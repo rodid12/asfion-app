@@ -15,9 +15,26 @@
     },
     "android": {
       "package": "com.asfion.app",
-      "permissions": ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION"]
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ]
     },
     "web": {},
-    "plugins": ["expo-secure-store", "expo-location"]
+    "plugins": [
+      "expo-secure-store",
+      "expo-location"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "99d27bea-3e12-4c60-845c-2e68e81ff648"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/99d27bea-3e12-4c60-845c-2e68e81ff648"
+    }
   }
 }
