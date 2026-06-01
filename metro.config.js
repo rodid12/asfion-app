@@ -1,39 +1,46 @@
 // Metro config para ASFION.
 //
-// Por qué existe este archivo (y no usamos solo el default de Expo):
+// Resuelve 2 problemas con paquetes de Supabase:
 //
-// `@supabase/realtime-js` (transitive dep de `@supabase/supabase-js`)
-// hace `import(/* webpackIgnore: true */ ... OTEL_PKG)` para cargar
-// OpenTelemetry de forma opcional. Esos comments mágicos son para
-// Webpack/Vite/Turbopack, pero Metro (bundler de RN) no los entiende
-// y serializa el código literal en el bundle. Después Hermes (engine
-// JS de Android) falla al parsearlo porque `OTEL_PKG` queda como una
-// variable sin resolver:
+// 1) @supabase/realtime-js usa `import(VAR_NAME)` con magic comments
+//    para cargar OpenTelemetry opcional. Metro no entiende los comments
+//    y serializa el código literal; Hermes (Android) no puede parsear
+//    `import(variable)` y falla con "Invalid expression encountered".
 //
-//   error: Invalid expression encountered
-//   import(... /* @vite-ignore */ OTEL_PKG).catch...
+//    Como ASFION no usa Realtime subscriptions (solo Auth + Postgrest),
+//    aliaseamos el package entero a un stub que provee la API mínima.
+//    Ver: src/lib/metro-stubs/realtime-js.js
 //
-// En iOS no aparece (usa JSC). En Android sí (usa Hermes por default
-// en Expo SDK 50+).
-//
-// Fix: aliasamos @opentelemetry/api a un módulo vacío. No usamos OTel
-// en la app, así que stub-earlo es seguro. Si en el futuro queremos
-// observabilidad real, instalamos @opentelemetry/api en serio y
-// borramos este alias.
+// 2) @opentelemetry/api / @opentelemetry/* — el código real de realtime-js
+//    intenta cargarlos vía dynamic import. Como ahora el stub reemplaza
+//    realtime-js entero, este ya no es necesario, pero lo dejamos por las
+//    dudas (otros paquetes también podrían importar OTel y romper).
 
 const { getDefaultConfig } = require('expo/metro-config');
+const path = require('path');
 
 const config = getDefaultConfig(__dirname);
 
-// Stub para @opentelemetry/api — ver comment de arriba.
+const REALTIME_STUB = path.resolve(__dirname, 'src/lib/metro-stubs/realtime-js.js');
+
 const originalResolveRequest = config.resolver.resolveRequest;
+
 config.resolver.resolveRequest = (context, moduleName, platform) => {
+  // 1) Stub completo de @supabase/realtime-js
+  if (moduleName === '@supabase/realtime-js') {
+    return {
+      filePath: REALTIME_STUB,
+      type: 'sourceFile',
+    };
+  }
+  // 2) Empty module para cualquier @opentelemetry/* (preventivo)
   if (
     moduleName === '@opentelemetry/api' ||
     moduleName.startsWith('@opentelemetry/')
   ) {
     return { type: 'empty' };
   }
+  // Default: delegar al resolver de Expo / Metro
   if (originalResolveRequest) {
     return originalResolveRequest(context, moduleName, platform);
   }
