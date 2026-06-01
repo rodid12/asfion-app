@@ -1,0 +1,23 @@
+{
+  "expo": {
+    "name": "ASFION",
+    "slug": "asfion-app",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.asfion.app",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "ASFION usa tu ubicación para registrar dónde se carga cada evento del campo."
+      }
+    },
+    "android": {
+      "package": "com.asfion.app",
+      "permissions": ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION"]
+    },
+    "web": {},
+    "plugins": ["expo-secure-store", "expo-location"]
+  }
+}
