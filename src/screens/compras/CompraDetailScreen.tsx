@@ -125,9 +125,15 @@ export function CompraDetailScreen() {
           <SyncBadge state={compra.syncState ?? 'synced'} />
         </View>
 
+        {/* Consignado destacado (siguiendo el orden de AppSheet del cliente:
+            N° op → Consignado → Fecha → ...). */}
+        {compra.consignado && (
+          <Text style={styles.consignadoTxt}>{compra.consignado}</Text>
+        )}
+
         <Text style={styles.fechaTxt}>{fechaLarga(compra.fecha)}</Text>
 
-        {/* SECCIÓN: Hacienda */}
+        {/* SECCIÓN: Hacienda (orden AppSheet: Cant → Kg origen → Kg destino → Merma) */}
         <Section title="Hacienda">
           <Row label="Campo" value={campo?.nombre ?? compra.campoId} />
           {compra.actividad && <Row label="Actividad" value={compra.actividad} />}
@@ -153,8 +159,21 @@ export function CompraDetailScreen() {
           )}
         </Section>
 
-        {/* SECCIÓN: Comercial */}
-        {(compra.precio != null || compra.consignado || compra.titular || compra.plazo) && (
+        {/* SECCIÓN: Logística (orden AppSheet: Km → DTE, antes de Comercial) */}
+        {(compra.numeroDte || compra.kmRecorrido != null) && (
+          <Section title="Logística">
+            {compra.kmRecorrido != null && (
+              <Row
+                label="Km recorrido"
+                value={`${compra.kmRecorrido.toLocaleString('es-AR')} km`}
+              />
+            )}
+            {compra.numeroDte && <Row label="N° DTE" value={compra.numeroDte} />}
+          </Section>
+        )}
+
+        {/* SECCIÓN: Comercial (Consignado ya está arriba) */}
+        {(compra.precio != null || compra.titular || compra.plazo) && (
           <Section title="Comercial">
             {compra.precio != null && (
               <Row
@@ -169,22 +188,8 @@ export function CompraDetailScreen() {
                 highlight
               />
             )}
-            {compra.consignado && <Row label="Consignado" value={compra.consignado} />}
             {compra.titular && <Row label="Titular" value={compra.titular} />}
             {compra.plazo && <Row label="Plazo" value={compra.plazo} />}
-          </Section>
-        )}
-
-        {/* SECCIÓN: Logística */}
-        {(compra.numeroDte || compra.kmRecorrido != null) && (
-          <Section title="Logística">
-            {compra.numeroDte && <Row label="N° DTE" value={compra.numeroDte} />}
-            {compra.kmRecorrido != null && (
-              <Row
-                label="Km recorrido"
-                value={`${compra.kmRecorrido.toLocaleString('es-AR')} km`}
-              />
-            )}
           </Section>
         )}
 
@@ -267,10 +272,17 @@ const styles = StyleSheet.create({
     color: colors.greenDeep,
     letterSpacing: 0.5,
   },
+  consignadoTxt: {
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.bold as '700',
+    color: colors.textDark,
+    marginTop: spacing.sm,
+  },
   fechaTxt: {
     fontSize: fontSize.md,
     color: colors.textMuted,
     marginBottom: spacing.lg,
+    marginTop: 2,
   },
 
   section: { marginBottom: spacing.lg },
