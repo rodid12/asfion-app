@@ -48,6 +48,7 @@ import type {
   Campo,
   CategoriaHacienda,
   CausaMuerteTipo,
+  Compra,
   EventoParicion,
   Lluvia,
   Mortandad,
@@ -67,20 +68,22 @@ const RANGO_LABEL: Record<Rango, string> = {
 // Sub-tab del dashboard. "resumen" muestra KPIs + cards con CTAs a cada módulo;
 // los demás muestran los gráficos detallados de ese módulo. Cuando sumemos
 // Medición, agregamos la key acá y la envolvemos igual.
-type MetricaTab = 'resumen' | 'pariciones' | 'lluvias' | 'mortandad' | 'pastoreo';
-const METRICA_TABS: MetricaTab[] = ['resumen', 'pariciones', 'lluvias', 'mortandad', 'pastoreo'];
+type MetricaTab = 'resumen' | 'pariciones' | 'lluvias' | 'mortandad' | 'pastoreo' | 'compras';
+const METRICA_TABS: MetricaTab[] = ['resumen', 'pariciones', 'lluvias', 'mortandad', 'pastoreo', 'compras'];
 const METRICA_LABEL: Record<MetricaTab, string> = {
   resumen: 'Resumen',
   pariciones: 'Pariciones',
   lluvias: 'Lluvias',
   mortandad: 'Mortandad',
   pastoreo: 'Pastoreo',
+  compras: 'Compras',
 };
 
 // Paletas accent por módulo — alineadas con las pantallas List de cada uno.
 const MORTANDAD_ACCENT = colors.danger;
 const LLUVIAS_ACCENT = '#1F4E6A';
 const PASTOREO_ACCENT = colors.amber;
+const COMPRAS_ACCENT = colors.greenDark;
 
 // Categorías de hacienda en orden estable.
 const CATEGORIA_ORDEN: CategoriaHacienda[] = ['vaca', 'ternero', 'toro', 'novillo', 'vaquillona'];
@@ -135,6 +138,7 @@ export function MetricasScreen() {
   const [lluvias, setLluvias] = useState<Lluvia[]>([]);
   const [mortandad, setMortandad] = useState<Mortandad[]>([]);
   const [pastoreo, setPastoreo] = useState<Pastoreo[]>([]);
+  const [compras, setCompras] = useState<Compra[]>([]);
   const [campos, setCampos] = useState<Campo[]>([]);
   // Map circuitoId → {nombre, campoId} para los charts de pastoreo.
   // Cargamos circuitos de TODOS los campos visibles al entrar al tab.
@@ -146,17 +150,19 @@ export function MetricasScreen() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [evs, lls, ms, ps, cs] = await Promise.all([
+      const [evs, lls, ms, ps, cps, cs] = await Promise.all([
         repo.listEventos('paricion'),
         repo.listEventos('lluvia'),
         repo.listEventos('mortandad'),
         repo.listEventos('pastoreo'),
+        repo.listEventos('compra'),
         repo.listCampos(),
       ]);
       setData(evs as Paricion[]);
       setLluvias(lls as Lluvia[]);
       setMortandad(ms as Mortandad[]);
       setPastoreo(ps as Pastoreo[]);
+      setCompras(cps as Compra[]);
       setCampos(cs);
       // Cargar todos los circuitos (un fetch por campo) — necesario para
       // mappear circuitoId → nombre en el chart "Movimientos por circuito".
@@ -623,6 +629,78 @@ export function MetricasScreen() {
     [pastoreoPorCategoria],
   );
 
+  // ====== COMPRAS ======
+  // Scope + rango paralelos a los otros módulos.
+  const scopedCompras = useMemo(() => {
+    if (!esAdmin && user?.email) return compras.filter(c => c.usuarioEmail === user.email);
+    return compras;
+  }, [compras, esAdmin, user]);
+
+  const filteredCompras = useMemo(() => {
+    const desde = rangoDesde(rango);
+    if (!desde) return scopedCompras;
+    return scopedCompras.filter(c => c.fecha >= desde);
+  }, [scopedCompras, rango]);
+
+  // Aggregations: por campo (count + kg destino total + inversión total).
+  const comprasPorCampo = useMemo(() => {
+    const map = new Map<string, { campoId: string; count: number; kgDestino: number; inversion: number }>();
+    filteredCompras.forEach(c => {
+      const entry = map.get(c.campoId) ?? { campoId: c.campoId, count: 0, kgDestino: 0, inversion: 0 };
+      entry.count++;
+      entry.kgDestino += Number.isFinite(c.kgNetosDestino) ? c.kgNetosDestino : 0;
+      if (c.precio != null && Number.isFinite(c.precio)) {
+        entry.inversion += c.precio * (Number.isFinite(c.kgNetosDestino) ? c.kgNetosDestino : 0);
+      }
+      map.set(c.campoId, entry);
+    });
+    return campos
+      .map(cmp => {
+        const e = map.get(cmp.id);
+        return e ? { campo: cmp, count: e.count, kgDestino: Math.round(e.kgDestino), inversion: Math.round(e.inversion) } : null;
+      })
+      .filter((r): r is { campo: Campo; count: number; kgDestino: number; inversion: number } => Boolean(r))
+      .sort((a, b) => b.count - a.count);
+  }, [filteredCompras, campos]);
+
+  const maxComprasCount = useMemo(
+    () => comprasPorCampo.reduce((m, r) => Math.max(m, r.count), 0),
+    [comprasPorCampo],
+  );
+  const maxComprasKg = useMemo(
+    () => comprasPorCampo.reduce((m, r) => Math.max(m, r.kgDestino), 0),
+    [comprasPorCampo],
+  );
+
+  // KPIs globales del sub-tab Compras.
+  const totalCompras = filteredCompras.length;
+  const totalKgCompras = useMemo(
+    () => Math.round(filteredCompras.reduce((acc, c) => acc + (Number.isFinite(c.kgNetosDestino) ? c.kgNetosDestino : 0), 0)),
+    [filteredCompras],
+  );
+  const totalInversion = useMemo(() => {
+    let s = 0;
+    filteredCompras.forEach(c => {
+      if (c.precio != null && Number.isFinite(c.precio) && Number.isFinite(c.kgNetosDestino)) {
+        s += c.precio * c.kgNetosDestino;
+      }
+    });
+    return Math.round(s);
+  }, [filteredCompras]);
+  // Estimación gruesa de cabezas compradas — parseamos cantCabYCat buscando
+  // números enteros y los sumamos. "83 machos. 27 hembras" → 110.
+  const totalCabezasEstimadas = useMemo(() => {
+    let total = 0;
+    filteredCompras.forEach(c => {
+      const txt = c.cantCabYCat ?? '';
+      const matches = txt.match(/\d+/g);
+      if (matches) {
+        matches.forEach(n => { total += parseInt(n, 10) || 0; });
+      }
+    });
+    return total;
+  }, [filteredCompras]);
+
   const totalMortandad = filteredMortandad.length;
   const totalMovimientos = filteredPastoreo.length;
   // Animales "abiertos" = todavía en el lote (sin fechaSalida). Es el número
@@ -650,6 +728,7 @@ export function MetricasScreen() {
               totalMM,
               totalMortandad,
               totalMovimientos,
+              totalCompras,
               // En Resumen sumamos los conteos crudos de cada módulo (no los
               // KPIs de "mm" o equivalentes que son magnitudes distintas).
               totalLluvias: filteredLluvias.length,
@@ -670,24 +749,46 @@ export function MetricasScreen() {
           sin scroll. shrink + numberOfLines + adjustsFontSizeToFit blindan
           el caso de un device extra-angosto o usuario con accessibility
           font scale alto. */}
-      <View style={styles.subTabBar}>
-        {METRICA_TABS.map(t => (
-          <Pressable
-            key={t}
-            onPress={() => setMetricaTab(t)}
-            style={[styles.subTab, metricaTab === t && styles.subTabSel]}
-            hitSlop={6}
+      {/* Sub-tabs en 2 filas (feedback Ro):
+            Fila 1: "Resumen" full-width — es la vista por default y la más
+                    importante (resumen ejecutivo), merece su propia fila.
+            Fila 2: los 5 módulos (Pariciones / Lluvias / Mortandad /
+                    Pastoreo / Compras) reparten el ancho parejo.
+          Esta separación da:
+            (a) más ancho a cada chip de módulo (era apretado con 6 chips)
+            (b) jerarquía visual: Resumen es "primero entre iguales"
+            (c) píldoras más grandes / legibles */}
+      <View style={styles.subTabBarCol}>
+        <Pressable
+          onPress={() => setMetricaTab('resumen')}
+          style={[styles.subTabBig, metricaTab === 'resumen' && styles.subTabBigSel]}
+          hitSlop={6}
+        >
+          <Text
+            style={[styles.subTabBigTxt, metricaTab === 'resumen' && styles.subTabBigTxtSel]}
           >
-            <Text
-              style={[styles.subTabTxt, metricaTab === t && styles.subTabTxtSel]}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.85}
+            {METRICA_LABEL.resumen}
+          </Text>
+        </Pressable>
+        <View style={styles.subTabModuleRow}>
+          {METRICA_TABS.filter(t => t !== 'resumen').map(t => (
+            <Pressable
+              key={t}
+              onPress={() => setMetricaTab(t)}
+              style={[styles.subTab, metricaTab === t && styles.subTabSel]}
+              hitSlop={6}
             >
-              {METRICA_LABEL[t]}
-            </Text>
-          </Pressable>
-        ))}
+              <Text
+                style={[styles.subTabTxt, metricaTab === t && styles.subTabTxtSel]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.85}
+              >
+                {METRICA_LABEL[t]}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
       </View>
 
       {/* Filtro rango — row sin scroll, 4 chips caben cómodos en iPhone.
@@ -799,6 +900,23 @@ export function MetricasScreen() {
               empty={movimientosPorCampo.length === 0 ? 'Sin movimientos en el rango' : undefined}
               ctaLabel="Ver detalle de pastoreo →"
               onCta={() => setMetricaTab('pastoreo')}
+            />
+
+            {/* Card Compras — top 3 campos por cantidad de compras registradas. */}
+            <SummaryCard
+              title="Compras"
+              stat={totalCompras}
+              statLabel={totalCompras === 1 ? 'compra' : 'compras'}
+              accent={COMPRAS_ACCENT}
+              rows={comprasPorCampo.slice(0, 3).map(r => ({
+                label: r.campo.nombre,
+                value: r.count,
+                max: maxComprasCount,
+                valueLabel: String(r.count),
+              }))}
+              empty={comprasPorCampo.length === 0 ? 'Sin compras en el rango' : undefined}
+              ctaLabel="Ver detalle de compras →"
+              onCta={() => setMetricaTab('compras')}
             />
           </>
         )}
@@ -1281,6 +1399,82 @@ export function MetricasScreen() {
           </>
         )}
 
+        {/* ============ COMPRAS ============ */}
+        {metricaTab === 'compras' && (
+          <>
+            <View style={styles.kpiRow}>
+              <Kpi value={totalCompras} label="COMPRAS" color={COMPRAS_ACCENT} />
+              <Kpi
+                value={totalCabezasEstimadas}
+                label="CABEZAS APROX"
+                color={colors.greenDark}
+              />
+              <Kpi
+                value={totalKgCompras}
+                label="KG TOTALES"
+                color={colors.amber}
+              />
+            </View>
+
+            {totalInversion > 0 && (
+              <View style={styles.kpiRow}>
+                <Kpi
+                  value={totalInversion}
+                  label="INVERSIÓN TOTAL ($)"
+                  color={colors.greenDark}
+                />
+              </View>
+            )}
+
+            <Section
+              title="Compras por campo"
+              subtitle="Cantidad de operaciones registradas"
+            >
+              {comprasPorCampo.length === 0 ? (
+                <Empty msg="Sin compras cargadas" />
+              ) : (
+                <View style={styles.chartBody}>
+                  {comprasPorCampo.map(r => (
+                    <HBar
+                      key={r.campo.id}
+                      label={r.campo.nombre}
+                      value={r.count}
+                      max={maxComprasCount}
+                      color={COMPRAS_ACCENT}
+                      valueLabel={String(r.count)}
+                    />
+                  ))}
+                </View>
+              )}
+            </Section>
+
+            <Section
+              title="Kg comprados por campo"
+              subtitle="Suma de kg netos de destino"
+              footer="Inversión por campo aparece si las compras tienen precio cargado."
+            >
+              {comprasPorCampo.length === 0 ? (
+                <Empty msg="Sin compras cargadas" />
+              ) : (
+                <View style={styles.chartBody}>
+                  {comprasPorCampo.map(r => (
+                    <HBar
+                      key={r.campo.id}
+                      label={r.campo.nombre}
+                      value={r.kgDestino}
+                      max={maxComprasKg}
+                      color={colors.amber}
+                      valueLabel={`${r.kgDestino.toLocaleString('es-AR')} kg${
+                        r.inversion > 0 ? ` · $${r.inversion.toLocaleString('es-AR')}` : ''
+                      }`}
+                    />
+                  ))}
+                </View>
+              )}
+            </Section>
+          </>
+        )}
+
         <View style={{ height: spacing.xxxl }} />
       </ScrollView>
     </SafeAreaView>
@@ -1306,6 +1500,7 @@ function headerStatValue(
     totalMortandad: number;
     totalLluvias: number;
     totalMovimientos: number;
+    totalCompras: number;
   },
 ): number {
   switch (tab) {
@@ -1315,12 +1510,14 @@ function headerStatValue(
     // En el modelo entrada/salida cada registro = 1 animal — "movimientos"
     // es el conteo natural (cabezas movidas ya no existe).
     case 'pastoreo':   return totals.totalMovimientos;
+    case 'compras':    return totals.totalCompras;
     case 'resumen':
       return (
         totals.totalEventos +
         totals.totalLluvias +
         totals.totalMortandad +
-        totals.totalMovimientos
+        totals.totalMovimientos +
+        totals.totalCompras
       );
   }
 }
@@ -1331,6 +1528,7 @@ function headerStatLabel(tab: MetricaTab): string {
     case 'lluvias':    return 'mm';
     case 'mortandad':  return 'muertes';
     case 'pastoreo':   return 'movimientos';
+    case 'compras':    return 'compras';
     // En "Resumen" usamos "registros" porque sumamos eventos de TODOS los
     // módulos — no son solo pariciones. "Registros" es genérico y honesto.
     case 'resumen':    return 'registros';
@@ -1532,20 +1730,58 @@ const styles = StyleSheet.create({
   // y reparten el ancho disponible parejito. El padding horizontal lo bajamos
   // a 4 para que las palabras largas no se compriman, y la fuente se autoajusta
   // hasta 85% si el device es muy angosto.
-  subTabBar: {
-    flexDirection: 'row',
+  // Layout en 2 filas: Resumen (full-width arriba) + 5 chips de módulos abajo.
+  // Da más ancho a cada módulo y jerarquía visual al Resumen.
+  subTabBarCol: {
     paddingHorizontal: spacing.base,
     paddingTop: spacing.sm,
+    gap: spacing.sm,
+  },
+
+  // "Resumen" — pildora grande arriba que ocupa toda la fila.
+  subTabBig: {
+    paddingVertical: 14,
+    paddingHorizontal: spacing.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.round,
+    backgroundColor: colors.bgLight,
+    borderWidth: 1,
+    borderColor: colors.borderSoft,
+    minHeight: 48,
+  },
+  subTabBigSel: {
+    backgroundColor: colors.greenDark,
+    borderColor: colors.greenDark,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
+  subTabBigTxt: {
+    fontSize: fontSize.md,
+    color: colors.textMuted,
+    fontWeight: fontWeight.bold as '700',
+    letterSpacing: 0.3,
+  },
+  subTabBigTxtSel: {
+    color: colors.white,
+  },
+
+  // Fila de 5 chips: Pariciones / Lluvias / Mortandad / Pastoreo / Compras.
+  subTabModuleRow: {
+    flexDirection: 'row',
     gap: 6,
   },
   subTab: {
     flex: 1,
-    paddingVertical: 8,
+    paddingVertical: 11,
     paddingHorizontal: 4,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.round,
-    minHeight: 36,
+    minHeight: 42,
     backgroundColor: colors.bgLight,
     borderWidth: 1,
     borderColor: colors.borderSoft,
@@ -1553,7 +1789,6 @@ const styles = StyleSheet.create({
   subTabSel: {
     backgroundColor: colors.white,
     borderColor: colors.greenDark,
-    // Shadow sutil en iOS, elevation en Android
     shadowColor: '#000',
     shadowOpacity: 0.1,
     shadowRadius: 3,
@@ -1561,9 +1796,10 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   subTabTxt: {
-    // Bajamos a 13pt para que "Pariciones" y "Mortandad" entren cómodos
-    // sin truncar en chips de ~66pt de ancho (iPhone SE/Mini).
-    fontSize: 13,
+    // Subido a 14pt — antes era 13 para que entraran 6 chips. Con la
+    // separación de Resumen en su propia fila, los 5 módulos restantes
+    // tienen más ancho y caben con texto más grande / legible.
+    fontSize: 14,
     color: colors.textMuted,
     fontWeight: fontWeight.semibold as '600',
   },

@@ -19,6 +19,7 @@ export type ModuloKey =
   | 'lluvias'
   | 'mortandad'
   | 'pastoreo'
+  | 'compras'
   | 'mediciones';
 
 /** Branding (logo + colores + nombre) que aparecen en login, header, etc. */
@@ -62,11 +63,17 @@ export interface PastoreoCatalogos {
   catAnimal: readonly string[];        // ["Toros", "TernH", "Vaq 1° Serv", ...]
 }
 
+export interface CompraCatalogos {
+  actividades: readonly string[];      // ["Destete Precoz", "Engorde", "Invernada"]
+  plazos: readonly string[];           // ["Contado", "30 días", "60 días", "90 días"]
+}
+
 /** Catálogos completos del cliente, indexados por módulo. */
 export interface ClientCatalogos {
   pariciones: ParicionCatalogos;
   mortandad: MortandadCatalogos;
   pastoreo: PastoreoCatalogos;
+  compras: CompraCatalogos;
   // Lluvias y Mediciones no tienen catálogo (solo números/texto libre)
 }
 

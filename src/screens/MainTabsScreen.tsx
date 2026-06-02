@@ -20,6 +20,7 @@ import { MetricasScreen } from '@/screens/metricas/MetricasScreen';
 import { LluviaListScreen } from '@/screens/lluvias/LluviaListScreen';
 import { MortandadListScreen } from '@/screens/mortandad/MortandadListScreen';
 import { PastoreoListScreen } from '@/screens/pastoreo/PastoreoListScreen';
+import { CompraListScreen } from '@/screens/compras/CompraListScreen';
 import { colors } from '@/theme/colors';
 
 // Mapping: cada tab pertenece a un módulo (o no, si es transversal).
@@ -31,6 +32,7 @@ const TAB_TO_MODULO: Partial<Record<TabKey, ModuloKey>> = {
   lluvias:   'lluvias',
   mortandad: 'mortandad',
   pastoreo:  'pastoreo',
+  compras:   'compras',
 };
 
 export function MainTabsScreen() {
@@ -78,6 +80,11 @@ export function MainTabsScreen() {
         {enabled('lluvias') && (
           <TabPane active={currentTab === 'lluvias'}>
             <LluviaListScreen />
+          </TabPane>
+        )}
+        {enabled('compras') && (
+          <TabPane active={currentTab === 'compras'}>
+            <CompraListScreen />
           </TabPane>
         )}
       </View>

@@ -117,6 +117,8 @@ export function PastoreoListScreen() {
   const [hastaCustom, setHastaCustom] = useState<string | undefined>();
   const [campoFiltro, setCampoFiltro] = useState<string | null>(null);
   const [campoPickerOpen, setCampoPickerOpen] = useState(false);
+  const [circuitoFiltro, setCircuitoFiltro] = useState<string | null>(null);
+  const [circuitoPickerOpen, setCircuitoPickerOpen] = useState(false);
 
   // Silent flag para refresh en background sin spinner.
   // Merge: server + cola pending local (deduped por id, gana server).
@@ -177,6 +179,27 @@ export function PastoreoListScreen() {
     return data;
   }, [data, esAdmin, user]);
 
+  // Circuitos visibles: si hay un campo filtrado, solo los de ese campo.
+  // Si no, todos los que aparezcan en eventos del scope actual.
+  const circuitosVisibles = useMemo(() => {
+    const circuitoIds = new Set<string>();
+    scopedData.forEach(p => {
+      if (campoFiltro && p.campoId !== campoFiltro) return;
+      if (p.circuitoId) circuitoIds.add(p.circuitoId);
+    });
+    return Array.from(circuitoIds)
+      .map(id => circuitosMap[id])
+      .filter((c): c is Circuito => Boolean(c))
+      .sort((a, b) => a.nombre.localeCompare(b.nombre));
+  }, [scopedData, circuitosMap, campoFiltro]);
+
+  // Si cambia el campo y el circuito filtrado ya no pertenece, resetear.
+  useEffect(() => {
+    if (circuitoFiltro && !circuitosVisibles.some(c => c.id === circuitoFiltro)) {
+      setCircuitoFiltro(null);
+    }
+  }, [circuitosVisibles, circuitoFiltro]);
+
   const filtered = useMemo(() => {
     const customActivo = Boolean(desdeCustom || hastaCustom);
     const desde = customActivo ? desdeCustom : rangoDesde(rango);
@@ -188,6 +211,7 @@ export function PastoreoListScreen() {
       if (desde && p.fecha < desde) return false;
       if (hasta && p.fecha > hasta) return false;
       if (campoFiltro && p.campoId !== campoFiltro) return false;
+      if (circuitoFiltro && p.circuitoId !== circuitoFiltro) return false;
       if (q) {
         const cir = p.circuitoId ? (circuitosMap[p.circuitoId]?.nombre ?? '') : '';
         const haystack = [
@@ -200,7 +224,7 @@ export function PastoreoListScreen() {
       }
       return true;
     });
-  }, [scopedData, estado, rango, desdeCustom, hastaCustom, campoFiltro, query, circuitosMap]);
+  }, [scopedData, estado, rango, desdeCustom, hastaCustom, campoFiltro, circuitoFiltro, query, circuitosMap]);
 
   const pendientes = useMemo(
     () => data.filter(p => p.syncState === 'pending' || p.syncState === 'failed').length,
@@ -213,8 +237,9 @@ export function PastoreoListScreen() {
     if (rango !== 'todo') n++;
     if (desdeCustom || hastaCustom) n++;
     if (campoFiltro) n++;
+    if (circuitoFiltro) n++;
     return n;
-  }, [estado, rango, desdeCustom, hastaCustom, campoFiltro]);
+  }, [estado, rango, desdeCustom, hastaCustom, campoFiltro, circuitoFiltro]);
 
   const clearFilters = () => {
     setEstado('todos');
@@ -223,6 +248,8 @@ export function PastoreoListScreen() {
     setHastaCustom(undefined);
     setCampoFiltro(null);
     setCampoPickerOpen(false);
+    setCircuitoFiltro(null);
+    setCircuitoPickerOpen(false);
   };
 
   // Sectioning POR CIRCUITO (feedback Ro: "primero por circuito, luego fecha").
@@ -357,6 +384,10 @@ export function PastoreoListScreen() {
     ? camposMap[campoFiltro]?.nombre ?? campoFiltro
     : 'Campo: todos';
 
+  const circuitoFiltroLabel = circuitoFiltro
+    ? circuitosMap[circuitoFiltro]?.nombre ?? circuitoFiltro
+    : 'Circuito: todos';
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       {/* Buscador */}
@@ -405,17 +436,28 @@ export function PastoreoListScreen() {
           onChangeCustom={(d, h) => { setDesdeCustom(d); setHastaCustom(h); }}
         />
 
-        {(camposVisibles.length > 1 || activosCount > 0) && (
+        {(camposVisibles.length > 1 || circuitosVisibles.length > 1 || activosCount > 0) && (
           <View style={styles.filterRow2}>
             {camposVisibles.length > 1 && (
               <Pressable
-                onPress={() => setCampoPickerOpen(o => !o)}
+                onPress={() => { setCampoPickerOpen(o => !o); setCircuitoPickerOpen(false); }}
                 style={[styles.fChipWide, campoFiltro && styles.fChipSel]}
               >
                 <Text style={[styles.fChipTxt, campoFiltro && styles.fChipTxtSel]} numberOfLines={1}>
                   {campoFiltroLabel}
                 </Text>
                 <Text style={[styles.fChev, campoFiltro && styles.fChevSel]}>▾</Text>
+              </Pressable>
+            )}
+            {circuitosVisibles.length > 1 && (
+              <Pressable
+                onPress={() => { setCircuitoPickerOpen(o => !o); setCampoPickerOpen(false); }}
+                style={[styles.fChipWide, circuitoFiltro && styles.fChipSel]}
+              >
+                <Text style={[styles.fChipTxt, circuitoFiltro && styles.fChipTxtSel]} numberOfLines={1}>
+                  {circuitoFiltroLabel}
+                </Text>
+                <Text style={[styles.fChev, circuitoFiltro && styles.fChevSel]}>▾</Text>
               </Pressable>
             )}
             {activosCount > 0 && (
@@ -442,6 +484,28 @@ export function PastoreoListScreen() {
               style={[styles.subChip, campoFiltro === c.id && styles.subChipSel]}
             >
               <Text style={[styles.subChipTxt, campoFiltro === c.id && styles.subChipTxtSel]}>
+                {c.nombre}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
+
+      {circuitoPickerOpen && circuitosVisibles.length > 1 && (
+        <View style={styles.subPicker}>
+          <Pressable
+            onPress={() => { setCircuitoFiltro(null); setCircuitoPickerOpen(false); }}
+            style={[styles.subChip, !circuitoFiltro && styles.subChipSel]}
+          >
+            <Text style={[styles.subChipTxt, !circuitoFiltro && styles.subChipTxtSel]}>Todos</Text>
+          </Pressable>
+          {circuitosVisibles.map(c => (
+            <Pressable
+              key={c.id}
+              onPress={() => { setCircuitoFiltro(c.id); setCircuitoPickerOpen(false); }}
+              style={[styles.subChip, circuitoFiltro === c.id && styles.subChipSel]}
+            >
+              <Text style={[styles.subChipTxt, circuitoFiltro === c.id && styles.subChipTxtSel]}>
                 {c.nombre}
               </Text>
             </Pressable>

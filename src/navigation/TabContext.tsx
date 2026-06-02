@@ -12,9 +12,9 @@
 
 import React, { createContext, useContext, useMemo, useState } from 'react';
 
-export type TabKey = 'menu' | 'lista' | 'lluvias' | 'mortandad' | 'pastoreo' | 'metricas';
+export type TabKey = 'menu' | 'lista' | 'lluvias' | 'mortandad' | 'pastoreo' | 'compras' | 'metricas';
 
-export const TAB_KEYS: TabKey[] = ['menu', 'lista', 'lluvias', 'mortandad', 'pastoreo', 'metricas'];
+export const TAB_KEYS: TabKey[] = ['menu', 'lista', 'lluvias', 'mortandad', 'pastoreo', 'compras', 'metricas'];
 
 interface TabCtx {
   currentTab: TabKey;

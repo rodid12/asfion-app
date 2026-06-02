@@ -49,5 +49,10 @@ export const DEMO_CONFIG: ClientConfig = {
       eventos: [],
       catAnimal: [],
     },
+    compras: {
+      // No se usa pero debe existir para no romper tipos.
+      actividades: [],
+      plazos: [],
+    },
   },
 };

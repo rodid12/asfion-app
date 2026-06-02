@@ -293,6 +293,64 @@ function pastoreoToRow(p: any, clienteId: string) {
   };
 }
 
+// ====== Compras (migration 0004) ======
+//
+// Replica el módulo "Compra" del AppSheet del cliente. Captura entrada de
+// hacienda (no nacimiento) con datos físicos, comerciales y logísticos.
+
+function rowToCompra(r: any): Evento {
+  return {
+    tipo: 'compra',
+    id: r.id,
+    fecha: r.fecha,
+    campoId: r.campo_id,
+    usuarioEmail: r.usuario_email,
+    // Físico
+    actividad:        r.actividad ?? undefined,
+    cantCabYCat:      r.cant_cab_y_cat ?? undefined,
+    kgNetosOrigen:    Number(r.kg_netos_origen),
+    kgNetosDestino:   Number(r.kg_netos_destino),
+    mermaPorcentaje:  r.merma_porcentaje != null ? Number(r.merma_porcentaje) : undefined,
+    kgCorregidos:     r.kg_corregidos    != null ? Number(r.kg_corregidos) : undefined,
+    // Comerciales
+    precio:           r.precio != null ? Number(r.precio) : undefined,
+    consignado:       r.consignado ?? undefined,
+    titular:          r.titular ?? undefined,
+    plazo:            r.plazo ?? undefined,
+    // Logística
+    numeroDte:        r.numero_dte ?? undefined,
+    numeroOperacion:  r.numero_operacion ?? undefined,
+    kmRecorrido:      r.km_recorrido != null ? Number(r.km_recorrido) : undefined,
+    observaciones:    r.observaciones ?? undefined,
+    createdAt: r.created_at,
+    syncState: 'synced',
+  };
+}
+
+function compraToRow(c: any, clienteId: string) {
+  return {
+    id: c.id,
+    cliente_id: clienteId,
+    campo_id: c.campoId,
+    usuario_email: c.usuarioEmail,
+    fecha: c.fecha,
+    actividad:        c.actividad ?? null,
+    cant_cab_y_cat:   c.cantCabYCat ?? null,
+    kg_netos_origen:  c.kgNetosOrigen,
+    kg_netos_destino: c.kgNetosDestino,
+    merma_porcentaje: c.mermaPorcentaje ?? null,
+    kg_corregidos:    c.kgCorregidos ?? null,
+    precio:           c.precio ?? null,
+    consignado:       c.consignado ?? null,
+    titular:          c.titular ?? null,
+    plazo:            c.plazo ?? null,
+    numero_dte:       c.numeroDte ?? null,
+    numero_operacion: c.numeroOperacion ?? null,
+    km_recorrido:     c.kmRecorrido ?? null,
+    observaciones:    c.observaciones ?? null,
+  };
+}
+
 // =============================================================================
 // SupabaseBackend
 // =============================================================================
@@ -578,6 +636,7 @@ function tablaDeEvento(tipo: TipoEvento): string {
     case 'lluvia':    return 'lluvias';
     case 'mortandad': return 'mortandad';
     case 'pastoreo':  return 'pastoreo';
+    case 'compra':    return 'compras';
     case 'medicion':  return 'mediciones';  // FUTURO
   }
 }
@@ -588,6 +647,7 @@ function rowParser(tipo: TipoEvento): (r: any) => Evento {
     case 'lluvia':    return rowToLluvia;
     case 'mortandad': return rowToMortandad;
     case 'pastoreo':  return rowToPastoreo;
+    case 'compra':    return rowToCompra;
     case 'medicion':  return (r) => r as Evento;  // FUTURO
   }
 }
@@ -598,6 +658,7 @@ function eventoToRow(e: Evento, clienteId: string): any {
     case 'lluvia':    return lluviaToRow(e, clienteId);
     case 'mortandad': return mortandadToRow(e, clienteId);
     case 'pastoreo':  return pastoreoToRow(e, clienteId);
+    case 'compra':    return compraToRow(e, clienteId);
     case 'medicion':  return { ...e, cliente_id: clienteId };
   }
 }

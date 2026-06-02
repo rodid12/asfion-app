@@ -205,9 +205,36 @@ export interface Medicion extends EventoBase {
   observaciones?: string;
 }
 
+// ====== Módulo Compras (compra de hacienda) ======
+//
+// Replica el módulo "Compra" del AppSheet del cliente.
+// Se carga cuando el campo COMPRA hacienda (entrada al sistema, no nacimiento).
+// Mide datos físicos (kg origen vs destino), comerciales (precio, plazo,
+// titular) y logísticos (DTE, km, número de operación).
+export interface Compra extends EventoBase {
+  tipo: 'compra';
+  // Detalle físico
+  actividad?: string;             // "Destete Precoz" | "Engorde" | "Invernada" (catalogo en ClientConfig)
+  cantCabYCat?: string;           // Texto libre. Ej: "83 machos. 27 hembras"
+  kgNetosOrigen: number;          // requerido — kg al subir al camión
+  kgNetosDestino: number;         // requerido — kg al bajar
+  mermaPorcentaje?: number;       // auto-calculado en el form: (origen-destino)/origen*100
+  kgCorregidos?: number;          // manual — fórmula propia de cada campo
+  // Comerciales
+  precio?: number;                // ARS/kg típicamente
+  consignado?: string;            // nombre del consignatario
+  titular?: string;               // nombre/dirección del vendedor
+  plazo?: string;                 // "Contado", "30 días", etc.
+  // Logística
+  numeroDte?: string;             // documento de tránsito electrónico
+  numeroOperacion?: string;       // auto-generado, formato "COR_28"
+  kmRecorrido?: number;
+  observaciones?: string;
+}
+
 // ====== Union type para el repositorio genérico ======
 
-export type Evento = Paricion | Lluvia | Mortandad | Pastoreo | Medicion;
+export type Evento = Paricion | Lluvia | Mortandad | Pastoreo | Medicion | Compra;
 export type TipoEvento = Evento['tipo'];
 
 // Helper para crear el shape base al instanciar un nuevo evento en el form.

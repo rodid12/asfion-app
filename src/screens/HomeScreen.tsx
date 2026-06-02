@@ -76,6 +76,13 @@ const TODOS_LOS_MODULOS: Modulo[] = [
     go: nav => nav.navigate('PastoreoForm', {}),
   },
   {
+    key: 'compras',
+    label: 'Compras',
+    emoji: '🛒',
+    descripcion: 'Compra de hacienda',
+    go: nav => nav.navigate('CompraForm', {}),
+  },
+  {
     key: 'mediciones',
     label: 'Mediciones',
     emoji: '📏',

@@ -36,8 +36,8 @@ export const GANADERAS_CONFIG: ClientConfig = {
     tagline: 'Gestión integral del campo',
     logo: null, // null = se usan iniciales del nombre
   },
-  // Los 4 módulos del AppSheet original. Mediciones no aplica para Ganaderas.
-  modulosHabilitados: ['pariciones', 'lluvias', 'mortandad', 'pastoreo'],
+  // Los 5 módulos activos (Compras agregado post-AppSheet).
+  modulosHabilitados: ['pariciones', 'lluvias', 'mortandad', 'pastoreo', 'compras'],
   catalogos: {
     pariciones: {
       vacasGrupos: GANADERAS_VACAS_GRUPOS,
@@ -57,6 +57,11 @@ export const GANADERAS_CONFIG: ClientConfig = {
       categorias: GANADERAS_PAST_CATEGORIAS,
       eventos: GANADERAS_PAST_EVENTOS,
       catAnimal: GANADERAS_PAST_CAT_ANIMAL,
+    },
+    compras: {
+      // Replica del módulo "Compra" del AppSheet de Ganaderas.
+      actividades: ['Destete Precoz', 'Engorde', 'Invernada'],
+      plazos: ['Contado', '30 días', '60 días', '90 días'],
     },
   },
 };

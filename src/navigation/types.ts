@@ -15,4 +15,9 @@ export type RootStackParamList = {
   LluviaForm: { lluviaId?: string } | undefined;
   MortandadForm: { mortandadId?: string } | undefined;
   PastoreoForm: { pastoreoId?: string } | undefined;
+  // Compras: igual que Pariciones, hay Detail intermedio porque la card de
+  // la lista no muestra precio/titular/DTE/observaciones y abrir el form
+  // sería entrar a editar sin querer en cargas comerciales sensibles.
+  CompraDetail: { compraId: string };
+  CompraForm: { compraId?: string } | undefined;
 };
