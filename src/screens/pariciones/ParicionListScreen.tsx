@@ -18,6 +18,7 @@ import {
   Alert,
   Pressable,
   RefreshControl,
+  ScrollView,
   SectionList,
   StyleSheet,
   Text,
@@ -29,7 +30,9 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import { DateRangeFilter } from '@/components/DateRangeFilter';
+import { EmptyState } from '@/components/EmptyState';
 import { Fab } from '@/components/Fab';
+import { ScreenHeader } from '@/components/ScreenHeader';
 import { SyncBadge } from '@/components/SyncBadge';
 import { useAuth } from '@/auth/context';
 import { useRepository } from '@/data';
@@ -105,7 +108,7 @@ const EVENTOS_FILTRO: EventoParicion[] = ['Nacimiento', 'Muerte', 'Aborto', 'Ret
 // Inspirada en los chips del form, consistente con MetricasScreen.
 // Así de un vistazo el peón ve: verde = nacimiento OK, rojo = muerte.
 const EVENTO_PALETTE: Record<EventoParicion, { bg: string; fg: string }> = {
-  Nacimiento: { bg: '#E6F4EC', fg: '#1B4332' }, // verde pastel / greenDark
+  Nacimiento: { bg: '#E6F4EC', fg: '#1B4332' }, // verde pastel / navy
   Muerte:     { bg: '#FBE4E3', fg: '#9B2F2D' }, // rojo pastel / danger dark
   Aborto:     { bg: '#F7E6D5', fg: '#8E5A29' }, // terracota pastel
   Retacto:    { bg: '#F5EAD0', fg: '#8E6321' }, // amber pastel
@@ -387,18 +390,19 @@ export function ParicionListScreen() {
         style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
         accessibilityRole="button"
       >
-        {/* Fila 1: caravana (prominente) + badge evento colorizado + chevron */}
+        {/* Fila 1: caravana (peach chip prominente con color dot + número)
+            + badge evento colorizado + chevron */}
         <View style={styles.rowTop}>
           {tieneCaravana ? (
-            <View style={styles.caravanaRow}>
-              <View style={[styles.colorDot, { backgroundColor: dotColor }]} />
+            <View style={styles.caravanaChip}>
+              <View style={[styles.caravanaDot, { backgroundColor: dotColor }]} />
               <Text style={styles.caravanaNum} numberOfLines={1}>
                 {item.caravanaNumero ?? '—'}
               </Text>
             </View>
           ) : (
-            <View style={styles.caravanaRow}>
-              <View style={[styles.colorDot, styles.colorDotEmpty]} />
+            <View style={[styles.caravanaChip, styles.caravanaChipEmpty]}>
+              <View style={[styles.caravanaDot, styles.caravanaDotEmpty]} />
               <Text style={styles.noCaravana}>sin caravana</Text>
             </View>
           )}
@@ -463,11 +467,30 @@ export function ParicionListScreen() {
     </View>
   );
 
-  const campoFiltroLabel = campoFiltro ? camposMap[campoFiltro]?.nombre ?? campoFiltro : 'Campo: todos';
-  const usuarioFiltroLabel = usuarioFiltro ? primerNombre(usuarioFiltro) : 'Usuario: todos';
+  // Labels compactos sin prefijo "Campo:" / "Usuario:" para que los 3 chips
+  // (Fecha + Campo + Usuario) entren en una sola fila. El icono al inicio
+  // del chip identifica qué tipo de filtro es.
+  const campoFiltroLabel = campoFiltro ? camposMap[campoFiltro]?.nombre ?? campoFiltro : 'Todos';
+  const usuarioFiltroLabel = usuarioFiltro ? primerNombre(usuarioFiltro) : 'Todos';
 
-  return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+  // Pill de novedades: si hay pendientes mostramos eso, sino "X hoy" si > 0.
+  const novedad = useMemo(() => {
+    if (pendientes > 0) {
+      return { emoji: '⚠️', text: `${pendientes} sin sync` };
+    }
+    const hoy = scopedData.filter(p => {
+      const d = new Date(); const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      return p.fecha === today;
+    }).length;
+    if (hoy > 0) return { emoji: '🐮', text: `${hoy} hoy` };
+    return null;
+  }, [pendientes, scopedData]);
+
+  // Bloque de filtros que va a entrar como ListHeaderComponent del SectionList
+  // → scrollea con los cards y desaparece al subir la lista.
+  // Navy header queda AFUERA, fijo siempre arriba.
+  const filtersHeader = (
+    <>
       {/* Buscador */}
       <View style={styles.searchWrap}>
         <Text style={styles.searchIcon}>🔍</Text>
@@ -489,10 +512,17 @@ export function ParicionListScreen() {
         )}
       </View>
 
-      {/* Filtros — UN solo chip de fecha que abre modal con presets + custom. */}
+      {/* Filtros — 2 filas:
+          Fila 1: Fecha + Campo + Usuario + Limpiar
+          Fila 2: 4 chips de evento (Nacimiento/Muerte/Aborto/Retacto) */}
       <View style={styles.filterBar}>
         <View style={styles.filterRow}>
           <DateRangeFilter
+            // flexBasis: 0 explícito → con flexWrap:'wrap' en el padre, el
+            // shorthand `flex: 1` no distribuía equitativo y la pildora Fecha
+            // quedaba más angosta que Campo/Usuario. Forzamos basis 0 para que
+            // el ancho se reparta solo por flexGrow.
+            chipStyle={{ flexGrow: 1, flexShrink: 1, flexBasis: 0, minWidth: 0 }}
             presets={(['hoy', '7d', '30d', 'todo'] as RangoFecha[]).map(r => ({ key: r, label: RANGO_LABEL[r] }))}
             preset={rango}
             presetTodo="todo"
@@ -501,16 +531,34 @@ export function ParicionListScreen() {
             onChangePreset={k => setRango(k as RangoFecha)}
             onChangeCustom={(d, h) => { setDesdeCustom(d); setHastaCustom(h); }}
           />
+          {camposVisibles.length > 1 && (
+            <Pressable
+              onPress={() => setExpandedFilter(e => (e === 'campo' ? null : 'campo'))}
+              style={[styles.fChipWide, campoFiltro && styles.fChipSel]}
+            >
+              <Text style={styles.fChipIcon}>📍</Text>
+              <Text style={[styles.fChipTxt, campoFiltro && styles.fChipTxtSel]} numberOfLines={1}>
+                {campoFiltroLabel}
+              </Text>
+              <Text style={[styles.fChev, campoFiltro && styles.fChevSel]}>▾</Text>
+            </Pressable>
+          )}
+          {esAdmin && usuariosVisibles.length > 1 && (
+            <Pressable
+              onPress={() => setExpandedFilter(e => (e === 'usuario' ? null : 'usuario'))}
+              style={[styles.fChipWide, usuarioFiltro && styles.fChipSel]}
+            >
+              <Text style={styles.fChipIcon}>👤</Text>
+              <Text style={[styles.fChipTxt, usuarioFiltro && styles.fChipTxtSel]} numberOfLines={1}>
+                {usuarioFiltroLabel}
+              </Text>
+              <Text style={[styles.fChev, usuarioFiltro && styles.fChevSel]}>▾</Text>
+            </Pressable>
+          )}
         </View>
 
-        {/* Filtro por TIPO DE EVENTO.
-            Reemplaza al picker visual de color de caravana, que está oculto
-            por feedback del cliente: "los filtros deberían ser por evento".
-            Mantenemos la lógica del filtro por color (ver state colorFiltro)
-            por si querés re-habilitarlo más adelante.
-            UX: chips horizontales con la paleta del evento — verde nacimiento,
-            rojo muerte, terracota aborto, ámbar retacto. Tap toggle. */}
-        <Text style={styles.swatchLabel}>EVENTO</Text>
+        {/* Filtro por TIPO DE EVENTO — 4 chips compactos con mini dot del
+            color del evento. Compactados para entrar los 4 en una fila. */}
         <View style={styles.swatchRow}>
           {EVENTOS_FILTRO.map(ev => {
             const sel = eventoFiltro === ev;
@@ -527,6 +575,7 @@ export function ParicionListScreen() {
                 accessibilityLabel={`Filtrar por evento ${ev}`}
                 accessibilityState={{ selected: sel }}
               >
+                <View style={[styles.eventoChipDot, { backgroundColor: pal.fg }]} />
                 <Text
                   style={[
                     styles.swatchTxt,
@@ -541,39 +590,11 @@ export function ParicionListScreen() {
           })}
         </View>
 
-        {/* Segunda fila: Campo + Usuario + Limpiar (solo si aplican) */}
-        {(camposVisibles.length > 1 || (esAdmin && usuariosVisibles.length > 1) || activosCount > 0) && (
-          <View style={styles.filterRow2}>
-            {camposVisibles.length > 1 && (
-              <Pressable
-                onPress={() => setExpandedFilter(e => (e === 'campo' ? null : 'campo'))}
-                style={[styles.fChipWide, campoFiltro && styles.fChipSel]}
-              >
-                <Text style={[styles.fChipTxt, campoFiltro && styles.fChipTxtSel]} numberOfLines={1}>
-                  {campoFiltroLabel}
-                </Text>
-                <Text style={[styles.fChev, campoFiltro && styles.fChevSel]}>▾</Text>
-              </Pressable>
-            )}
-
-            {esAdmin && usuariosVisibles.length > 1 && (
-              <Pressable
-                onPress={() => setExpandedFilter(e => (e === 'usuario' ? null : 'usuario'))}
-                style={[styles.fChipWide, usuarioFiltro && styles.fChipSel]}
-              >
-                <Text style={[styles.fChipTxt, usuarioFiltro && styles.fChipTxtSel]} numberOfLines={1}>
-                  {usuarioFiltroLabel}
-                </Text>
-                <Text style={[styles.fChev, usuarioFiltro && styles.fChevSel]}>▾</Text>
-              </Pressable>
-            )}
-
-            {activosCount > 0 && (
-              <Pressable onPress={clearFilters} style={styles.fClear}>
-                <Text style={styles.fClearTxt}>Limpiar</Text>
-              </Pressable>
-            )}
-          </View>
+        {/* Limpiar — fila propia abajo de los eventos, solo si hay filtros activos */}
+        {activosCount > 0 && (
+          <Pressable onPress={clearFilters} style={styles.fClear}>
+            <Text style={styles.fClearTxt}>Limpiar filtros</Text>
+          </Pressable>
         )}
       </View>
 
@@ -637,8 +658,22 @@ export function ParicionListScreen() {
           <Text style={styles.pendAction}>{flushing ? 'Subiendo...' : 'Sincronizar'}</Text>
         </Pressable>
       )}
+    </>
+  );
+
+  return (
+    <View style={styles.safe}>
+      {/* Navy fijo arriba (NUNCA scrollea) */}
+      <ScreenHeader
+        title="Pariciones"
+        count={scopedData.length}
+        countLabel="cargadas"
+        novedad={novedad}
+      />
 
       <SectionList
+        style={{ flex: 1 }}
+        ListHeaderComponent={filtersHeader}
         sections={sections}
         keyExtractor={i => i.id}
         renderItem={renderItem}
@@ -655,25 +690,22 @@ export function ParicionListScreen() {
         contentContainerStyle={styles.list}
         ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
         refreshControl={
-          <RefreshControl refreshing={loading} onRefresh={load} tintColor={colors.greenDark} />
+          <RefreshControl refreshing={loading} onRefresh={load} tintColor={colors.navy} />
         }
         ListEmptyComponent={
           query.length > 0 || activosCount > 0 ? (
-            <View style={styles.empty}>
-              <Text style={styles.emptyTxt}>
-                Sin resultados con los filtros activos.
-              </Text>
-              <Pressable onPress={clearFilters} style={styles.emptyBtn}>
-                <Text style={styles.emptyBtnTxt}>Limpiar filtros</Text>
-              </Pressable>
-            </View>
+            <EmptyState
+              emoji="🔍"
+              title="Sin resultados"
+              description="No hay pariciones que coincidan con los filtros activos."
+              cta={{ label: 'Limpiar filtros', onPress: clearFilters }}
+            />
           ) : (
-            <View style={styles.empty}>
-              <Text style={styles.emptyTxt}>Todavía no hay pariciones cargadas.</Text>
-              <Text style={styles.emptyHint}>
-                Tocá el botón <Text style={styles.emptyPlus}>+</Text> para cargar la primera.
-              </Text>
-            </View>
+            <EmptyState
+              emoji="🐮"
+              title="Todavía no hay pariciones"
+              description="Tocá el botón naranja + para cargar la primera."
+            />
           )
         }
       />
@@ -682,7 +714,7 @@ export function ParicionListScreen() {
         onPress={() => nav.navigate('ParicionForm', {})}
         accessibilityLabel="Nueva parición"
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -693,7 +725,8 @@ const styles = StyleSheet.create({
   searchWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: spacing.base,
+    // Sin marginHorizontal: el contentContainerStyle del SectionList ya
+    // tiene 16px de padding → la search bar arranca al mismo borde que las cards.
     marginTop: spacing.md,
     paddingHorizontal: spacing.md,
     height: 44,
@@ -727,13 +760,32 @@ const styles = StyleSheet.create({
   // Filter bar (2 filas: rango en la primera, campo/usuario en la segunda).
   // Cambiado de horizontal scroll a wrap — Ro reportó chips cortados en iPhone 15 Pro.
   filterBar: {
-    paddingHorizontal: spacing.base,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.sm,
+    // Sin paddingHorizontal: el contentContainerStyle del SectionList ya
+    // tiene padding 16px. Si dobláramos acá los filtros quedarían más
+    // adentro (32px) que las cards (16px) → "concentradas a la izquierda".
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.md,
     gap: spacing.sm,
+  },
+  // Filter bar horizontal — todos los chips en una sola fila scrolleable.
+  filterBarHorizontal: {
+    paddingHorizontal: spacing.base,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.md,
+    gap: spacing.xs,
+    alignItems: 'center',
+  },
+  // Separador entre filtros generales y filtros por evento.
+  filterSep: {
+    width: 1,
+    height: 24,
+    backgroundColor: colors.borderSoft,
+    marginHorizontal: 4,
   },
   filterRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
     gap: spacing.xs,
   },
   filterRow2: {
@@ -758,43 +810,68 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: spacing.xs,
   },
+  fChipIcon: {
+    fontSize: 13, // mismo tamaño que calendarIcon del DateRangeFilter
+  },
   fChipWide: {
+    // Distribución EQUITATIVA con la pildora Fecha (DateRangeFilter):
+    // flexBasis:0 + flexGrow:1 + flexShrink:1 + minWidth:0 fuerza el reparto
+    // por flexGrow puro (sin que el contenido influya en la basis). Con el
+    // shorthand `flex:1` y `flexWrap:'wrap'` en el padre, el reparto se
+    // volvía proporcional al contenido y Fecha quedaba más angosta.
+    // Padding y minHeight idénticos al mainChip del DateRangeFilter.
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 0,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
-    paddingLeft: spacing.md,
-    paddingRight: spacing.sm,
-    paddingVertical: 10,
+    gap: 4,
+    paddingLeft: 10,
+    paddingRight: 8,
+    paddingVertical: 8,
+    minHeight: 36,
     borderRadius: radius.round,
     borderWidth: 1,
     borderColor: colors.borderSoft,
     backgroundColor: colors.white,
-    maxWidth: 200,
-    minHeight: 36,
   },
   fChipSel: {
-    backgroundColor: colors.greenDark,
-    borderColor: colors.greenDark,
+    backgroundColor: colors.navy,
+    borderColor: colors.navy,
   },
   fChipTxt: {
+    // flex:1 + minWidth:0 → permite que numberOfLines={1} trunque cuando el
+    // chip está achicado por el reparto flex. Sin esto, el Text reporta su
+    // ancho natural y los chips quedan desparejos.
+    flex: 1,
+    minWidth: 0,
     fontSize: fontSize.sm,
     color: colors.textDark,
     fontWeight: fontWeight.semibold as '600',
   },
   fChipTxtSel: { color: colors.white },
-  fChev: { fontSize: 10, color: colors.textMuted, marginLeft: 2 },
+  fChev: { fontSize: 14, color: colors.textMuted, marginLeft: 2, fontWeight: '700' },
   fChevSel: { color: colors.white },
   // "Limpiar" — antes era rojo subrayado (parecía un botón de borrar
   // todo / acción peligrosa). Es solo un reset de filtros, así que lo
   // bajamos a textMuted sin subrayado, alineado al estilo "ghost link".
+  // Limpiar: botón outline ocupando el ancho completo (fila propia abajo
+  // de los chips de evento). Acción de "reset" subtle pero clara.
   fClear: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: radius.round,
+    borderWidth: 1,
+    borderColor: colors.borderSoft,
+    backgroundColor: 'transparent',
   },
   fClearTxt: {
     fontSize: fontSize.sm,
     color: colors.textMuted,
     fontWeight: fontWeight.semibold as '600',
+    letterSpacing: 0.2,
   },
 
   // Sub-picker (cuando tocás Campo o Usuario)
@@ -814,15 +891,15 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgLight,
   },
   subChipSel: {
-    backgroundColor: colors.greenLime,
-    borderColor: colors.greenLime,
+    backgroundColor: colors.orange,
+    borderColor: colors.orange,
   },
   subChipTxt: {
     fontSize: fontSize.sm,
     color: colors.textDark,
   },
   subChipTxtSel: {
-    color: colors.greenDeep,
+    color: colors.navyDeep,
     fontWeight: fontWeight.bold as '700',
   },
 
@@ -838,16 +915,18 @@ const styles = StyleSheet.create({
   },
   swatchRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap', // si los 4 chips no entran, wrap a próxima línea
     alignItems: 'center',
     gap: spacing.xs,
   },
   swatch: {
+    // flex:1 + padding ultra compacto + dot chico para que "Nacimiento" entre.
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 5,
-    paddingHorizontal: spacing.xs,
+    gap: 3,
+    paddingHorizontal: 4,
     paddingVertical: 7,
     borderRadius: radius.round,
     borderWidth: 1,
@@ -856,7 +935,7 @@ const styles = StyleSheet.create({
     minHeight: 34,
   },
   swatchSel: {
-    borderColor: colors.greenDark,
+    borderColor: colors.navy,
     borderWidth: 2,
     // Compensamos el extra 1px de border para que no salte el layout vertical.
     paddingVertical: 6,
@@ -869,14 +948,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.borderSoft,
   },
+  // Mini dot adentro del chip de evento, color del evento (pista visual).
+  eventoChipDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
   swatchTxt: {
-    fontSize: fontSize.xs,
+    fontSize: 12, // chico para que "Nacimiento" entre con el dot dentro del 25% de fila
     color: colors.textDark,
     fontWeight: fontWeight.semibold as '600',
     flexShrink: 1,
   },
   swatchTxtSel: {
-    color: colors.greenDark,
+    color: colors.navy,
     fontWeight: fontWeight.bold as '700',
   },
 
@@ -928,7 +1013,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: fontSize.md,
     fontWeight: fontWeight.bold as '700',
-    color: colors.greenDark,
+    color: colors.navy,
     letterSpacing: 0.3,
   },
   sectionCount: {
@@ -968,29 +1053,40 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
   },
-  caravanaRow: {
+  // Peach chip que envuelve [color dot + número] como un sticker leading.
+  // Mismo color (orangeSoft) que el emoji bubble del Home → consistencia.
+  // Sin flex:1 — el chip toma SOLO el tamaño de su contenido (no se estira).
+  caravanaChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    flex: 1,
-    minWidth: 0, // permite que numberOfLines haga truncate sin romper flex
+    gap: 8,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.orangeSoft,
+    borderRadius: radius.md,
+    alignSelf: 'flex-start',
   },
-  colorDot: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 1.5,
+  caravanaChipEmpty: {
+    backgroundColor: colors.bgLight,
+    borderWidth: 1,
     borderColor: colors.borderSoft,
+    borderStyle: 'dashed',
   },
-  colorDotEmpty: {
+  caravanaDot: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.12)',
+  },
+  caravanaDotEmpty: {
     backgroundColor: colors.bgLight,
     borderStyle: 'dashed',
   },
   caravanaNum: {
-    fontSize: fontSize.xl, // 24pt — dominante en la card
+    fontSize: fontSize.lg, // 18pt — visible pero proporcional al chip
     fontWeight: fontWeight.bold as '700',
-    color: colors.textDark,
-    lineHeight: 28,
+    color: colors.navy,
     letterSpacing: 0.3,
   },
   noCaravana: {
@@ -1006,6 +1102,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.round,
     minHeight: 26,
     justifyContent: 'center',
+    marginLeft: 'auto', // empuja el badge + chev a la derecha (chip queda a la izq)
   },
   eventoBadgeTxt: {
     fontSize: fontSize.xs,
@@ -1023,11 +1120,11 @@ const styles = StyleSheet.create({
 
   // Fila 2: atributos del animal (sexo · grupo)
   attrLine: {
-    fontSize: fontSize.base, // 15pt — legible, peso medio
+    fontSize: fontSize.base,
     color: colors.textDark,
     fontWeight: fontWeight.medium as '500',
     lineHeight: 20,
-    paddingLeft: 34, // alineado con el número de caravana (dot + gap)
+    // Alineado con el borde izq del chip (no más paddingLeft hack)
   },
 
   // Footer: campo + usuario + sync badge
@@ -1035,7 +1132,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    paddingLeft: 34,
     paddingTop: 2,
   },
   footerItem: {
@@ -1055,7 +1151,6 @@ const styles = StyleSheet.create({
   // Badge de causa — señal de alarma para muerte/aborto
   causaBadge: {
     marginTop: 2,
-    marginLeft: 34,
     backgroundColor: '#FBE4E3',
     paddingHorizontal: spacing.sm,
     paddingVertical: 6,
@@ -1090,7 +1185,7 @@ const styles = StyleSheet.create({
   },
   emptyPlus: {
     fontWeight: fontWeight.bold as '700',
-    color: colors.greenDark,
+    color: colors.navy,
   },
   emptyBtn: {
     marginTop: spacing.lg,
@@ -1098,10 +1193,10 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     borderRadius: radius.md,
     borderWidth: 1.5,
-    borderColor: colors.greenDark,
+    borderColor: colors.navy,
   },
   emptyBtnTxt: {
-    color: colors.greenDark,
+    color: colors.navy,
     fontWeight: fontWeight.bold as '700',
   },
 });

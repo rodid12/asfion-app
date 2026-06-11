@@ -17,13 +17,13 @@ interface Props {
 
 export function PrimaryButton({ label, onPress, variant = 'primary', loading, disabled }: Props) {
   const bg =
-    variant === 'primary' ? colors.greenDark :
+    variant === 'primary' ? colors.navy :
     variant === 'danger'  ? colors.terracota :
                             'transparent';
   const fg =
-    variant === 'ghost' ? colors.greenDark : colors.white;
+    variant === 'ghost' ? colors.navy : colors.white;
   const border =
-    variant === 'ghost' ? colors.greenDark : 'transparent';
+    variant === 'ghost' ? colors.navy : 'transparent';
 
   return (
     <Pressable

@@ -19,6 +19,7 @@ import { useNavigation, useRoute, type RouteProp } from '@react-navigation/nativ
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import { PrimaryButton } from '@/components/PrimaryButton';
+import { SectionHeading } from '@/components/SectionHeading';
 import { SyncBadge } from '@/components/SyncBadge';
 import { useRepository } from '@/data';
 import { colors } from '@/theme/colors';
@@ -107,7 +108,7 @@ export function CompraDetailScreen() {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.loadingBox}>
-          <ActivityIndicator color={colors.greenDark} size="large" />
+          <ActivityIndicator color={colors.navy} size="large" />
         </View>
       </SafeAreaView>
     );
@@ -229,7 +230,7 @@ export function CompraDetailScreen() {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <View style={styles.section}>
-      <Text style={styles.sectionTitle}>{title}</Text>
+      <SectionHeading>{title}</SectionHeading>
       <View style={styles.sectionBody}>{children}</View>
     </View>
   );
@@ -264,12 +265,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: 6,
     borderRadius: radius.round,
-    backgroundColor: colors.greenLime,
+    backgroundColor: colors.orange,
   },
   numTxt: {
     fontSize: fontSize.md,
     fontWeight: fontWeight.bold as '700',
-    color: colors.greenDeep,
+    color: colors.navyDeep,
     letterSpacing: 0.5,
   },
   consignadoTxt: {
@@ -313,7 +314,7 @@ const styles = StyleSheet.create({
   },
   rowValSmall: { fontSize: fontSize.sm, color: colors.textMuted, fontWeight: fontWeight.regular as '400' },
   rowValHighlight: {
-    color: colors.greenDeep,
+    color: colors.navyDeep,
     fontWeight: fontWeight.bold as '700',
     fontSize: fontSize.lg,
   },

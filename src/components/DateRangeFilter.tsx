@@ -46,6 +46,8 @@ interface Props {
   hasta?: string;
   onChangePreset: (key: string) => void;
   onChangeCustom: (desde: string | undefined, hasta: string | undefined) => void;
+  /** Style extra para el chip principal (ej: flex:1 para que ocupe el ancho). */
+  chipStyle?: import('react-native').ViewStyle;
 }
 
 function fmtCorta(iso: string): string {
@@ -66,6 +68,7 @@ export function DateRangeFilter({
   hasta,
   onChangePreset,
   onChangeCustom,
+  chipStyle,
 }: Props) {
   const [open, setOpen] = useState(false);
   // sub-state local para los pickers dentro del modal (evita commitear hasta
@@ -122,12 +125,12 @@ export function DateRangeFilter({
           no carga. */}
       <Pressable
         onPress={onAbrir}
-        style={[styles.mainChip, customActivo && styles.mainChipActive]}
+        style={[styles.mainChip, customActivo && styles.mainChipActive, chipStyle]}
         hitSlop={6}
       >
         <Text style={styles.calendarIcon}>🗓</Text>
         <Text style={[styles.mainChipTxt, customActivo && styles.mainChipTxtActive]} numberOfLines={1}>
-          Fecha: {chipLabel}
+          {chipLabel}
         </Text>
         <Text style={[styles.chev, customActivo && styles.chevActive]}>▾</Text>
       </Pressable>
@@ -170,7 +173,11 @@ export function DateRangeFilter({
             <View style={styles.customRow}>
               <Pressable
                 onPress={() => setPickerOpen('desde')}
-                style={[styles.dateBtn, draftDesde && styles.dateBtnActive]}
+                style={[
+                  styles.dateBtn,
+                  pickerOpen === 'desde' && styles.dateBtnEditing,
+                  draftDesde && styles.dateBtnFilled,
+                ]}
               >
                 <Text style={styles.dateBtnLabel}>DESDE</Text>
                 <Text style={[styles.dateBtnValue, !draftDesde && styles.dateBtnValueEmpty]}>
@@ -179,7 +186,11 @@ export function DateRangeFilter({
               </Pressable>
               <Pressable
                 onPress={() => setPickerOpen('hasta')}
-                style={[styles.dateBtn, draftHasta && styles.dateBtnActive]}
+                style={[
+                  styles.dateBtn,
+                  pickerOpen === 'hasta' && styles.dateBtnEditing,
+                  draftHasta && styles.dateBtnFilled,
+                ]}
               >
                 <Text style={styles.dateBtnLabel}>HASTA</Text>
                 <Text style={[styles.dateBtnValue, !draftHasta && styles.dateBtnValueEmpty]}>
@@ -200,6 +211,10 @@ export function DateRangeFilter({
                   }
                   mode="date"
                   display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  // textColor + themeVariant para que el spinner se vea legible
+                  // (en iOS por default el texto era gris claro sobre bgLight, casi invisible)
+                  textColor={colors.navyDeep}
+                  themeVariant="light"
                   minimumDate={
                     pickerOpen === 'hasta' && draftDesde
                       ? new Date(draftDesde + 'T00:00:00')
@@ -260,13 +275,15 @@ export function DateRangeFilter({
 }
 
 const styles = StyleSheet.create({
-  // Chip principal en la filter bar
+  // Chip principal en la filter bar — compacto para entrar con flex:1 en
+  // un row con otros 2 chips (Campo, Usuario).
   mainChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 10,
+    gap: 4,
+    paddingLeft: 10,
+    paddingRight: 8,
+    paddingVertical: 8,
     borderRadius: radius.round,
     borderWidth: 1,
     borderColor: colors.borderSoft,
@@ -274,26 +291,29 @@ const styles = StyleSheet.create({
     minHeight: 36,
   },
   mainChipActive: {
-    backgroundColor: colors.greenLime,
-    borderColor: colors.greenLime,
+    backgroundColor: colors.orange,
+    borderColor: colors.orange,
   },
   calendarIcon: { fontSize: 14 },
-  // Sin flex:1 — antes el texto colapsaba a 0 cuando el chip estaba dentro
-  // de un row container sin width fija, lo que mostraba solo el icono y la
-  // flecha. Ahora el texto usa su ancho natural y el chip crece al
-  // contenido. Mantenemos numberOfLines={1} en el JSX para evitar wraps
-  // raros en rangos custom largos.
+  // flex:1 + minWidth:0 → permite truncar (numberOfLines={1}) cuando el chip
+  // es angosto. Sin esto, el Text reporta su ancho natural como intrinsic min
+  // y el reparto flex termina siendo proporcional al contenido en vez de
+  // equitativo — por ej. una Fecha "Hoy" queda mucho más chica que un chip
+  // con "Campo: todos" en la misma fila.
   mainChipTxt: {
+    flex: 1,
+    minWidth: 0,
     fontSize: fontSize.sm,
     color: colors.textDark,
     fontWeight: fontWeight.semibold as '600',
   },
   mainChipTxtActive: {
-    color: colors.greenDeep,
+    color: colors.navyDeep,
     fontWeight: fontWeight.bold as '700',
   },
-  chev: { fontSize: 10, color: colors.textMuted },
-  chevActive: { color: colors.greenDeep },
+  // Flecha dropdown más grande (14) para que se vea con claridad en el chip.
+  chev: { fontSize: 14, color: colors.textMuted, fontWeight: '700' },
+  chevActive: { color: colors.navyDeep },
 
   // Modal
   backdrop: {
@@ -337,8 +357,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgLight,
   },
   presetSel: {
-    backgroundColor: colors.greenDark,
-    borderColor: colors.greenDark,
+    backgroundColor: colors.navy,
+    borderColor: colors.navy,
   },
   presetTxt: {
     fontSize: fontSize.sm,
@@ -370,9 +390,16 @@ const styles = StyleSheet.create({
     borderColor: colors.borderSoft,
     backgroundColor: colors.bgLight,
   },
-  dateBtnActive: {
-    borderColor: colors.greenLime,
-    backgroundColor: '#F0F8E8',
+  // Estado "editando": el usuario tappeó esta caja y el picker está abierto.
+  // Solo borde naranja, sin fill. Indica "estoy esperando que elijas fecha".
+  dateBtnEditing: {
+    borderColor: colors.orange,
+  },
+  // Estado "rellenado": la caja tiene una fecha elegida.
+  // Borde naranja + bg peach. Indica "esta fecha está seleccionada".
+  dateBtnFilled: {
+    borderColor: colors.orange,
+    backgroundColor: colors.orangeSoft,
   },
   dateBtnLabel: {
     fontSize: fontSize.xs,
@@ -393,9 +420,10 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.semibold as '600',
   },
 
-  // Picker dentro del modal
+  // Picker dentro del modal — bg blanco para máximo contraste con el texto
+  // del spinner iOS (sobre bgLight cream el texto se ve gris claro).
   pickerWrap: {
-    backgroundColor: colors.bgLight,
+    backgroundColor: colors.white,
     borderRadius: radius.md,
     paddingTop: spacing.xs,
     alignItems: 'center',
@@ -406,7 +434,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
   },
   pickerDoneTxt: {
-    color: colors.greenDark,
+    color: colors.navy,
     fontSize: fontSize.md,
     fontWeight: fontWeight.bold as '700',
   },
@@ -445,7 +473,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderRadius: radius.md,
-    backgroundColor: colors.greenDark,
+    backgroundColor: colors.navy,
   },
   btnPrimaryDisabled: {
     backgroundColor: colors.borderSoft,

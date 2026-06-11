@@ -67,7 +67,7 @@ const styles = StyleSheet.create({
   },
   chev: {
     fontSize: fontSize.md,
-    color: colors.greenDark,
+    color: colors.navy,
     fontWeight: fontWeight.bold as '700',
   },
   body: {

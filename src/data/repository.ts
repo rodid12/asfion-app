@@ -1,8 +1,8 @@
 // Repository pattern. Los screens NUNCA hablan con Sheets ni con Supabase directo.
 // Siempre pasan por acá. Eso nos permite cambiar el backend sin tocar la UI.
 
-import type { CaravanaColor, Campo, Circuito, Evento, Lote, Parcela, Pastoreo, Pluviometro, TipoEvento, Usuario } from './types';
-import { isSessionExpiredError } from './backends/supabase';
+import type { CaravanaColor, Campo, Circuito, Evento, Lote, Parcela, Pastoreo, Pluviometro, Subscription, TipoEvento, Usuario } from './types';
+import { isSessionExpiredError, looksLikeRlsBlock, SubscriptionBlockedError } from './backends/supabase';
 
 /** Última caravana cargada en un campo — alimenta el autocomplete del form. */
 export interface UltimaCaravana {
@@ -40,6 +40,9 @@ export interface IDataBackend {
    * tira "usuario sin clienteId". AuthProvider llama esto al bootstrap.
    */
   setCurrentUser?(user: Usuario | null): void;
+
+  // Subscription / billing — estado del cliente para enforcement de cobranza.
+  getSubscription(): Promise<Subscription>;
 
   // Catálogos
   listCampos(): Promise<Campo[]>;
@@ -134,6 +137,9 @@ export class Repository {
   logout = () => this.backend.logout();
   setCurrentUser = (user: Usuario | null) => this.backend.setCurrentUser?.(user);
 
+  // Subscription / billing
+  getSubscription = () => this.backend.getSubscription();
+
   // Catálogos
   listCampos = () => this.backend.listCampos();
   listLotes = (campoId: string) => this.backend.listLotes(campoId);
@@ -166,6 +172,16 @@ export class Repository {
       // que ofrezca re-login.
       if (isSessionExpiredError(err)) {
         throw err;
+      }
+      // Si fue un bloqueo de RLS (típicamente: subscription en mora), tampoco
+      // encolamos — el reintento va a fallar hasta que regularicen el pago.
+      // Lo elevamos como SubscriptionBlockedError para que la UI muestre un
+      // mensaje claro en vez del "pending" típico de errores de red.
+      const msg = err instanceof Error ? err.message : String(err);
+      if (looksLikeRlsBlock(msg)) {
+        throw new SubscriptionBlockedError(
+          'No se puede cargar este evento: la cuenta está en mora. Regularizá el pago para volver a cargar datos.',
+        );
       }
       const pending: Evento = {
         ...evento,

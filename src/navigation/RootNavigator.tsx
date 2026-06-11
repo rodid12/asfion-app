@@ -19,15 +19,17 @@ import { useClientConfig } from '@/config/ClientConfigContext';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-// Header global del Stack. Importante:
-//  - headerBackButtonDisplayMode: 'minimal' → en iOS muestra solo el chevron,
-//    no el nombre de la pantalla anterior (que era "MainTabs", muy feo).
-//  - headerBackTitle: '' → fallback por si el flag anterior no aplica en alguna versión.
-//  - headerTitleAlign: 'center' → centrado tipo iOS estándar; queda más limpio.
+// Header global del Stack — consistente con el ScreenHeader de los listados:
+//  - bg = navyDeep (mismo color que ScreenHeader → continuidad visual cuando
+//    se navega desde una lista a un form o detalle)
+//  - title 18px bold blanco
+//  - headerBackButtonDisplayMode: 'minimal' → en iOS muestra solo el chevron
+//  - headerBackTitle: '' → fallback para versiones viejas
+//  - headerTitleAlign: 'center' → centrado tipo iOS estándar
 const headerStyle = {
-  headerStyle: { backgroundColor: colors.greenDark },
+  headerStyle: { backgroundColor: colors.navyDeep },
   headerTintColor: colors.white,
-  headerTitleStyle: { fontWeight: '700' as const },
+  headerTitleStyle: { fontWeight: '700' as const, fontSize: 18, color: colors.white },
   headerTitleAlign: 'center' as const,
   headerBackTitle: '',
   headerBackButtonDisplayMode: 'minimal' as const,
@@ -46,7 +48,7 @@ export function RootNavigator() {
   if (loading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.bgLight }}>
-        <ActivityIndicator color={colors.greenDark} size="large" />
+        <ActivityIndicator color={colors.navy} size="large" />
       </View>
     );
   }
@@ -72,53 +74,28 @@ export function RootNavigator() {
                   Registramos condicionalmente según los módulos del cliente:
                   si Mortandad no está habilitada, MortandadForm no existe
                   en el stack. */}
+              {/* Forms y detalles: el title específico ("Nueva parición" /
+                  "Editar parición" / etc.) lo setea cada screen con
+                  nav.setOptions en su useEffect — ver isEdit en cada Form. */}
               {hasModulo('pariciones') && (
                 <>
-                  <Stack.Screen
-                    name="ParicionDetail"
-                    component={ParicionDetailScreen}
-                    options={{ title: 'Detalle parición' }}
-                  />
-                  <Stack.Screen
-                    name="ParicionForm"
-                    component={ParicionFormScreen}
-                    options={{ title: 'Parición' }}
-                  />
+                  <Stack.Screen name="ParicionDetail" component={ParicionDetailScreen} options={{ title: 'Detalle' }} />
+                  <Stack.Screen name="ParicionForm"   component={ParicionFormScreen}   options={{ title: 'Parición' }} />
                 </>
               )}
               {hasModulo('lluvias') && (
-                <Stack.Screen
-                  name="LluviaForm"
-                  component={LluviaFormScreen}
-                  options={{ title: 'Lluvia' }}
-                />
+                <Stack.Screen name="LluviaForm" component={LluviaFormScreen} options={{ title: 'Lluvia' }} />
               )}
               {hasModulo('mortandad') && (
-                <Stack.Screen
-                  name="MortandadForm"
-                  component={MortandadFormScreen}
-                  options={{ title: 'Mortandad' }}
-                />
+                <Stack.Screen name="MortandadForm" component={MortandadFormScreen} options={{ title: 'Mortandad' }} />
               )}
               {hasModulo('pastoreo') && (
-                <Stack.Screen
-                  name="PastoreoForm"
-                  component={PastoreoFormScreen}
-                  options={{ title: 'Pastoreo' }}
-                />
+                <Stack.Screen name="PastoreoForm" component={PastoreoFormScreen} options={{ title: 'Pastoreo' }} />
               )}
               {hasModulo('compras') && (
                 <>
-                  <Stack.Screen
-                    name="CompraDetail"
-                    component={CompraDetailScreen}
-                    options={{ title: 'Detalle compra' }}
-                  />
-                  <Stack.Screen
-                    name="CompraForm"
-                    component={CompraFormScreen}
-                    options={{ title: 'Compra' }}
-                  />
+                  <Stack.Screen name="CompraDetail" component={CompraDetailScreen} options={{ title: 'Detalle' }} />
+                  <Stack.Screen name="CompraForm"   component={CompraFormScreen}   options={{ title: 'Compra' }} />
                 </>
               )}
             </>

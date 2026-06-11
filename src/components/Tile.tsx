@@ -16,13 +16,13 @@ interface Props {
 
 export function Tile({ label, emoji, onPress, variant = 'dark' }: Props) {
   const bg =
-    variant === 'dark' ? colors.greenDark :
-    variant === 'lime' ? colors.greenLime :
+    variant === 'dark' ? colors.navy :
+    variant === 'lime' ? colors.orange :
                          colors.white;        // antes era bgLight → invisible sobre el fondo
   const fg =
-    variant === 'light' ? colors.greenDark : colors.white;
+    variant === 'light' ? colors.navy : colors.white;
   const borderColor =
-    variant === 'light' ? colors.greenDark : 'transparent';
+    variant === 'light' ? colors.navy : 'transparent';
   const borderWidth = variant === 'light' ? 2 : 0;
 
   return (

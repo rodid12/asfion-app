@@ -83,7 +83,7 @@ const METRICA_LABEL: Record<MetricaTab, string> = {
 const MORTANDAD_ACCENT = colors.danger;
 const LLUVIAS_ACCENT = '#1F4E6A';
 const PASTOREO_ACCENT = colors.amber;
-const COMPRAS_ACCENT = colors.greenDark;
+const COMPRAS_ACCENT = colors.navy;
 
 // Categorías de hacienda en orden estable.
 const CATEGORIA_ORDEN: CategoriaHacienda[] = ['vaca', 'ternero', 'toro', 'novillo', 'vaquillona'];
@@ -118,7 +118,7 @@ function rangoDesde(r: Rango): string | null {
 
 // Paleta por tipo de evento (consistente con los chips del form).
 const EVENTO_COLOR: Record<EventoParicion, string> = {
-  Nacimiento: colors.greenLime,
+  Nacimiento: colors.orange,
   Muerte:     colors.danger,
   Aborto:     colors.terracota,
   Retacto:    colors.amber,
@@ -812,7 +812,7 @@ export function MetricasScreen() {
       <ScrollView
         contentContainerStyle={styles.scroll}
         refreshControl={
-          <RefreshControl refreshing={loading} onRefresh={load} tintColor={colors.greenDark} />
+          <RefreshControl refreshing={loading} onRefresh={load} tintColor={colors.navy} />
         }
       >
         {/* ============ RESUMEN ============ */}
@@ -821,7 +821,7 @@ export function MetricasScreen() {
             {/* KPI tiles — mix de los 4 módulos. 2 filas de 2 para que entren
                 cómodas en iPhone sin que las cifras grandes se corten. */}
             <View style={styles.kpiRow}>
-              <Kpi value={totalNacimientos} label="NACIMIENTOS" color={colors.greenLime} />
+              <Kpi value={totalNacimientos} label="NACIMIENTOS" color={colors.orange} />
               <Kpi value={totalMM} label="MM LLUVIA" color={LLUVIAS_ACCENT} />
             </View>
             <View style={styles.kpiRow}>
@@ -837,7 +837,7 @@ export function MetricasScreen() {
               title="Pariciones"
               stat={totalEventos}
               statLabel={totalEventos === 1 ? 'evento' : 'eventos'}
-              accent={colors.greenDark}
+              accent={colors.navy}
               rows={eventosPorCampo.slice(0, 3).map(r => ({
                 label: r.campo.nombre,
                 value: r.count,
@@ -925,7 +925,7 @@ export function MetricasScreen() {
         {metricaTab === 'pariciones' && (
           <>
             <View style={styles.kpiRow}>
-              <Kpi value={totalNacimientos} label="NACIMIENTOS" color={colors.greenLime} />
+              <Kpi value={totalNacimientos} label="NACIMIENTOS" color={colors.orange} />
               <Kpi value={totalMuertes} label="MUERTES" color={colors.danger} />
             </View>
 
@@ -944,7 +944,7 @@ export function MetricasScreen() {
                       label={r.campo.nombre}
                       value={r.count}
                       max={maxEventosCampo}
-                      color={colors.greenDark}
+                      color={colors.navy}
                     />
                   ))}
                 </View>
@@ -986,7 +986,7 @@ export function MetricasScreen() {
                       label={r.campo.nombre}
                       value={r.restan}
                       max={maxRestan}
-                      color={colors.greenLime}
+                      color={colors.orange}
                       valueLabel={`${r.restan} / ${r.stock}`}
                     />
                   ))}
@@ -1067,7 +1067,7 @@ export function MetricasScreen() {
             <View style={styles.kpiRow}>
               <Kpi value={totalMM} label="MM TOTALES" color="#1F4E6A" />
               <Kpi value={filteredLluvias.length} label="REGISTROS" color="#3E8AB4" />
-              <Kpi value={lluviasPorCampo.length} label="CAMPOS" color={colors.greenDark} />
+              <Kpi value={lluviasPorCampo.length} label="CAMPOS" color={colors.navy} />
             </View>
 
             {/* Line chart de mm por día (eje X fecha, eje Y mm) — feedback
@@ -1175,7 +1175,7 @@ export function MetricasScreen() {
           <>
             <View style={styles.kpiRow}>
               <Kpi value={totalMortandad} label="MUERTES" color={MORTANDAD_ACCENT} />
-              <Kpi value={mortandadPorCampo.length} label="CAMPOS" color={colors.greenDark} />
+              <Kpi value={mortandadPorCampo.length} label="CAMPOS" color={colors.navy} />
               {/* Top categoría: cuando no hay datos, el label "TOP CATEG."
                   + value 0 era confuso. Pasamos un value > 0 solo si existe
                   una categoría líder; si no, dejamos que Kpi renderice "—". */}
@@ -1319,7 +1319,7 @@ export function MetricasScreen() {
 
             <View style={styles.kpiRow}>
               <Kpi value={totalMovimientos} label="MOVIMIENTOS" color={PASTOREO_ACCENT} />
-              <Kpi value={totalAbiertos} label="EN LOTE AHORA" color={colors.greenDark} />
+              <Kpi value={totalAbiertos} label="EN LOTE AHORA" color={colors.navy} />
               <Kpi value={movimientosPorCampo.length} label="CAMPOS" color={colors.terracota} />
             </View>
 
@@ -1389,7 +1389,7 @@ export function MetricasScreen() {
                       label={r.categoria}
                       value={r.count}
                       max={maxPastoreoCategoria}
-                      color={colors.greenDark}
+                      color={colors.navy}
                       valueLabel={String(r.count)}
                     />
                   ))}
@@ -1407,7 +1407,7 @@ export function MetricasScreen() {
               <Kpi
                 value={totalCabezasEstimadas}
                 label="CABEZAS APROX"
-                color={colors.greenDark}
+                color={colors.navy}
               />
               <Kpi
                 value={totalKgCompras}
@@ -1421,7 +1421,7 @@ export function MetricasScreen() {
                 <Kpi
                   value={totalInversion}
                   label="INVERSIÓN TOTAL ($)"
-                  color={colors.greenDark}
+                  color={colors.navy}
                 />
               </View>
             )}
@@ -1627,18 +1627,21 @@ function SummaryCard({
 // Si más adelante queremos forzar el cero literal en algún caso, agregamos
 // un prop `showZero` y listo.
 function Kpi({ value, label, color }: { value: number; label: string; color: string }) {
+  // Rediseño post-rebrand: card blanca + strip lateral 4px del color del KPI,
+  // mismo patrón que StatCard del Home — da consistencia visual entre las
+  // dos pantallas principales de la app.
   const isEmpty = value === 0;
+  const stripColor = isEmpty ? colors.borderSoft : color;
+  const valueColor = isEmpty ? colors.textMuted : color;
   return (
     <View style={styles.kpi}>
-      <Text
-        style={[
-          styles.kpiVal,
-          { color: isEmpty ? colors.textMuted : color },
-        ]}
-      >
-        {isEmpty ? '—' : value}
-      </Text>
-      <Text style={styles.kpiLbl}>{label}</Text>
+      <View style={[styles.kpiStrip, { backgroundColor: stripColor }]} />
+      <View style={styles.kpiBody}>
+        <Text style={[styles.kpiVal, { color: valueColor }]}>
+          {isEmpty ? '—' : value}
+        </Text>
+        <Text style={styles.kpiLbl}>{label}</Text>
+      </View>
     </View>
   );
 }
@@ -1711,7 +1714,7 @@ const styles = StyleSheet.create({
   headerStat: {
     fontSize: fontSize.xxl,
     fontWeight: fontWeight.bold as '700',
-    color: colors.greenDark,
+    color: colors.navy,
     lineHeight: 32,
   },
   headerStatLbl: {
@@ -1751,8 +1754,8 @@ const styles = StyleSheet.create({
     minHeight: 48,
   },
   subTabBigSel: {
-    backgroundColor: colors.greenDark,
-    borderColor: colors.greenDark,
+    backgroundColor: colors.navy,
+    borderColor: colors.navy,
     shadowColor: '#000',
     shadowOpacity: 0.12,
     shadowRadius: 4,
@@ -1788,7 +1791,7 @@ const styles = StyleSheet.create({
   },
   subTabSel: {
     backgroundColor: colors.white,
-    borderColor: colors.greenDark,
+    borderColor: colors.navy,
     shadowColor: '#000',
     shadowOpacity: 0.1,
     shadowRadius: 3,
@@ -1804,7 +1807,7 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.semibold as '600',
   },
   subTabTxtSel: {
-    color: colors.greenDark,
+    color: colors.navy,
     fontWeight: fontWeight.bold as '700',
   },
 
@@ -1831,8 +1834,8 @@ const styles = StyleSheet.create({
     minHeight: 36,
   },
   fChipSel: {
-    backgroundColor: colors.greenDark,
-    borderColor: colors.greenDark,
+    backgroundColor: colors.navy,
+    borderColor: colors.navy,
   },
   fChipTxt: {
     fontSize: fontSize.sm,
@@ -1881,19 +1884,31 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.md,
   },
+  // Card blanca con strip lateral de 4px del color del KPI.
+  // Misma anatomía que StatCard del Home (consistencia visual).
   kpi: {
     flex: 1,
     backgroundColor: colors.white,
     borderRadius: radius.lg,
-    padding: spacing.base,
     borderWidth: 1,
     borderColor: colors.borderSoft,
+    flexDirection: 'row',
+    overflow: 'hidden',
+    minHeight: 90,
+  },
+  kpiStrip: {
+    width: 4,
+  },
+  kpiBody: {
+    flex: 1,
+    padding: spacing.base,
     gap: 2,
+    justifyContent: 'center',
   },
   kpiVal: {
-    fontSize: 36,
+    fontSize: 32,
     fontWeight: fontWeight.bold as '700',
-    lineHeight: 38,
+    lineHeight: 36,
   },
   kpiLbl: {
     fontSize: fontSize.xs,
@@ -1901,6 +1916,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.8,
     fontWeight: fontWeight.bold as '700',
+    marginTop: 2,
   },
 
   // Section
@@ -2036,7 +2052,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgLight,
   },
   tHeadRow: {
-    backgroundColor: colors.greenDark,
+    backgroundColor: colors.navy,
   },
   tHeadCell: {
     color: colors.white,
@@ -2059,6 +2075,6 @@ const styles = StyleSheet.create({
   },
   tCellStrong: {
     fontWeight: fontWeight.bold as '700',
-    color: colors.greenDark,
+    color: colors.navy,
   },
 });

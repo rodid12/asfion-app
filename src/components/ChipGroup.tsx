@@ -78,8 +78,8 @@ const styles = StyleSheet.create({
     minWidth: 96,
   },
   chipSelected: {
-    borderColor: colors.greenDark,
-    backgroundColor: colors.greenDark,
+    borderColor: colors.navy,
+    backgroundColor: colors.navy,
   },
   chipDisabled: { opacity: 0.5 },
   text: {

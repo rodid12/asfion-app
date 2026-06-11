@@ -36,6 +36,7 @@ import { ChipGroup } from '@/components/ChipGroup';
 import { FaltaHint } from '@/components/FaltaHint';
 import { FormField } from '@/components/FormField';
 import { PrimaryButton } from '@/components/PrimaryButton';
+import { SectionHeading } from '@/components/SectionHeading';
 import { useAuth } from '@/auth/context';
 import { useRepository } from '@/data';
 import { useClientConfig } from '@/config/ClientConfigContext';
@@ -433,7 +434,7 @@ export function CompraFormScreen() {
           </View>
 
           {/* ============ SECCIÓN: HACIENDA ============ */}
-          <Text style={styles.sectionTitle}>Hacienda</Text>
+          <SectionHeading>Hacienda</SectionHeading>
 
           {/* Actividad — chips */}
           {catCompras.actividades.length > 0 && (
@@ -505,7 +506,7 @@ export function CompraFormScreen() {
           </View>
 
           {/* ============ SECCIÓN: COMERCIAL ============ */}
-          <Text style={styles.sectionTitle}>Comercial</Text>
+          <SectionHeading>Comercial</SectionHeading>
 
           <View style={styles.dosColumnas}>
             <View style={styles.col}>
@@ -564,7 +565,7 @@ export function CompraFormScreen() {
           />
 
           {/* ============ SECCIÓN: LOGÍSTICA ============ */}
-          <Text style={styles.sectionTitle}>Logística</Text>
+          <SectionHeading>Logística</SectionHeading>
 
           <View style={styles.dosColumnas}>
             <View style={styles.col}>
@@ -647,7 +648,8 @@ const styles = StyleSheet.create({
   headerValue: { flex: 1, fontSize: fontSize.md, color: colors.textDark, fontWeight: fontWeight.semibold as '600', textAlign: 'right' },
   headerValueEmpty: { color: colors.textMuted, fontStyle: 'italic' },
   headerPicker: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, flex: 1, justifyContent: 'flex-end' },
-  chev: { fontSize: 12, color: colors.textMuted },
+  // Flecha dropdown más grande (14) para mejor visibilidad — consistente con los chips de filtro.
+  chev: { fontSize: 14, color: colors.textMuted, fontWeight: '700' },
 
   pickerOptions: { gap: spacing.xs, marginTop: spacing.xs },
   pickerOpt: {
@@ -658,18 +660,18 @@ const styles = StyleSheet.create({
     borderColor: colors.borderSoft,
     backgroundColor: colors.bgLight,
   },
-  pickerOptSel: { backgroundColor: colors.greenDark, borderColor: colors.greenDark },
+  pickerOptSel: { backgroundColor: colors.navy, borderColor: colors.navy },
   pickerOptTxt: { fontSize: fontSize.md, color: colors.textDark, fontWeight: fontWeight.semibold as '600' },
   pickerOptTxtSel: { color: colors.white, fontWeight: fontWeight.bold as '700' },
 
   pickerDoneBtn: { alignSelf: 'flex-end', paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
-  pickerDoneTxt: { color: colors.greenDark, fontSize: fontSize.md, fontWeight: fontWeight.bold as '700' },
+  pickerDoneTxt: { color: colors.navy, fontSize: fontSize.md, fontWeight: fontWeight.bold as '700' },
 
   // Sections
   sectionTitle: {
     fontSize: fontSize.md,
     fontWeight: fontWeight.bold as '700',
-    color: colors.greenDark,
+    color: colors.navy,
     marginTop: spacing.md,
     letterSpacing: 0.4,
   },
@@ -705,7 +707,7 @@ const styles = StyleSheet.create({
     borderColor: colors.borderSoft,
     backgroundColor: colors.white,
   },
-  plazoChipSel: { backgroundColor: colors.greenDark, borderColor: colors.greenDark },
+  plazoChipSel: { backgroundColor: colors.navy, borderColor: colors.navy },
   plazoChipTxt: { fontSize: fontSize.sm, color: colors.textDark, fontWeight: fontWeight.semibold as '600' },
   plazoChipTxtSel: { color: colors.white, fontWeight: fontWeight.bold as '700' },
 

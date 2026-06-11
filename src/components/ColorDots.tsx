@@ -88,7 +88,7 @@ const styles = StyleSheet.create({
     borderColor: colors.borderSoft,
   },
   dotSelected: {
-    borderColor: colors.greenDark,
+    borderColor: colors.navy,
     borderWidth: 4,
   },
   dotLabel: {
@@ -97,7 +97,7 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.semibold as '600',
   },
   dotLabelSelected: {
-    color: colors.greenDark,
+    color: colors.navy,
     fontWeight: fontWeight.bold as '700',
   },
 });

@@ -462,7 +462,7 @@ const styles = StyleSheet.create({
   },
   infoCtaTxt: {
     fontSize: fontSize.sm,
-    color: colors.greenDark,
+    color: colors.navy,
     fontWeight: fontWeight.bold as '700',
     textDecorationLine: 'underline',
   },
@@ -486,12 +486,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgLight,
   },
   pickerChipSel: {
-    backgroundColor: colors.greenDark,
-    borderColor: colors.greenDark,
+    backgroundColor: colors.navy,
+    borderColor: colors.navy,
   },
   pickerChipSelLote: {
-    backgroundColor: colors.greenLime,
-    borderColor: colors.greenLime,
+    backgroundColor: colors.orange,
+    borderColor: colors.orange,
   },
   pickerChipTxt: {
     fontSize: fontSize.sm,

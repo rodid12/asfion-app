@@ -179,6 +179,17 @@ export class InMemoryBackend implements IDataBackend {
     await this.persist();
   }
 
+  async getSubscription() {
+    // Backend en memoria: nunca expira. Sirve para development local sin
+    // configurar billing real.
+    return {
+      status: 'active' as const,
+      periodEndDate: null,
+      lastPaymentDate: null,
+      daysOverdue: 0,
+    };
+  }
+
   async listCampos() {
     await this.load();
     return [...this.db.campos];

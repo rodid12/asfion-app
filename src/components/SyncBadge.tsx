@@ -28,7 +28,9 @@ const PILL: Record<Exclude<SyncState, 'synced'>, PillCopy> = {
 };
 
 export function SyncBadge({ state }: { state: SyncState }) {
-  // Estado normal: dot chico y discreto. No agrega ruido textual.
+  // Estado normal: dot verde chico (sync OK). Útil para confirmar que el
+  // registro está subido al server. Cuando hay algo pending/failed, en lugar
+  // del dot mostramos el pill correspondiente con su color y texto.
   if (state === 'synced') {
     return (
       <View style={styles.dotWrap} accessibilityLabel="Sincronizado">
@@ -67,9 +69,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   dot: {
+    // Verde success (no brand) para que "sincronizado" no se confunda con CTAs naranjas.
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: colors.greenLime,
+    backgroundColor: colors.success,
   },
 });

@@ -29,6 +29,7 @@ import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import { PrimaryButton } from '@/components/PrimaryButton';
+import { SectionHeading } from '@/components/SectionHeading';
 import { SyncBadge } from '@/components/SyncBadge';
 import { useRepository } from '@/data';
 import { colors } from '@/theme/colors';
@@ -136,7 +137,7 @@ export function ParicionDetailScreen() {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.loadingBox}>
-          <ActivityIndicator color={colors.greenDark} size="large" />
+          <ActivityIndicator color={colors.navy} size="large" />
         </View>
       </SafeAreaView>
     );
@@ -237,7 +238,7 @@ export function ParicionDetailScreen() {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <View style={styles.section}>
-      <Text style={styles.sectionTitle}>{title}</Text>
+      <SectionHeading>{title}</SectionHeading>
       <View style={styles.sectionBody}>{children}</View>
     </View>
   );

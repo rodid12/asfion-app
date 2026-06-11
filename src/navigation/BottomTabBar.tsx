@@ -5,7 +5,7 @@
 //
 // Diseño:
 //  - 6 tabs no caben cómodas con labels completas → labels cortas de 1-2 líneas.
-//  - Tab activo: color greenLime + línea superior de acento (ASFION verde).
+//  - Tab activo: color orange + línea superior de acento (ASFION verde).
 //  - Tab inactivo pero "próximamente": opacidad reducida, no clickable.
 //  - Tabs iconográficos: usamos emoji + texto, como hace el AppSheet. Más adelante
 //    migramos a iconos SVG propios (ASFION) cuando tengamos el set.
@@ -132,7 +132,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   indicatorOn: {
-    backgroundColor: colors.greenLime,
+    backgroundColor: colors.orange,
   },
   emoji: {
     fontSize: 20,
@@ -150,7 +150,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 2,
   },
   labelActive: {
-    color: colors.greenDark,
+    color: colors.navy,
     fontWeight: fontWeight.bold as '700',
   },
   labelDisabled: {

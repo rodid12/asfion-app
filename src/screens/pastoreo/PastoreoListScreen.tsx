@@ -25,7 +25,9 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import { DateRangeFilter } from '@/components/DateRangeFilter';
+import { EmptyState } from '@/components/EmptyState';
 import { Fab } from '@/components/Fab';
+import { ScreenHeader } from '@/components/ScreenHeader';
 import { SyncBadge } from '@/components/SyncBadge';
 import { useAuth } from '@/auth/context';
 import { useRepository } from '@/data';
@@ -380,16 +382,25 @@ export function PastoreoListScreen() {
     </View>
   );
 
+  // Label sin prefijo "Campo:" / "Circuito:" — el ícono del chip ya indica
+  // qué tipo de filtro es. Cuando no hay nada seleccionado mostramos solo
+  // "Todos" para que los chips queden parejos en ancho con Fecha.
   const campoFiltroLabel = campoFiltro
     ? camposMap[campoFiltro]?.nombre ?? campoFiltro
-    : 'Campo: todos';
+    : 'Todos';
 
   const circuitoFiltroLabel = circuitoFiltro
     ? circuitosMap[circuitoFiltro]?.nombre ?? circuitoFiltro
-    : 'Circuito: todos';
+    : 'Todos';
 
-  return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+  // Pill de novedades: pendientes o cantidad de pastoreos abiertos.
+  const abiertos = scopedData.filter(p => !p.fechaSalida).length;
+  const novedad = pendientes > 0
+    ? { emoji: '⚠️', text: `${pendientes} sin sync` }
+    : (abiertos > 0 ? { emoji: '🌾', text: `${abiertos} abiertos` } : null);
+
+  const filtersHeader = (
+    <>
       {/* Buscador */}
       <View style={styles.searchWrap}>
         <Text style={styles.searchIcon}>🔍</Text>
@@ -411,6 +422,7 @@ export function PastoreoListScreen() {
       </View>
 
       <View style={styles.filterBar}>
+        {/* Fila 1: Estado (Abiertos/Cerrados/Todos) — chips equitativos. */}
         <View style={styles.filterRow}>
           {(['abiertos', 'cerrados', 'todos'] as EstadoFilter[]).map(e => (
             <Pressable
@@ -426,46 +438,49 @@ export function PastoreoListScreen() {
           ))}
         </View>
 
-        <DateRangeFilter
-          presets={(['30d', '90d', 'year', 'todo'] as RangoFecha[]).map(r => ({ key: r, label: RANGO_LABEL[r] }))}
-          preset={rango}
-          presetTodo="todo"
-          desde={desdeCustom}
-          hasta={hastaCustom}
-          onChangePreset={k => setRango(k as RangoFecha)}
-          onChangeCustom={(d, h) => { setDesdeCustom(d); setHastaCustom(h); }}
-        />
+        {/* Fila 2: Fecha + Campo + Circuito — chips equitativos
+            (todos con flexBasis:0 + flexGrow:1 para reparto parejo). */}
+        <View style={styles.filterRow}>
+          <DateRangeFilter
+            chipStyle={{ flexGrow: 1, flexShrink: 1, flexBasis: 0, minWidth: 0 }}
+            presets={(['30d', '90d', 'year', 'todo'] as RangoFecha[]).map(r => ({ key: r, label: RANGO_LABEL[r] }))}
+            preset={rango}
+            presetTodo="todo"
+            desde={desdeCustom}
+            hasta={hastaCustom}
+            onChangePreset={k => setRango(k as RangoFecha)}
+            onChangeCustom={(d, h) => { setDesdeCustom(d); setHastaCustom(h); }}
+          />
+          {camposVisibles.length > 1 && (
+            <Pressable
+              onPress={() => { setCampoPickerOpen(o => !o); setCircuitoPickerOpen(false); }}
+              style={[styles.fChipWide, campoFiltro && styles.fChipSel]}
+            >
+              <Text style={styles.fChipIcon}>📍</Text>
+              <Text style={[styles.fChipTxt, campoFiltro && styles.fChipTxtSel]} numberOfLines={1}>
+                {campoFiltroLabel}
+              </Text>
+              <Text style={[styles.fChev, campoFiltro && styles.fChevSel]}>▾</Text>
+            </Pressable>
+          )}
+          {circuitosVisibles.length > 1 && (
+            <Pressable
+              onPress={() => { setCircuitoPickerOpen(o => !o); setCampoPickerOpen(false); }}
+              style={[styles.fChipWide, circuitoFiltro && styles.fChipSel]}
+            >
+              <Text style={styles.fChipIcon}>🔁</Text>
+              <Text style={[styles.fChipTxt, circuitoFiltro && styles.fChipTxtSel]} numberOfLines={1}>
+                {circuitoFiltroLabel}
+              </Text>
+              <Text style={[styles.fChev, circuitoFiltro && styles.fChevSel]}>▾</Text>
+            </Pressable>
+          )}
+        </View>
 
-        {(camposVisibles.length > 1 || circuitosVisibles.length > 1 || activosCount > 0) && (
-          <View style={styles.filterRow2}>
-            {camposVisibles.length > 1 && (
-              <Pressable
-                onPress={() => { setCampoPickerOpen(o => !o); setCircuitoPickerOpen(false); }}
-                style={[styles.fChipWide, campoFiltro && styles.fChipSel]}
-              >
-                <Text style={[styles.fChipTxt, campoFiltro && styles.fChipTxtSel]} numberOfLines={1}>
-                  {campoFiltroLabel}
-                </Text>
-                <Text style={[styles.fChev, campoFiltro && styles.fChevSel]}>▾</Text>
-              </Pressable>
-            )}
-            {circuitosVisibles.length > 1 && (
-              <Pressable
-                onPress={() => { setCircuitoPickerOpen(o => !o); setCampoPickerOpen(false); }}
-                style={[styles.fChipWide, circuitoFiltro && styles.fChipSel]}
-              >
-                <Text style={[styles.fChipTxt, circuitoFiltro && styles.fChipTxtSel]} numberOfLines={1}>
-                  {circuitoFiltroLabel}
-                </Text>
-                <Text style={[styles.fChev, circuitoFiltro && styles.fChevSel]}>▾</Text>
-              </Pressable>
-            )}
-            {activosCount > 0 && (
-              <Pressable onPress={clearFilters} style={styles.fClear}>
-                <Text style={styles.fClearTxt}>Limpiar</Text>
-              </Pressable>
-            )}
-          </View>
+        {activosCount > 0 && (
+          <Pressable onPress={clearFilters} style={styles.fClear}>
+            <Text style={styles.fClearTxt}>Limpiar filtros</Text>
+          </Pressable>
         )}
       </View>
 
@@ -527,8 +542,16 @@ export function PastoreoListScreen() {
           <Text style={styles.pendAction}>{flushing ? 'Subiendo...' : 'Sincronizar'}</Text>
         </Pressable>
       )}
+    </>
+  );
+
+  return (
+    <View style={styles.safe}>
+      <ScreenHeader title="Pastoreo" count={scopedData.length} countLabel="registros" novedad={novedad} />
 
       <SectionList
+        style={{ flex: 1 }}
+        ListHeaderComponent={filtersHeader}
         sections={sections}
         keyExtractor={i => i.id}
         renderItem={renderItem}
@@ -542,24 +565,22 @@ export function PastoreoListScreen() {
         contentContainerStyle={styles.list}
         ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
         refreshControl={
-          <RefreshControl refreshing={loading} onRefresh={load} tintColor={colors.greenDark} />
+          <RefreshControl refreshing={loading} onRefresh={load} tintColor={colors.navy} />
         }
         ListEmptyComponent={
           query.length > 0 || activosCount > 0 ? (
-            <View style={styles.empty}>
-              <Text style={styles.emptyTxt}>Sin resultados con los filtros activos.</Text>
-              <Pressable onPress={clearFilters} style={styles.emptyBtn}>
-                <Text style={styles.emptyBtnTxt}>Limpiar filtros</Text>
-              </Pressable>
-            </View>
+            <EmptyState
+              emoji="🔍"
+              title="Sin resultados"
+              description="No hay pastoreos que coincidan con los filtros activos."
+              cta={{ label: 'Limpiar filtros', onPress: clearFilters }}
+            />
           ) : (
-            <View style={styles.empty}>
-              <Text style={styles.emptyEmoji}>🌾</Text>
-              <Text style={styles.emptyTxt}>Todavía no hay pastoreos cargados.</Text>
-              <Text style={styles.emptyHint}>
-                Tocá <Text style={styles.emptyPlus}>+</Text> para registrar el primero.
-              </Text>
-            </View>
+            <EmptyState
+              emoji="🌾"
+              title="Todavía no hay pastoreos"
+              description="Tocá el botón naranja + para registrar el primero."
+            />
           )
         }
       />
@@ -568,17 +589,17 @@ export function PastoreoListScreen() {
         onPress={() => nav.navigate('PastoreoForm', {})}
         accessibilityLabel="Nuevo pastoreo"
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bgLight },
 
+  // Search — sin marginHorizontal: list contentContainerStyle ya aplica spacing.base.
   searchWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: spacing.base,
     marginTop: spacing.md,
     paddingHorizontal: spacing.md,
     height: 44,
@@ -604,13 +625,14 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.bold as '700', lineHeight: 16,
   },
 
+  // Filter bar — sin paddingHorizontal: alineado con cards via contentContainerStyle.
   filterBar: {
-    paddingHorizontal: spacing.base,
     paddingTop: spacing.md,
     paddingBottom: spacing.sm,
     gap: spacing.sm,
   },
-  filterRow: { flexDirection: 'row', gap: spacing.xs },
+  filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, alignItems: 'center' },
+  fChipIcon: { fontSize: 13 },
   filterRow2: {
     flexDirection: 'row', flexWrap: 'wrap',
     gap: spacing.xs, alignItems: 'center',
@@ -626,41 +648,72 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgLight, minHeight: 32, paddingVertical: 6,
   },
   fChipWide: {
-    flexDirection: 'row', alignItems: 'center', gap: spacing.xs,
-    paddingLeft: spacing.md, paddingRight: spacing.sm, paddingVertical: 10,
-    borderRadius: radius.round, borderWidth: 1, borderColor: colors.borderSoft,
-    backgroundColor: colors.white, maxWidth: 200, minHeight: 36,
+    // Padding/minHeight idénticos al mainChip del DateRangeFilter.
+    // flexBasis:0 → reparto parejo con Fecha/Campo/Circuito.
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 0,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingLeft: 10,
+    paddingRight: 8,
+    paddingVertical: 8,
+    minHeight: 36,
+    borderRadius: radius.round,
+    borderWidth: 1,
+    borderColor: colors.borderSoft,
+    backgroundColor: colors.white,
   },
-  fChipSel: { backgroundColor: colors.greenDark, borderColor: colors.greenDark },
-  fChipSelSecondary: { backgroundColor: colors.greenLime, borderColor: colors.greenLime },
-  fChipTxt: { fontSize: fontSize.sm, color: colors.textDark, fontWeight: fontWeight.semibold as '600' },
-  fChipTxtSel: { color: colors.white },
-  fChipTxtSelSecondary: { color: colors.greenDeep, fontWeight: fontWeight.bold as '700' },
-  fChev: { fontSize: 10, color: colors.textMuted, marginLeft: 2 },
-  fChevSel: { color: colors.white },
-  fClear: { paddingHorizontal: spacing.sm, paddingVertical: 6 },
-  // "Limpiar" como ghost link suave (ver ParicionListScreen).
-  fClearTxt: {
-    fontSize: fontSize.sm, color: colors.textMuted,
+  fChipSel: { backgroundColor: colors.navy, borderColor: colors.navy },
+  fChipSelSecondary: { backgroundColor: colors.orange, borderColor: colors.orange },
+  fChipTxt: {
+    // flex:1 + minWidth:0 → permite truncar cuando el reparto flex achica el chip.
+    flex: 1,
+    minWidth: 0,
+    fontSize: fontSize.sm,
+    color: colors.textDark,
     fontWeight: fontWeight.semibold as '600',
+  },
+  fChipTxtSel: { color: colors.white },
+  fChipTxtSelSecondary: { color: colors.navyDeep, fontWeight: fontWeight.bold as '700' },
+  fChev: { fontSize: 14, color: colors.textMuted, marginLeft: 2, fontWeight: '700' },
+  fChevSel: { color: colors.white },
+  // Limpiar outline full-width (consistente con los demás listados).
+  fClear: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: radius.round,
+    borderWidth: 1,
+    borderColor: colors.borderSoft,
+    backgroundColor: 'transparent',
+  },
+  fClearTxt: {
+    fontSize: fontSize.sm,
+    color: colors.textMuted,
+    fontWeight: fontWeight.semibold as '600',
+    letterSpacing: 0.2,
   },
 
   subPicker: {
     flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs,
-    paddingHorizontal: spacing.base, paddingBottom: spacing.md,
+    paddingBottom: spacing.md,
   },
   subChip: {
     paddingHorizontal: spacing.md, paddingVertical: 6,
     borderRadius: radius.md, borderWidth: 1,
     borderColor: colors.borderSoft, backgroundColor: colors.bgLight,
   },
-  subChipSel: { backgroundColor: colors.greenLime, borderColor: colors.greenLime },
+  subChipSel: { backgroundColor: colors.orange, borderColor: colors.orange },
   subChipTxt: { fontSize: fontSize.sm, color: colors.textDark },
-  subChipTxtSel: { color: colors.greenDeep, fontWeight: fontWeight.bold as '700' },
+  subChipTxtSel: { color: colors.navyDeep, fontWeight: fontWeight.bold as '700' },
 
+  // Pending pill — sin marginHorizontal (contentContainerStyle ya pone el base).
   pendPill: {
     flexDirection: 'row', alignItems: 'center',
-    marginHorizontal: spacing.base, marginBottom: spacing.md,
+    marginBottom: spacing.md,
     paddingVertical: spacing.sm, paddingHorizontal: spacing.md,
     borderRadius: radius.lg, backgroundColor: colors.amber, gap: spacing.sm,
   },
@@ -681,7 +734,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: fontSize.md, fontWeight: fontWeight.bold as '700',
-    color: colors.greenDark, letterSpacing: 0.3,
+    color: colors.navy, letterSpacing: 0.3,
   },
   sectionSub: {
     fontSize: fontSize.xs, color: colors.textMuted,
@@ -699,17 +752,17 @@ const styles = StyleSheet.create({
     shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04, shadowRadius: 3, elevation: 1,
   },
-  cardAbierto: { borderColor: colors.greenLime, borderWidth: 1.5 },
+  cardAbierto: { borderColor: colors.orange, borderWidth: 1.5 },
   cardPressed: { opacity: 0.75, backgroundColor: colors.bgLight },
 
   parcelaBlock: {
     minWidth: 56, alignItems: 'center',
     paddingVertical: spacing.xs, paddingHorizontal: spacing.sm,
-    backgroundColor: colors.bgLight, borderRadius: radius.md,
+    backgroundColor: colors.orangeSoft, borderRadius: radius.md,
   },
   parcelaNum: {
     fontSize: fontSize.xl, fontWeight: fontWeight.bold as '700',
-    color: colors.greenDark, lineHeight: 26,
+    color: colors.navy, lineHeight: 26,
   },
   parcelaLbl: {
     fontSize: 9, color: colors.textMuted,
@@ -723,7 +776,7 @@ const styles = StyleSheet.create({
     color: colors.textDark, lineHeight: 20,
   },
   catAnimal: {
-    fontSize: fontSize.sm, color: colors.greenDark,
+    fontSize: fontSize.sm, color: colors.navy,
     fontWeight: fontWeight.semibold as '600',
   },
   caravana: {
@@ -735,7 +788,7 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.medium as '500', marginTop: 2,
   },
   fechaTxtBold: {
-    fontSize: fontSize.sm, color: colors.greenDark,
+    fontSize: fontSize.sm, color: colors.navy,
     fontWeight: fontWeight.bold as '700', marginTop: 2,
   },
   metaTxt: {
@@ -745,12 +798,12 @@ const styles = StyleSheet.create({
 
   cardEnd: { alignItems: 'flex-end', gap: spacing.xs },
   badgeAbierto: {
-    backgroundColor: colors.greenLime,
+    backgroundColor: colors.orange,
     paddingHorizontal: spacing.sm, paddingVertical: 3,
     borderRadius: radius.round,
   },
   badgeAbiertoTxt: {
-    color: colors.greenDeep, fontSize: 10,
+    color: colors.navyDeep, fontSize: 10,
     fontWeight: fontWeight.bold as '700', letterSpacing: 0.8,
   },
   chev: {
@@ -765,11 +818,11 @@ const styles = StyleSheet.create({
   emptyEmoji: { fontSize: 48, marginBottom: spacing.sm },
   emptyTxt: { fontSize: fontSize.md, color: colors.textMuted, textAlign: 'center' },
   emptyHint: { marginTop: spacing.sm, fontSize: fontSize.sm, color: colors.textMuted, textAlign: 'center' },
-  emptyPlus: { fontWeight: fontWeight.bold as '700', color: colors.greenDark },
+  emptyPlus: { fontWeight: fontWeight.bold as '700', color: colors.navy },
   emptyBtn: {
     marginTop: spacing.lg, paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm, borderRadius: radius.md,
-    borderWidth: 1.5, borderColor: colors.greenDark,
+    borderWidth: 1.5, borderColor: colors.navy,
   },
-  emptyBtnTxt: { color: colors.greenDark, fontWeight: fontWeight.bold as '700' },
+  emptyBtnTxt: { color: colors.navy, fontWeight: fontWeight.bold as '700' },
 });

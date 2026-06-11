@@ -1,11 +1,21 @@
-// Home: todos los módulos visibles + stats + CTA directa a cada uno.
+// Home v6 — rediseñado para la paleta oficial naranja+navy.
 //
-// Evolución tras feedback:
-//   - Los 5 módulos aparecen como tiles equivalentes (antes 4 estaban escondidos).
-//   - Pariciones tiene tratamiento "destacado" (está activo); los demás muestran
-//     "Próximamente" como badge en vez de desaparecer.
-//   - El nombre del cliente y el rol del usuario aparecen arriba.
-//   - Stats row se mantiene — el operario necesita ver "hoy cargué 3".
+// Cambios:
+//   - HEADER bg navyDeep ASIMÉTRICO: bottom-left muy curvado (radius 56),
+//     bottom-right apenas (radius 12). Da sensación de flujo/dirección
+//     que recuerda al swoosh del logo, sin necesidad de SVG.
+//   - PILL DE NOVEDADES overlapping en el borde inferior del header
+//     (left side). Naranja brand. Contenido dinámico:
+//       1. Si hay pendientes de sync > 0 → "X sin sincronizar" (tappable, va al listado)
+//       2. Si hubo pariciones hoy → "🐮 X hoy"
+//       3. Si hubo pariciones esta semana → "🐮 X esta semana"
+//       4. Si no hay nada → hide (no se renderiza)
+//   - STATS ROW con strip lateral.
+//   - 5 TILES NAVY iguales con bubble orange (no hero, igualdad).
+//   - Footer ASFION con dots a los lados.
+//
+// Filosofía de color: NAVY dominante (60%) + WHITE neutral (30%) +
+// ORANGE accent (10%) solo para CTAs y elementos primarios.
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -39,57 +49,26 @@ interface Modulo {
   emoji: string;
   descripcion: string;
   go?: (nav: Nav) => void;
+  /**
+   * Si true, el tile se muestra SIEMPRE (independiente de clientConfig.modulosHabilitados)
+   * con badge "PRÓXIMAMENTE". Útil para teasear módulos del roadmap que todavía
+   * no están implementados. Una vez que se habilita el módulo, se quita este flag
+   * y se enchufan el go + el config.
+   */
+  tease?: boolean;
 }
 
-// Catálogo COMPLETO de módulos del producto — todos los que ASFION sabe
-// renderear. La home filtra por config.modulosHabilitados antes de mostrar
-// los tiles, así que para un cliente que tiene solo Pariciones+Lluvias,
-// solo se ven esos dos. La lógica de qué módulos existen vive acá; la lógica
-// de qué módulos se habilitan vive en el ClientConfig.
 const TODOS_LOS_MODULOS: Modulo[] = [
-  {
-    key: 'pariciones',
-    label: 'Pariciones',
-    emoji: '🐮',
-    descripcion: 'Nacimientos, muertes, abortos, retactos',
-    go: nav => nav.navigate('ParicionForm', {}),
-  },
-  {
-    key: 'lluvias',
-    label: 'Lluvias',
-    emoji: '🌧️',
-    descripcion: 'Milímetros por pluviómetro',
-    go: nav => nav.navigate('LluviaForm', {}),
-  },
-  {
-    key: 'mortandad',
-    label: 'Mortandad',
-    emoji: '⚠️',
-    descripcion: 'Hacienda muerta (no parto)',
-    go: nav => nav.navigate('MortandadForm', {}),
-  },
-  {
-    key: 'pastoreo',
-    label: 'Pastoreo',
-    emoji: '🌾',
-    descripcion: 'Movimiento de hacienda',
-    go: nav => nav.navigate('PastoreoForm', {}),
-  },
-  {
-    key: 'compras',
-    label: 'Compras',
-    emoji: '🛒',
-    descripcion: 'Compra de hacienda',
-    go: nav => nav.navigate('CompraForm', {}),
-  },
-  {
-    key: 'mediciones',
-    label: 'Mediciones',
-    emoji: '📏',
-    descripcion: 'Pesadas, condición, forraje',
-    // Sin "go" porque la ruta no existe todavía — si un cliente lo habilita
-    // antes de implementarlo, va a mostrar un alert "próximamente".
-  },
+  { key: 'pariciones', label: 'Pariciones', emoji: '🐮', descripcion: 'Nacimientos, muertes, abortos, retactos', go: nav => nav.navigate('ParicionForm', {}) },
+  { key: 'lluvias',    label: 'Lluvias',    emoji: '🌧️', descripcion: 'Milímetros por pluviómetro',           go: nav => nav.navigate('LluviaForm', {}) },
+  { key: 'mortandad',  label: 'Mortandad',  emoji: '⚠️', descripcion: 'Hacienda muerta (no parto)',           go: nav => nav.navigate('MortandadForm', {}) },
+  { key: 'pastoreo',   label: 'Pastoreo',   emoji: '🌾', descripcion: 'Movimiento de hacienda',                go: nav => nav.navigate('PastoreoForm', {}) },
+  { key: 'compras',    label: 'Compras',    emoji: '🛒', descripcion: 'Compra de hacienda',                    go: nav => nav.navigate('CompraForm', {}) },
+  { key: 'mediciones', label: 'Mediciones', emoji: '📏', descripcion: 'Pesadas, condición, forraje' },
+  // Teaser: aparece en el Home con badge PRÓXIMAMENTE para todos los clientes,
+  // sin requerir entrada en modulosHabilitados. Cuando se implemente Ventas,
+  // borrar el tease, agregar el `go` y dar de alta en config de cada cliente.
+  { key: 'ventas',     label: 'Ventas',     emoji: '💰', descripcion: 'Operaciones de venta de hacienda',     tease: true },
 ];
 
 // ---------- helpers ----------
@@ -122,11 +101,11 @@ export function HomeScreen() {
   const { switchTab, currentTab } = useTabNav();
   const clientConfig = useClientConfig();
 
-  // Solo mostramos los módulos habilitados en la config del cliente. Si el
-  // cliente solo tiene Pariciones+Lluvias, la grilla muestra 2 tiles.
   const modulos = useMemo(
     () => TODOS_LOS_MODULOS
-      .filter(m => clientConfig.modulosHabilitados.includes(m.key))
+      // Tease modules se muestran siempre, independiente del clientConfig.
+      // Los demás solo si están en modulosHabilitados.
+      .filter(m => m.tease || clientConfig.modulosHabilitados.includes(m.key))
       .map(m => ({ ...m, enabled: Boolean(m.go) })),
     [clientConfig],
   );
@@ -146,7 +125,6 @@ export function HomeScreen() {
     setParicionesSemana(semana);
   }, [repo]);
 
-  // Refrescar al volver al stack (ej: back desde ParicionForm) y al entrar al tab Menú.
   useEffect(() => {
     const unsub = nav.addListener('focus', refresh);
     return unsub;
@@ -157,9 +135,32 @@ export function HomeScreen() {
 
   const nombreUsuario = primerNombre(user?.email, user?.nombre);
 
-  // El tipo enriquecido viene del useMemo de arriba — cada módulo se enriquece
-  // con un `enabled: Boolean(m.go)` (que indica si la ruta está implementada).
-  // Un módulo habilitado en config pero sin "go" cae en "próximamente".
+  // Pill de "novedades" overlapping en el bottom del header.
+  // Mostramos la info más relevante: pendientes > pariciones hoy > semana.
+  // Si no hay nada que destacar, el componente no se renderiza.
+  const novedad = useMemo<null | { emoji: string; text: string; onPress?: () => void }>(() => {
+    if (pendientes > 0) {
+      return {
+        emoji: '⚠️',
+        text: `${pendientes} sin sincronizar`,
+        onPress: () => switchTab('lista'),
+      };
+    }
+    if (paricionesHoy > 0) {
+      return {
+        emoji: '🐮',
+        text: `${paricionesHoy} ${paricionesHoy === 1 ? 'parición' : 'pariciones'} hoy`,
+      };
+    }
+    if (paricionesSemana > 0) {
+      return {
+        emoji: '🐮',
+        text: `${paricionesSemana} esta semana`,
+      };
+    }
+    return null;
+  }, [pendientes, paricionesHoy, paricionesSemana, switchTab]);
+
   const onModuloPress = (m: Modulo & { enabled: boolean }) => {
     if (!m.enabled) {
       Alert.alert(
@@ -172,17 +173,20 @@ export function HomeScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.scroll}>
-        {/* Header: avatar + cliente + usuario + salir.
-            Diseño revisitado (feedback Ro): jerarquía clara con avatar
-            circular a la izquierda (iniciales del nombre o el primer char
-            del email), nombre del cliente como eyebrow chico arriba, saludo
-            grande y bold, rol+email en una línea sutil debajo. El botón
-            Salir queda como icon button (chico, no robando el ojo). */}
-        <View style={styles.headerRow}>
+    <View style={styles.safe}>
+      {/* HEADER FULL-BLEED navy deep.
+          IMPORTANTE: el bg navy va en un <View> que envuelve al SafeAreaView,
+          NO en el SafeAreaView mismo. Algunas versiones de
+          react-native-safe-area-context añaden un wrapper interno que no toma
+          el backgroundColor, dejando ver el cream del parent. Esta estructura
+          garantiza navy en toda la zona del header (incluida la del notch). */}
+      <View style={styles.headerWrap}>
+        <SafeAreaView edges={['top']}>
+          <View style={styles.headerInner}>{/* avatar + saludo + salir */}
           <View style={styles.avatar}>
-            <Text style={styles.avatarTxt}>{(nombreUsuario || user?.email || '?').charAt(0).toUpperCase()}</Text>
+            <Text style={styles.avatarTxt}>
+              {(nombreUsuario || user?.email || '?').charAt(0).toUpperCase()}
+            </Text>
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.clientTop} numberOfLines={1}>
@@ -191,10 +195,6 @@ export function HomeScreen() {
             <Text style={styles.hello} numberOfLines={1}>
               Hola{nombreUsuario ? `, ${nombreUsuario}` : ''}
             </Text>
-            {/* Separamos rol y email en dos Text porque el `textTransform:
-                capitalize` del style 'rol' aplicaba tambien al email y
-                lo mostraba como "Agusufi20@Gmail.Com". Ahora el capitalize
-                solo afecta al rol; el email queda en lowercase real. */}
             <Text style={styles.rol} numberOfLines={1}>
               <Text>{user?.rol ?? '—'}</Text>
               {user?.email ? (
@@ -202,19 +202,51 @@ export function HomeScreen() {
               ) : null}
             </Text>
           </View>
-          <Pressable onPress={logout} style={styles.logoutBtn} accessibilityRole="button" accessibilityLabel="Salir de la sesión">
+          <Pressable
+            onPress={logout}
+            style={styles.logoutBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Salir de la sesión"
+            hitSlop={8}
+          >
             <Text style={styles.logoutTxt}>Salir</Text>
           </Pressable>
         </View>
+        </SafeAreaView>
+      </View>
 
-        {/* Stats row */}
+      {/* Pill de novedades COLGANDO del borde inferior del header navy.
+          Va afuera del headerWrap para que pueda overlapear la transición
+          navy → cream con sombra propia. */}
+      {novedad && (
+        <View style={styles.novedadesWrap}>
+          {novedad.onPress ? (
+            <Pressable
+              onPress={novedad.onPress}
+              style={({ pressed }) => [styles.novedadesPill, pressed && styles.novedadesPillPressed]}
+              accessibilityRole="button"
+            >
+              <Text style={styles.novedadesEmoji}>{novedad.emoji}</Text>
+              <Text style={styles.novedadesText}>{novedad.text}</Text>
+            </Pressable>
+          ) : (
+            <View style={styles.novedadesPill}>
+              <Text style={styles.novedadesEmoji}>{novedad.emoji}</Text>
+              <Text style={styles.novedadesText}>{novedad.text}</Text>
+            </View>
+          )}
+        </View>
+      )}
+
+      <ScrollView contentContainerStyle={styles.scroll}>
+        {/* Stats */}
         <View style={styles.statsRow}>
           <StatCard
             value={paricionesHoy}
             label="HOY"
             variant={paricionesHoy > 0 ? 'lime' : 'default'}
           />
-          <StatCard value={paricionesSemana} label="ESTA SEMANA" />
+          <StatCard value={paricionesSemana} label="SEMANA" />
           <StatCard
             value={pendientes}
             label="SIN SYNC"
@@ -223,32 +255,37 @@ export function HomeScreen() {
           />
         </View>
 
-        {/* Módulos */}
-        <Text style={styles.section}>Cargar evento</Text>
+        {/* Sección */}
+        <View style={styles.sectionRow}>
+          <Text style={styles.section}>CARGAR EVENTO</Text>
+          <View style={styles.sectionLine} />
+        </View>
+
+        {/* GRID uniforme: 5 tiles del mismo tamaño en 2 columnas.
+            Si la cantidad es impar, el último tile se centra en su fila
+            (vs. quedar pegado a la izquierda). */}
         <View style={styles.modulesGrid}>
-          {modulos.map(m => (
+          {modulos.map((m, idx) => {
+            const isLastOdd = modulos.length % 2 === 1 && idx === modulos.length - 1;
+            return (
             <Pressable
               key={m.key}
               onPress={() => onModuloPress(m)}
               style={({ pressed }) => [
-                styles.moduleTile,
-                m.enabled ? styles.moduleActive : styles.moduleDisabled,
-                pressed && styles.moduleTilePressed,
-                // Antes Pariciones tenía tratamiento "hero" (ocupaba 2 columnas)
-                // porque era el único módulo activo. Ahora que los 4 están
-                // funcionales, todos los tiles son del mismo tamaño.
+                styles.tile,
+                isLastOdd && styles.tileCentered,
+                pressed && styles.tilePressed,
+                !m.enabled && styles.tileDisabled,
               ]}
               accessibilityRole="button"
               accessibilityLabel={m.label}
             >
-              <View style={styles.moduleTopRow}>
-                <View
-                  style={[
-                    styles.emojiBubble,
-                    m.enabled ? styles.emojiBubbleActive : styles.emojiBubbleDisabled,
-                  ]}
-                >
-                  <Text style={styles.emojiTxt}>{m.emoji}</Text>
+              <View style={styles.tileTopRow}>
+                <View style={[
+                  styles.tileEmojiBubble,
+                  !m.enabled && styles.tileEmojiBubbleDisabled,
+                ]}>
+                  <Text style={styles.tileEmojiTxt}>{m.emoji}</Text>
                 </View>
                 {!m.enabled && (
                   <View style={styles.soonBadge}>
@@ -256,203 +293,240 @@ export function HomeScreen() {
                   </View>
                 )}
               </View>
-              <Text
-                style={[styles.moduleLabel, m.enabled ? styles.moduleLabelActive : styles.moduleLabelDisabled]}
-              >
+              <Text style={[
+                styles.tileLabel,
+                !m.enabled && styles.tileLabelDisabled,
+              ]} numberOfLines={1}>
                 {m.label}
               </Text>
-              <Text
-                style={[
-                  styles.moduleDesc,
-                  m.enabled ? styles.moduleDescActive : styles.moduleDescDisabled,
-                ]}
-                numberOfLines={2}
-              >
+              <Text style={[
+                styles.tileDesc,
+                !m.enabled && styles.tileDescDisabled,
+              ]} numberOfLines={2}>
                 {m.descripcion}
               </Text>
             </Pressable>
-          ))}
+            );
+          })}
         </View>
-
-        {/*
-          Acá había un link standalone "Ver pariciones cargadas" leftover de
-          cuando Pariciones era el único módulo de la app. Lo sacamos porque:
-          (a) los otros 3 módulos no tienen un link equivalente — quedaba
-              asimétrico.
-          (b) el usuario ya tiene 2 vías mejores para ver el listado: la tab
-              "Pariciones" en la bottom tab bar y el card "Pariciones" del
-              grid de arriba (que abre el form, y desde Home → Métricas se
-              ve el listado por tab).
-          Si en algún momento queremos un "ver listado" rápido por módulo,
-          conviene hacerlo CONSISTENTE para los 4 — no solo pariciones.
-        */}
 
         {/* Footer ASFION */}
         <View style={styles.asfionFooter}>
           <View style={styles.asfionDot} />
-          <Text style={styles.asfionTxt}>Powered by ASFION</Text>
+          <Text style={styles.asfionTxt}>Powered by ASFiON</Text>
+          <View style={styles.asfionDot} />
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bgLight },
-  scroll: {
-    padding: spacing.base,
-    gap: spacing.lg,
-    paddingBottom: spacing.xxxl,
-  },
 
-  // Header
-  headerRow: {
+  // ---- HEADER full-bleed navy ----
+  // Sin ningún borderRadius: el navy termina con una línea horizontal
+  // recta que se conecta directo con el cream del body. Sin "rectángulo
+  // fantasma" del color del fondo asomando por ningún lado.
+  headerWrap: {
+    backgroundColor: colors.navyDeep,
+  },
+  headerInner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
+    paddingHorizontal: spacing.base,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.lg + spacing.sm, // espacio extra para que la pill cuelgue
   },
-  // Avatar circular: lima sobre fondo blanco con borde. Usa la primera
-  // letra del nombre o email — bajita y robusta. Si tuviéramos foto del
-  // usuario en perfil iría acá; mientras tanto inicial alcanza.
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: colors.greenLime,
+
+  // ---- PILL de novedades (colgando bottom-right del header) ----
+  // marginTop negativo para que overlapee el borde inferior del header navy.
+  novedadesWrap: {
+    marginTop: -16,
+    marginBottom: spacing.md,
+    paddingHorizontal: spacing.base,
+    alignItems: 'flex-end',
+  },
+  novedadesPill: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: colors.greenDeep,
+    gap: 6,
+    backgroundColor: colors.orange,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 8,
+    borderRadius: 999,
+    shadowColor: colors.orange,
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  novedadesPillPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.97 }],
+  },
+  novedadesEmoji: {
+    fontSize: 14,
+  },
+  novedadesText: {
+    color: colors.white,
+    fontSize: 12,
+    fontWeight: fontWeight.bold as '700',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+  },
+  avatar: {
+    width: 48, height: 48, borderRadius: 24,
+    backgroundColor: colors.orange,
+    alignItems: 'center', justifyContent: 'center',
   },
   avatarTxt: {
     fontSize: 20,
     fontWeight: fontWeight.bold as '700',
-    color: colors.greenDeep,
+    color: colors.navyDeep,
   },
   clientTop: {
-    fontSize: 11,
-    color: colors.greenDark,
+    fontSize: 10,
+    color: colors.orange,
     textTransform: 'uppercase',
-    letterSpacing: 1.4,
+    letterSpacing: 1.6,
     fontWeight: fontWeight.bold as '700',
     marginBottom: 2,
-    opacity: 0.85,
   },
   hello: {
-    fontSize: fontSize.xl,
+    fontSize: 20,
     fontWeight: fontWeight.bold as '700',
-    color: colors.textDark,
-    lineHeight: 26,
+    color: colors.white,
+    lineHeight: 24,
   },
   rol: {
-    fontSize: fontSize.xs,
-    color: colors.textMuted,
+    fontSize: 11,
+    color: colors.textOnDarkMuted,
     marginTop: 2,
     textTransform: 'capitalize',
   },
-  // Override para que el email NO se capitalice (era "Agusufi20@Gmail.Com"
-  // por el textTransform heredado del style 'rol').
-  emailInline: {
-    textTransform: 'none',
-  },
+  emailInline: { textTransform: 'none' },
   logoutBtn: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm - 2,
     borderRadius: radius.md,
     borderWidth: 1.5,
-    borderColor: colors.greenDark,
-    backgroundColor: colors.white,
+    borderColor: colors.orange,
+    backgroundColor: 'transparent',
   },
   logoutTxt: {
-    color: colors.greenDark,
+    color: colors.orange,
     fontWeight: fontWeight.bold as '700',
     fontSize: fontSize.sm,
   },
 
-  // Stats
+  // ---- BODY scroll ----
+  scroll: {
+    paddingHorizontal: spacing.base,
+    paddingTop: 0,
+    paddingBottom: spacing.xxxl,
+    gap: spacing.lg,
+  },
+
+  // ---- Stats ----
   statsRow: {
     flexDirection: 'row',
     gap: spacing.sm,
   },
 
-  // Section
-  section: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.bold as '700',
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.7,
+  // ---- Section heading ----
+  sectionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
     marginTop: spacing.sm,
   },
+  section: {
+    fontSize: 11,
+    fontWeight: fontWeight.bold as '700',
+    color: colors.navy,
+    letterSpacing: 1.4,
+  },
+  sectionLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.borderSoft,
+  },
 
-  // Modules grid
+  // ---- TILES grid uniforme (2 columnas, todos navy con orange) ----
+  // Filosofía: cada tile = mini-hero card. Navy bg + bubble naranja
+  // grande + label blanco + desc en gris claro. Da color y "peso visual"
+  // a los 5 módulos por igual. Más memorable que 5 tiles blancos.
   modulesGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.md,
   },
-  moduleTile: {
+  tile: {
+    // Sin flexGrow: si el tile queda solo en su fila no debe estirarse al 100%.
+    // Ancho fijo en 48% para que se vea igual estando solo o acompañado.
     width: '48%',
-    minHeight: 140,
-    flexGrow: 1,
-    borderRadius: radius.xl,
+    minHeight: 150,
+    backgroundColor: colors.navy,
+    borderRadius: radius.lg,
     padding: spacing.base,
     gap: spacing.sm,
     justifyContent: 'space-between',
+    shadowColor: colors.navyDeep,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 3,
   },
-  moduleHero: {
-    // Pariciones en la primera fila ocupa todo el ancho.
-    width: '100%',
-    minHeight: 120,
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
+  tilePressed: {
+    opacity: 0.88,
+    transform: [{ scale: 0.97 }],
   },
-  moduleActive: {
-    backgroundColor: colors.greenDark,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.14,
-    shadowRadius: 8,
-    elevation: 4,
+  tileDisabled: { opacity: 0.55 },
+  // Cuando la cantidad de módulos es impar, el último queda solo en su fila.
+  // Lo centramos con margin auto en ambos lados (en vez de quedar pegado a la izquierda).
+  tileCentered: {
+    marginLeft: 'auto',
+    marginRight: 'auto',
   },
-  moduleDisabled: {
-    backgroundColor: colors.white,
-    borderWidth: 1,
-    borderColor: colors.borderSoft,
-  },
-  moduleTilePressed: {
-    opacity: 0.85,
-    transform: [{ scale: 0.98 }],
-  },
-
-  moduleTopRow: {
+  tileTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: spacing.sm,
   },
-  emojiBubble: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
+  // Bubble del emoji con orangeTile (#FFB97A) — variante un poco más vivida
+  // del peach orangeSoft (#FFCB95) que se usa en las etiquetas de caravana.
+  // El bump compensa el "chromatic adaptation": rodeado de navy oscuro, el
+  // peach claro se ve más pálido. Con orangeTile sobre navy el ojo lo
+  // percibe como el mismo tono que el orangeSoft sobre las cards blancas.
+  tileEmojiBubble: {
+    width: 56, height: 56, borderRadius: 28,
+    backgroundColor: colors.orangeTile,
+    alignItems: 'center', justifyContent: 'center',
   },
-  emojiBubbleActive: {
-    backgroundColor: colors.greenLime,
+  tileEmojiBubbleDisabled: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
   },
-  emojiBubbleDisabled: {
-    backgroundColor: colors.bgLight,
+  tileEmojiTxt: { fontSize: 28 },
+  tileLabel: {
+    fontSize: 20,
+    fontWeight: fontWeight.bold as '700',
+    color: colors.white,
+    letterSpacing: 0.2,
   },
-  emojiTxt: { fontSize: 24 },
+  tileLabelDisabled: { color: colors.textOnDarkMuted },
+  tileDesc: {
+    fontSize: 12,
+    color: colors.textOnDarkMuted,
+    lineHeight: 16,
+    marginTop: 2,
+  },
+  tileDescDisabled: { color: colors.textOnDarkMuted },
 
   soonBadge: {
     paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
+    paddingVertical: 2,
     backgroundColor: colors.bgLight,
     borderRadius: radius.sm,
     borderWidth: 1,
@@ -465,20 +539,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 
-  moduleLabel: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.bold as '700',
-  },
-  moduleLabelActive: { color: colors.white },
-  moduleLabelDisabled: { color: colors.textDark },
-  moduleDesc: {
-    fontSize: fontSize.xs,
-    lineHeight: 15,
-  },
-  moduleDescActive: { color: colors.textOnDarkMuted },
-  moduleDescDisabled: { color: colors.textMuted },
-
-  // Footer ASFION
+  // ---- Footer ----
   asfionFooter: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -488,18 +549,15 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   asfionDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.greenLime,
-    opacity: 0.6,
+    width: 5, height: 5, borderRadius: 2.5,
+    backgroundColor: colors.orange,
+    opacity: 0.5,
   },
   asfionTxt: {
-    fontSize: fontSize.xs,
+    fontSize: 11,
     color: colors.textMuted,
-    letterSpacing: 1.5,
+    letterSpacing: 1.8,
     textTransform: 'uppercase',
-    opacity: 0.7,
     fontWeight: fontWeight.semibold as '600',
   },
 });

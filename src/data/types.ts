@@ -237,6 +237,33 @@ export interface Compra extends EventoBase {
 export type Evento = Paricion | Lluvia | Mortandad | Pastoreo | Medicion | Compra;
 export type TipoEvento = Evento['tipo'];
 
+// ====== Subscription / billing state ======
+//
+// Mirror del enum en clientes.subscription_status (migración 0005). El cliente
+// nunca pierde acceso a sus datos pero la fricción aumenta a medida que pasa
+// el vencimiento. El detalle de qué pasa en cada estado lo decide la UI vía
+// SubscriptionBanner / SubscriptionLockoutScreen.
+export type SubscriptionStatus =
+  | 'active'      // pago al día, todo normal
+  | 'past_due'    // días 1-7 vencido, banner naranja + app operativa
+  | 'restricted'  // días 8-19 vencido, read-only (no se cargan eventos)
+  | 'suspended'   // días 20+ vencido, login bloqueado salvo para export
+  | 'canceled';   // cuenta cerrada, sin login
+
+export interface Subscription {
+  status: SubscriptionStatus;
+  /** Fecha hasta la cual está pagado (ISO YYYY-MM-DD). Null = no billing setup. */
+  periodEndDate: string | null;
+  /** Última transferencia confirmada (ISO datetime). */
+  lastPaymentDate: string | null;
+  /**
+   * Días desde el vencimiento. 0 cuando está al día (o adelantado). Calculado
+   * en la app a partir de periodEndDate y la fecha actual; el cron del server
+   * mueve el status discretamente, esto es la métrica continua para el UI.
+   */
+  daysOverdue: number;
+}
+
 // Helper para crear el shape base al instanciar un nuevo evento en el form.
 export function nuevoEventoBase(partial: Partial<EventoBase> & { campoId: string; usuarioEmail: string }): EventoBase {
   const now = new Date();

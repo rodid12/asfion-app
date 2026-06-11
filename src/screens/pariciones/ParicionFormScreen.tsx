@@ -639,7 +639,7 @@ const styles = StyleSheet.create({
   },
   infoCtaTxt: {
     fontSize: fontSize.sm,
-    color: colors.greenDark,
+    color: colors.navy,
     fontWeight: fontWeight.bold as '700',
     textDecorationLine: 'underline',
   },
@@ -663,12 +663,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgLight,
   },
   pickerChipSel: {
-    backgroundColor: colors.greenDark,
-    borderColor: colors.greenDark,
+    backgroundColor: colors.navy,
+    borderColor: colors.navy,
   },
   pickerChipSelLote: {
-    backgroundColor: colors.greenLime,
-    borderColor: colors.greenLime,
+    backgroundColor: colors.orange,
+    borderColor: colors.orange,
   },
   pickerChipTxt: {
     fontSize: fontSize.sm,
@@ -701,8 +701,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
   },
   suggestChipSel: {
-    backgroundColor: colors.greenLime,
-    borderColor: colors.greenLime,
+    backgroundColor: colors.orange,
+    borderColor: colors.orange,
   },
   suggestChipTxt: {
     fontSize: fontSize.sm,
@@ -710,7 +710,7 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.semibold as '600',
   },
   suggestChipTxtSel: {
-    color: colors.greenDeep,
+    color: colors.navyDeep,
     fontWeight: fontWeight.bold as '700',
   },
 });

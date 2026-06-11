@@ -687,7 +687,7 @@ const styles = StyleSheet.create({
   },
   infoCtaTxt: {
     fontSize: fontSize.sm,
-    color: colors.greenDark,
+    color: colors.navy,
     fontWeight: fontWeight.bold as '700',
     textDecorationLine: 'underline',
   },
@@ -729,12 +729,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgLight,
   },
   pickerChipSel: {
-    backgroundColor: colors.greenDark,
-    borderColor: colors.greenDark,
+    backgroundColor: colors.navy,
+    borderColor: colors.navy,
   },
   pickerChipSelLote: {
-    backgroundColor: colors.greenLime,
-    borderColor: colors.greenLime,
+    backgroundColor: colors.orange,
+    borderColor: colors.orange,
   },
   pickerChipTxt: {
     fontSize: fontSize.sm,
@@ -764,7 +764,7 @@ const styles = StyleSheet.create({
   autoFillValue: {
     fontSize: fontSize.md,
     fontWeight: fontWeight.bold as '700',
-    color: colors.greenDark,
+    color: colors.navy,
   },
 
   // Parcelas: chips con números grandes (más fáciles de tocar con guantes)
@@ -786,8 +786,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   parcelaChipSel: {
-    backgroundColor: colors.greenLime,
-    borderColor: colors.greenLime,
+    backgroundColor: colors.orange,
+    borderColor: colors.orange,
   },
   parcelaChipTxt: {
     fontSize: fontSize.lg,
@@ -808,8 +808,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   catChipSel: {
-    backgroundColor: colors.greenDark,
-    borderColor: colors.greenDark,
+    backgroundColor: colors.navy,
+    borderColor: colors.navy,
   },
   catChipTxt: {
     fontSize: fontSize.sm,
@@ -831,7 +831,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   salidaHoyBtn: {
-    backgroundColor: colors.greenDark,
+    backgroundColor: colors.navy,
     borderRadius: radius.md,
     paddingVertical: spacing.sm,
     alignItems: 'center',

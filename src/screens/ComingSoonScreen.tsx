@@ -128,7 +128,7 @@ const styles = StyleSheet.create({
     maxWidth: 320,
   },
   rolloutStrong: {
-    color: colors.greenDark,
+    color: colors.navy,
     fontWeight: fontWeight.bold as '700',
   },
   cta: {
@@ -137,10 +137,10 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     borderRadius: radius.md,
     borderWidth: 1.5,
-    borderColor: colors.greenDark,
+    borderColor: colors.navy,
   },
   ctaTxt: {
-    color: colors.greenDark,
+    color: colors.navy,
     fontWeight: fontWeight.bold as '700',
     fontSize: fontSize.sm,
   },

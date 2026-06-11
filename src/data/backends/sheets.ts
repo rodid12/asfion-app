@@ -59,6 +59,18 @@ export class GoogleSheetsBackend implements IDataBackend {
     return this.call<void>('logout');
   }
 
+  // Sheets backend (legacy) no soporta billing — devuelve siempre activo.
+  // El motivo: este backend solo existe para desarrollo histórico con la
+  // app-script del cliente. En producción usamos Supabase.
+  async getSubscription() {
+    return {
+      status: 'active' as const,
+      periodEndDate: null,
+      lastPaymentDate: null,
+      daysOverdue: 0,
+    };
+  }
+
   listCampos(): Promise<Campo[]> {
     return this.call<Campo[]>('listCampos');
   }

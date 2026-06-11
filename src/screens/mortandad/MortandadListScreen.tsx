@@ -26,7 +26,9 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import { DateRangeFilter } from '@/components/DateRangeFilter';
+import { EmptyState } from '@/components/EmptyState';
 import { Fab } from '@/components/Fab';
+import { ScreenHeader } from '@/components/ScreenHeader';
 import { SyncBadge } from '@/components/SyncBadge';
 import { useAuth } from '@/auth/context';
 import { useRepository } from '@/data';
@@ -336,12 +338,26 @@ export function MortandadListScreen() {
     </View>
   );
 
+  // Sin prefijo "Campo:" — el ícono 📍 ya indica qué tipo de filtro es.
   const campoFiltroLabel = campoFiltro
     ? camposMap[campoFiltro]?.nombre ?? campoFiltro
-    : 'Campo: todos';
+    : 'Todos';
 
-  return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+  // Pill: pendientes > muertes hoy > esta semana.
+  const today = new Date();
+  const isoToday = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const aWeekAgo = new Date(today); aWeekAgo.setDate(today.getDate() - 6);
+  const isoWeekAgo = `${aWeekAgo.getFullYear()}-${String(aWeekAgo.getMonth() + 1).padStart(2, '0')}-${String(aWeekAgo.getDate()).padStart(2, '0')}`;
+  const hoy = scopedData.filter(m => m.fecha === isoToday).length;
+  const semana = scopedData.filter(m => m.fecha >= isoWeekAgo).length;
+  const novedad = pendientes > 0
+    ? { emoji: '⚠️', text: `${pendientes} sin sync` }
+    : (hoy > 0 ? { emoji: '⚠️', text: `${hoy} hoy` }
+       : semana > 0 ? { emoji: '⚠️', text: `${semana} esta semana` }
+       : null);
+
+  const filtersHeader = (
+    <>
       {/* Buscador */}
       <View style={styles.searchWrap}>
         <Text style={styles.searchIcon}>🔍</Text>
@@ -362,10 +378,12 @@ export function MortandadListScreen() {
         )}
       </View>
 
-      {/* Filtros — UN solo chip de fecha que abre modal con presets + custom. */}
+      {/* Filtros: Fecha + Campo en una sola fila (chips equitativos),
+          Limpiar abajo si hay filtros activos. */}
       <View style={styles.filterBar}>
         <View style={styles.filterRow}>
           <DateRangeFilter
+            chipStyle={{ flexGrow: 1, flexShrink: 1, flexBasis: 0, minWidth: 0 }}
             presets={(['30d', '90d', 'year', 'todo'] as RangoFecha[]).map(r => ({ key: r, label: RANGO_LABEL[r] }))}
             preset={rango}
             presetTodo="todo"
@@ -374,27 +392,24 @@ export function MortandadListScreen() {
             onChangePreset={k => setRango(k as RangoFecha)}
             onChangeCustom={(d, h) => { setDesdeCustom(d); setHastaCustom(h); }}
           />
+          {camposVisibles.length > 1 && (
+            <Pressable
+              onPress={() => setCampoPickerOpen(o => !o)}
+              style={[styles.fChipWide, campoFiltro && styles.fChipSel]}
+            >
+              <Text style={styles.fChipIcon}>📍</Text>
+              <Text style={[styles.fChipTxt, campoFiltro && styles.fChipTxtSel]} numberOfLines={1}>
+                {campoFiltroLabel}
+              </Text>
+              <Text style={[styles.fChev, campoFiltro && styles.fChevSel]}>▾</Text>
+            </Pressable>
+          )}
         </View>
 
-        {(camposVisibles.length > 1 || activosCount > 0) && (
-          <View style={styles.filterRow2}>
-            {camposVisibles.length > 1 && (
-              <Pressable
-                onPress={() => setCampoPickerOpen(o => !o)}
-                style={[styles.fChipWide, campoFiltro && styles.fChipSel]}
-              >
-                <Text style={[styles.fChipTxt, campoFiltro && styles.fChipTxtSel]} numberOfLines={1}>
-                  {campoFiltroLabel}
-                </Text>
-                <Text style={[styles.fChev, campoFiltro && styles.fChevSel]}>▾</Text>
-              </Pressable>
-            )}
-            {activosCount > 0 && (
-              <Pressable onPress={clearFilters} style={styles.fClear}>
-                <Text style={styles.fClearTxt}>Limpiar</Text>
-              </Pressable>
-            )}
-          </View>
+        {activosCount > 0 && (
+          <Pressable onPress={clearFilters} style={styles.fClear}>
+            <Text style={styles.fClearTxt}>Limpiar filtros</Text>
+          </Pressable>
         )}
       </View>
 
@@ -435,8 +450,16 @@ export function MortandadListScreen() {
           <Text style={styles.pendAction}>{flushing ? 'Subiendo...' : 'Sincronizar'}</Text>
         </Pressable>
       )}
+    </>
+  );
+
+  return (
+    <View style={styles.safe}>
+      <ScreenHeader title="Mortandad" count={scopedData.length} countLabel="registros" novedad={novedad} />
 
       <SectionList
+        style={{ flex: 1 }}
+        ListHeaderComponent={filtersHeader}
         sections={sections}
         keyExtractor={i => i.id}
         renderItem={renderItem}
@@ -450,24 +473,22 @@ export function MortandadListScreen() {
         contentContainerStyle={styles.list}
         ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
         refreshControl={
-          <RefreshControl refreshing={loading} onRefresh={load} tintColor={colors.greenDark} />
+          <RefreshControl refreshing={loading} onRefresh={load} tintColor={colors.navy} />
         }
         ListEmptyComponent={
           query.length > 0 || activosCount > 0 ? (
-            <View style={styles.empty}>
-              <Text style={styles.emptyTxt}>Sin resultados con los filtros activos.</Text>
-              <Pressable onPress={clearFilters} style={styles.emptyBtn}>
-                <Text style={styles.emptyBtnTxt}>Limpiar filtros</Text>
-              </Pressable>
-            </View>
+            <EmptyState
+              emoji="🔍"
+              title="Sin resultados"
+              description="No hay mortandad que coincida con los filtros activos."
+              cta={{ label: 'Limpiar filtros', onPress: clearFilters }}
+            />
           ) : (
-            <View style={styles.empty}>
-              <Text style={styles.emptyEmoji}>⚠️</Text>
-              <Text style={styles.emptyTxt}>Todavía no hay mortandad cargada.</Text>
-              <Text style={styles.emptyHint}>
-                Tocá <Text style={styles.emptyPlus}>+</Text> para registrar la primera.
-              </Text>
-            </View>
+            <EmptyState
+              emoji="⚠️"
+              title="Todavía no hay mortandad"
+              description="Tocá el botón naranja + para registrar la primera."
+            />
           )
         }
       />
@@ -476,18 +497,17 @@ export function MortandadListScreen() {
         onPress={() => nav.navigate('MortandadForm', {})}
         accessibilityLabel="Nueva mortandad"
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bgLight },
 
-  // Search
+  // Search — sin marginHorizontal: contentContainerStyle ya aplica spacing.base.
   searchWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: spacing.base,
     marginTop: spacing.md,
     paddingHorizontal: spacing.md,
     height: 44,
@@ -518,20 +538,20 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
 
-  // Filter bar
+  // Filter bar — sin paddingHorizontal: alineado con cards via contentContainerStyle.
   filterBar: {
-    paddingHorizontal: spacing.base,
     paddingTop: spacing.md,
     paddingBottom: spacing.sm,
     gap: spacing.sm,
   },
-  filterRow: { flexDirection: 'row', gap: spacing.xs },
+  filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, alignItems: 'center' },
   filterRow2: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.xs,
     alignItems: 'center',
   },
+  fChipIcon: { fontSize: 13 },
   fChip: {
     paddingHorizontal: spacing.md,
     paddingVertical: 10,
@@ -545,44 +565,60 @@ const styles = StyleSheet.create({
   },
   fChipEq: { flex: 1, paddingHorizontal: spacing.xs },
   fChipWide: {
+    // Padding/minHeight idénticos al mainChip del DateRangeFilter para
+    // chips del mismo tamaño visual. flexBasis:0 → reparto parejo del ancho.
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 0,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
-    paddingLeft: spacing.md,
-    paddingRight: spacing.sm,
-    paddingVertical: 10,
+    gap: 4,
+    paddingLeft: 10,
+    paddingRight: 8,
+    paddingVertical: 8,
+    minHeight: 36,
     borderRadius: radius.round,
     borderWidth: 1,
     borderColor: colors.borderSoft,
     backgroundColor: colors.white,
-    maxWidth: 200,
-    minHeight: 36,
   },
   fChipSel: {
-    backgroundColor: colors.greenDark,
-    borderColor: colors.greenDark,
+    backgroundColor: colors.navy,
+    borderColor: colors.navy,
   },
   fChipTxt: {
+    // flex:1 + minWidth:0 → ver comentario en LluviaListScreen.
+    flex: 1,
+    minWidth: 0,
     fontSize: fontSize.sm,
     color: colors.textDark,
     fontWeight: fontWeight.semibold as '600',
   },
   fChipTxtSel: { color: colors.white },
-  fChev: { fontSize: 10, color: colors.textMuted, marginLeft: 2 },
+  fChev: { fontSize: 14, color: colors.textMuted, marginLeft: 2, fontWeight: '700' },
   fChevSel: { color: colors.white },
-  fClear: { paddingHorizontal: spacing.sm, paddingVertical: 6 },
-  // "Limpiar" como ghost link suave (ver ParicionListScreen).
+  // Limpiar outline full-width (consistente con Pariciones/Lluvias).
+  fClear: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: radius.round,
+    borderWidth: 1,
+    borderColor: colors.borderSoft,
+    backgroundColor: 'transparent',
+  },
   fClearTxt: {
     fontSize: fontSize.sm,
     color: colors.textMuted,
     fontWeight: fontWeight.semibold as '600',
+    letterSpacing: 0.2,
   },
 
   subPicker: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.xs,
-    paddingHorizontal: spacing.base,
     paddingBottom: spacing.md,
   },
   subChip: {
@@ -594,20 +630,19 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgLight,
   },
   subChipSel: {
-    backgroundColor: colors.greenLime,
-    borderColor: colors.greenLime,
+    backgroundColor: colors.orange,
+    borderColor: colors.orange,
   },
   subChipTxt: { fontSize: fontSize.sm, color: colors.textDark },
   subChipTxtSel: {
-    color: colors.greenDeep,
+    color: colors.navyDeep,
     fontWeight: fontWeight.bold as '700',
   },
 
-  // Pending pill
+  // Pending pill — sin marginHorizontal (contentContainerStyle ya pone el base).
   pendPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: spacing.base,
     marginBottom: spacing.md,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
@@ -649,7 +684,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: fontSize.md,
     fontWeight: fontWeight.bold as '700',
-    color: colors.greenDark,
+    color: colors.navy,
     letterSpacing: 0.3,
   },
   sectionCount: {
@@ -706,7 +741,7 @@ const styles = StyleSheet.create({
     minWidth: 86,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
-    backgroundColor: '#FBE9E7',
+    backgroundColor: colors.orangeSoft, // peach consistente con Home + Pariciones
     borderRadius: radius.md,
     gap: 2,
   },
@@ -714,7 +749,7 @@ const styles = StyleSheet.create({
   catTxt: {
     fontSize: fontSize.md,
     fontWeight: fontWeight.bold as '700',
-    color: colors.danger,
+    color: colors.navy, // navy bold sobre peach
     letterSpacing: 0.3,
   },
 
@@ -788,7 +823,7 @@ const styles = StyleSheet.create({
   },
   emptyPlus: {
     fontWeight: fontWeight.bold as '700',
-    color: colors.greenDark,
+    color: colors.navy,
   },
   emptyBtn: {
     marginTop: spacing.lg,
@@ -796,10 +831,10 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     borderRadius: radius.md,
     borderWidth: 1.5,
-    borderColor: colors.greenDark,
+    borderColor: colors.navy,
   },
   emptyBtnTxt: {
-    color: colors.greenDark,
+    color: colors.navy,
     fontWeight: fontWeight.bold as '700',
   },
 });

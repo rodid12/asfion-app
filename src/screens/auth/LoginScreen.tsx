@@ -22,7 +22,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { FormField } from '@/components/FormField';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { useAuth } from '@/auth/context';
-import { clientBranding, iniciales } from '@/config/client';
+import { clientBranding } from '@/config/client';
 import { colors } from '@/theme/colors';
 import { fontSize, fontWeight } from '@/theme/typography';
 import { radius, spacing } from '@/theme/spacing';
@@ -48,8 +48,6 @@ export function LoginScreen() {
     }
   };
 
-  const brandLogo = clientBranding.logo;
-  const brandInitials = iniciales(clientBranding.nombre);
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -58,18 +56,13 @@ export function LoginScreen() {
         style={{ flex: 1 }}
       >
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-          {/* Branding del cliente */}
+          {/* Branding del cliente + logo oficial ASFION arriba */}
           <View style={styles.clientBrand}>
-            <View style={styles.logoBadge}>
-              {typeof brandLogo === 'string' && brandLogo.length <= 2 ? (
-                <Text style={styles.logoEmoji}>{brandLogo}</Text>
-              ) : brandLogo ? (
-                // @ts-ignore - si algún día es una imagen real
-                <Image source={brandLogo} style={styles.logoImg} resizeMode="contain" />
-              ) : (
-                <Text style={styles.logoInitials}>{brandInitials}</Text>
-              )}
-            </View>
+            <Image
+              source={require('../../../assets/icon.png')}
+              style={styles.logoImg}
+              resizeMode="contain"
+            />
             <Text style={styles.clientName}>{clientBranding.nombre}</Text>
             {clientBranding.tagline ? (
               <Text style={styles.clientTagline}>{clientBranding.tagline}</Text>
@@ -113,7 +106,7 @@ export function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.greenDeep },
+  safe: { flex: 1, backgroundColor: colors.navyDeep },
   scroll: {
     padding: spacing.xl,
     justifyContent: 'center',
@@ -125,31 +118,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.md,
   },
-  logoBadge: {
-    width: 96,
-    height: 96,
-    borderRadius: radius.xl,
-    backgroundColor: colors.greenLime,
-    justifyContent: 'center',
-    alignItems: 'center',
+  // El icon.png oficial es cuadrado (1024x1024) con el wordmark dentro.
+  // Lo mostramos a 140x140 con bordes redondeados, como una "app icon preview"
+  // — replica el aspecto que va a tener en el home screen del iPhone.
+  logoImg: {
+    width: 140,
+    height: 140,
+    borderRadius: 28,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.25,
     shadowRadius: 12,
     elevation: 6,
-  },
-  logoImg: {
-    width: 72,
-    height: 72,
-  },
-  logoEmoji: {
-    fontSize: 52,
-  },
-  logoInitials: {
-    fontSize: 40,
-    fontWeight: fontWeight.black as '900',
-    color: colors.greenDeep,
-    letterSpacing: 1,
   },
   clientName: {
     fontSize: fontSize.xl,
@@ -186,7 +166,7 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: colors.greenLime,
+    backgroundColor: colors.orange,
     opacity: 0.7,
   },
   asfionTxt: {

@@ -22,6 +22,7 @@ import { MortandadListScreen } from '@/screens/mortandad/MortandadListScreen';
 import { PastoreoListScreen } from '@/screens/pastoreo/PastoreoListScreen';
 import { CompraListScreen } from '@/screens/compras/CompraListScreen';
 import { colors } from '@/theme/colors';
+import { SubscriptionBanner, SubscriptionLockoutScreen, useSubscription } from '@/subscription';
 
 // Mapping: cada tab pertenece a un módulo (o no, si es transversal).
 // "menu" (Home) y "metricas" no están atados a un módulo específico —
@@ -38,6 +39,11 @@ const TAB_TO_MODULO: Partial<Record<TabKey, ModuloKey>> = {
 export function MainTabsScreen() {
   const { currentTab, switchTab } = useTabNav();
   const clientConfig = useClientConfig();
+  // Estado de subscription: si el cliente está suspended/canceled, reemplazamos
+  // el shell de tabs por la pantalla de lockout (con CTA a WhatsApp). Si está
+  // past_due/restricted, mostramos un banner arriba pero los tabs siguen
+  // funcionando (cuando es restricted los Form quedan disabled vía RLS).
+  const sub = useSubscription();
 
   // Filtramos el catálogo de tabs por los módulos habilitados del cliente.
   // 'menu' y 'metricas' (sin entry en TAB_TO_MODULO) siempre pasan.
@@ -53,8 +59,16 @@ export function MainTabsScreen() {
   // si su módulo no está habilitado — ahorra memoria y evita state stale).
   const enabled = (k: TabKey) => tabsVisibles.some(t => t.key === k);
 
+  // Lockout total: reemplaza COMPLETAMENTE el shell. El usuario solo ve la
+  // pantalla de mora y un CTA para hablar con ASFION. El logout funciona
+  // normal por si quieren cambiar de cuenta o probar re-login post-pago.
+  if (sub.isLocked) {
+    return <SubscriptionLockoutScreen />;
+  }
+
   return (
     <View style={styles.safe}>
+      <SubscriptionBanner />
       <View style={styles.body}>
         <TabPane active={currentTab === 'menu'}>
           <HomeScreen />

@@ -28,7 +28,9 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import { DateRangeFilter, type DatePreset } from '@/components/DateRangeFilter';
+import { EmptyState } from '@/components/EmptyState';
 import { Fab } from '@/components/Fab';
+import { ScreenHeader } from '@/components/ScreenHeader';
 import { SyncBadge } from '@/components/SyncBadge';
 import { useAuth } from '@/auth/context';
 import { useRepository } from '@/data';
@@ -238,11 +240,13 @@ export function CompraListScreen() {
         style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
         accessibilityRole="button"
       >
-        {/* Top: N° operación + cant/cat */}
+        {/* Top: N° operación (peach chip) + cant/cat */}
         <View style={styles.topRow}>
-          <Text style={styles.numOp} numberOfLines={1}>
-            {item.numeroOperacion ?? '(sin n°)'}
-          </Text>
+          <View style={styles.numOpChip}>
+            <Text style={styles.numOp} numberOfLines={1}>
+              {item.numeroOperacion ?? '(sin n°)'}
+            </Text>
+          </View>
           {item.cantCabYCat ? (
             <Text style={styles.cantCat} numberOfLines={1}>{item.cantCabYCat}</Text>
           ) : null}
@@ -317,10 +321,25 @@ export function CompraListScreen() {
     </View>
   );
 
-  const campoFiltroLabel = campoFiltro ? camposMap[campoFiltro]?.nombre ?? campoFiltro : 'Campo: todos';
+  // Sin prefijo "Campo:" — el ícono 📍 ya indica qué tipo de filtro es.
+  const campoFiltroLabel = campoFiltro ? camposMap[campoFiltro]?.nombre ?? campoFiltro : 'Todos';
 
-  return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+  // Pill: pendientes > compras hoy > esta semana. Las compras son menos
+  // frecuentes que pariciones, así que "esta semana" es más útil.
+  const today = new Date();
+  const isoToday = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const aWeekAgo = new Date(today); aWeekAgo.setDate(today.getDate() - 6);
+  const isoWeekAgo = `${aWeekAgo.getFullYear()}-${String(aWeekAgo.getMonth() + 1).padStart(2, '0')}-${String(aWeekAgo.getDate()).padStart(2, '0')}`;
+  const hoy = scopedData.filter(c => c.fecha === isoToday).length;
+  const semana = scopedData.filter(c => c.fecha >= isoWeekAgo).length;
+  const novedad = pendientes > 0
+    ? { emoji: '⚠️', text: `${pendientes} sin sync` }
+    : (hoy > 0 ? { emoji: '🛒', text: `${hoy} hoy` }
+       : semana > 0 ? { emoji: '🛒', text: `${semana} esta semana` }
+       : null);
+
+  const filtersHeader = (
+    <>
       {/* Search */}
       <View style={styles.searchWrap}>
         <Text style={styles.searchIcon}>🔍</Text>
@@ -341,35 +360,36 @@ export function CompraListScreen() {
       </View>
 
       <View style={styles.filterBar}>
-        <DateRangeFilter
-          presets={RANGO_PRESETS}
-          preset={rango}
-          presetTodo="todo"
-          desde={desdeCustom}
-          hasta={hastaCustom}
-          onChangePreset={k => setRango(k as RangoFecha)}
-          onChangeCustom={(d, h) => { setDesdeCustom(d); setHastaCustom(h); }}
-        />
+        {/* Fila 1: Fecha + Campo (chips equitativos). Limpiar abajo si activo. */}
+        <View style={styles.filterRow}>
+          <DateRangeFilter
+            chipStyle={{ flexGrow: 1, flexShrink: 1, flexBasis: 0, minWidth: 0 }}
+            presets={RANGO_PRESETS}
+            preset={rango}
+            presetTodo="todo"
+            desde={desdeCustom}
+            hasta={hastaCustom}
+            onChangePreset={k => setRango(k as RangoFecha)}
+            onChangeCustom={(d, h) => { setDesdeCustom(d); setHastaCustom(h); }}
+          />
+          {camposVisibles.length > 1 && (
+            <Pressable
+              onPress={() => setCampoPickerOpen(o => !o)}
+              style={[styles.fChipWide, campoFiltro && styles.fChipSel]}
+            >
+              <Text style={styles.fChipIcon}>📍</Text>
+              <Text style={[styles.fChipTxt, campoFiltro && styles.fChipTxtSel]} numberOfLines={1}>
+                {campoFiltroLabel}
+              </Text>
+              <Text style={[styles.fChev, campoFiltro && styles.fChevSel]}>▾</Text>
+            </Pressable>
+          )}
+        </View>
 
-        {(camposVisibles.length > 1 || activosCount > 0) && (
-          <View style={styles.filterRow2}>
-            {camposVisibles.length > 1 && (
-              <Pressable
-                onPress={() => setCampoPickerOpen(o => !o)}
-                style={[styles.fChipWide, campoFiltro && styles.fChipSel]}
-              >
-                <Text style={[styles.fChipTxt, campoFiltro && styles.fChipTxtSel]} numberOfLines={1}>
-                  {campoFiltroLabel}
-                </Text>
-                <Text style={[styles.fChev, campoFiltro && styles.fChevSel]}>▾</Text>
-              </Pressable>
-            )}
-            {activosCount > 0 && (
-              <Pressable onPress={clearFilters} style={styles.fClear}>
-                <Text style={styles.fClearTxt}>Limpiar</Text>
-              </Pressable>
-            )}
-          </View>
+        {activosCount > 0 && (
+          <Pressable onPress={clearFilters} style={styles.fClear}>
+            <Text style={styles.fClearTxt}>Limpiar filtros</Text>
+          </Pressable>
         )}
 
         {campoPickerOpen && camposVisibles.length > 1 && (
@@ -408,46 +428,57 @@ export function CompraListScreen() {
           </Pressable>
         )}
       </View>
+    </>
+  );
+
+  return (
+    <View style={styles.safe}>
+      <ScreenHeader title="Compras" count={scopedData.length} countLabel="operaciones" novedad={novedad} />
 
       <SectionList
+        style={{ flex: 1 }}
+        ListHeaderComponent={filtersHeader}
         sections={sections}
         renderItem={renderItem}
         renderSectionHeader={renderSectionHeader}
         keyExtractor={c => c.id}
         contentContainerStyle={styles.listContent}
         refreshControl={
-          <RefreshControl refreshing={loading} onRefresh={load} tintColor={colors.greenDark} />
+          <RefreshControl refreshing={loading} onRefresh={load} tintColor={colors.navy} />
         }
         stickySectionHeadersEnabled={false}
         ListEmptyComponent={
           !loading ? (
-            <View style={styles.empty}>
-              <Text style={styles.emptyTxt}>
-                {scopedData.length === 0
-                  ? 'Sin compras cargadas todavía'
-                  : 'Sin compras en este filtro'}
-              </Text>
-              {activosCount > 0 && (
-                <Pressable onPress={clearFilters} style={styles.emptyBtn}>
-                  <Text style={styles.emptyBtnTxt}>Limpiar filtros</Text>
-                </Pressable>
-              )}
-            </View>
+            scopedData.length === 0 ? (
+              <EmptyState
+                emoji="🛒"
+                title="Todavía no hay compras"
+                description="Tocá el botón naranja + para registrar la primera operación."
+              />
+            ) : (
+              <EmptyState
+                emoji="🔍"
+                title="Sin resultados"
+                description="No hay compras que coincidan con los filtros activos."
+                cta={activosCount > 0 ? { label: 'Limpiar filtros', onPress: clearFilters } : undefined}
+              />
+            )
           ) : null
         }
       />
 
       <Fab onPress={() => nav.navigate('CompraForm', {})} />
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bgLight },
 
+  // Search — sin marginHorizontal: listContent ya pone spacing.base en ambos lados.
   searchWrap: {
     flexDirection: 'row', alignItems: 'center',
-    marginHorizontal: spacing.base, marginTop: spacing.md,
+    marginTop: spacing.md,
     paddingHorizontal: spacing.md, height: 44,
     backgroundColor: colors.white, borderRadius: radius.lg,
     borderWidth: 1, borderColor: colors.borderSoft,
@@ -457,25 +488,60 @@ const styles = StyleSheet.create({
   clearBtn: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
   clearTxt: { fontSize: 22, color: colors.textMuted, lineHeight: 22 },
 
+  // Filter bar — sin paddingHorizontal: alineado con cards via listContent.
   filterBar: {
-    paddingHorizontal: spacing.base, paddingTop: spacing.md, paddingBottom: spacing.sm,
+    paddingTop: spacing.md, paddingBottom: spacing.sm,
     gap: spacing.sm,
   },
+  filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, alignItems: 'center' },
   filterRow2: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, alignItems: 'center' },
+  fChipIcon: { fontSize: 13 },
   fChipWide: {
-    flexDirection: 'row', alignItems: 'center', gap: spacing.xs,
-    paddingLeft: spacing.md, paddingRight: spacing.sm, paddingVertical: 10,
-    borderRadius: radius.round, borderWidth: 1, borderColor: colors.borderSoft,
-    backgroundColor: colors.white, maxWidth: 220, minHeight: 36,
+    // Padding/minHeight idénticos al mainChip del DateRangeFilter.
+    // flexBasis:0 → reparto parejo del ancho con la pildora Fecha.
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 0,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingLeft: 10,
+    paddingRight: 8,
+    paddingVertical: 8,
+    minHeight: 36,
+    borderRadius: radius.round,
+    borderWidth: 1,
+    borderColor: colors.borderSoft,
+    backgroundColor: colors.white,
   },
-  fChipSel: { backgroundColor: colors.greenDark, borderColor: colors.greenDark },
-  fChipTxt: { fontSize: fontSize.sm, color: colors.textDark, fontWeight: fontWeight.semibold as '600' },
+  fChipSel: { backgroundColor: colors.navy, borderColor: colors.navy },
+  fChipTxt: {
+    // flex:1 + minWidth:0 → permite truncar cuando el reparto flex achica el chip.
+    flex: 1,
+    minWidth: 0,
+    fontSize: fontSize.sm,
+    color: colors.textDark,
+    fontWeight: fontWeight.semibold as '600',
+  },
   fChipTxtSel: { color: colors.white },
-  fChev: { fontSize: 10, color: colors.textMuted, marginLeft: 2 },
+  fChev: { fontSize: 14, color: colors.textMuted, marginLeft: 2, fontWeight: '700' },
   fChevSel: { color: colors.white },
-  fClear: { paddingHorizontal: spacing.sm, paddingVertical: 6 },
+  // Limpiar outline full-width (consistente con Pariciones/Lluvias/Mortandad).
+  fClear: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: radius.round,
+    borderWidth: 1,
+    borderColor: colors.borderSoft,
+    backgroundColor: 'transparent',
+  },
   fClearTxt: {
-    fontSize: fontSize.sm, color: colors.textMuted, fontWeight: fontWeight.semibold as '600',
+    fontSize: fontSize.sm,
+    color: colors.textMuted,
+    fontWeight: fontWeight.semibold as '600',
+    letterSpacing: 0.2,
   },
 
   subPicker: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
@@ -484,9 +550,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.round, borderWidth: 1, borderColor: colors.borderSoft,
     backgroundColor: colors.bgLight,
   },
-  subChipSel: { backgroundColor: colors.greenLime, borderColor: colors.greenLime },
+  subChipSel: { backgroundColor: colors.orange, borderColor: colors.orange },
   subChipTxt: { fontSize: fontSize.sm, color: colors.textDark, fontWeight: fontWeight.semibold as '600' },
-  subChipTxtSel: { color: colors.greenDeep, fontWeight: fontWeight.bold as '700' },
+  subChipTxtSel: { color: colors.navyDeep, fontWeight: fontWeight.bold as '700' },
 
   pendPill: {
     flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
@@ -509,7 +575,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: fontSize.md, fontWeight: fontWeight.bold as '700',
-    color: colors.greenDark, letterSpacing: 0.3,
+    color: colors.navy, letterSpacing: 0.3,
   },
   sectionSub: {
     fontSize: fontSize.sm, color: colors.textMuted,
@@ -517,9 +583,9 @@ const styles = StyleSheet.create({
   },
   sectionTotalBox: {
     paddingHorizontal: spacing.md, paddingVertical: 4,
-    borderRadius: radius.round, backgroundColor: colors.greenLime,
+    borderRadius: radius.round, backgroundColor: colors.orange,
   },
-  sectionTotalTxt: { fontSize: fontSize.sm, color: colors.greenDeep, fontWeight: fontWeight.bold as '700' },
+  sectionTotalTxt: { fontSize: fontSize.sm, color: colors.navyDeep, fontWeight: fontWeight.bold as '700' },
 
   // Card
   card: {
@@ -528,7 +594,15 @@ const styles = StyleSheet.create({
   },
   cardPressed: { opacity: 0.85 },
   topRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: spacing.sm },
-  numOp: { fontSize: fontSize.lg, fontWeight: fontWeight.bold as '700', color: colors.greenDeep },
+  // Peach chip leading consistente con otros listados + Home.
+  numOpChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm - 2,
+    backgroundColor: colors.orangeSoft,
+    borderRadius: radius.md,
+    alignSelf: 'flex-start',
+  },
+  numOp: { fontSize: fontSize.lg, fontWeight: fontWeight.bold as '700', color: colors.navy, letterSpacing: 0.3 },
   cantCat: { fontSize: fontSize.sm, color: colors.textMuted, fontWeight: fontWeight.semibold as '600' },
 
   kgRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexWrap: 'wrap' },
@@ -554,7 +628,7 @@ const styles = StyleSheet.create({
   emptyTxt: { fontSize: fontSize.md, color: colors.textMuted, fontStyle: 'italic' },
   emptyBtn: {
     paddingHorizontal: spacing.lg, paddingVertical: spacing.sm,
-    borderRadius: radius.round, backgroundColor: colors.greenDark,
+    borderRadius: radius.round, backgroundColor: colors.navy,
   },
   emptyBtnTxt: { fontSize: fontSize.sm, color: colors.white, fontWeight: fontWeight.bold as '700' },
 });

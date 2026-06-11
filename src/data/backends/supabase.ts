@@ -23,6 +23,8 @@ import type {
   Parcela,
   Paricion,
   Pluviometro,
+  Subscription,
+  SubscriptionStatus,
   TipoEvento,
   Usuario,
 } from '../types';
@@ -33,6 +35,7 @@ import type {
   ParicionRef,
   UltimaCaravana,
 } from '../repository';
+import { computeDaysOverdue } from '../subscription';
 
 // =============================================================================
 // Config
@@ -67,6 +70,37 @@ export class SessionExpiredError extends Error {
 
 export function isSessionExpiredError(err: unknown): err is SessionExpiredError {
   return Boolean(err) && typeof err === 'object' && (err as any).isSessionExpired === true;
+}
+
+// SubscriptionBlockedError: levantado cuando un INSERT/UPDATE falla por la
+// policy RLS de subscription (current_cliente_can_write() devolvió false).
+// Igual que SessionExpired: NO encolar como pending, porque el reintento
+// también va a fallar hasta que regularicen el pago.
+//
+// Postgres devuelve un error 42501 ("new row violates row-level security
+// policy") cuando WITH CHECK falla. Lo detectamos heurísticamente porque el
+// mensaje en supabase-js no incluye el code en formato fácil.
+export class SubscriptionBlockedError extends Error {
+  readonly isSubscriptionBlocked = true;
+  constructor(message: string) {
+    super(message);
+    this.name = 'SubscriptionBlockedError';
+  }
+}
+
+export function isSubscriptionBlockedError(err: unknown): err is SubscriptionBlockedError {
+  return Boolean(err) && typeof err === 'object' && (err as any).isSubscriptionBlocked === true;
+}
+
+/** Devuelve true si el error de supabase-js parece ser un block de RLS. */
+export function looksLikeRlsBlock(message: string): boolean {
+  const m = message.toLowerCase();
+  return (
+    m.includes('row-level security') ||
+    m.includes('violates row level security') ||
+    m.includes('new row violates') ||
+    m.includes('rls')
+  );
 }
 
 // =============================================================================
@@ -424,6 +458,39 @@ export class SupabaseBackend implements IDataBackend {
     return rowToUsuario(data);
   }
 
+  // ---------- Subscription / billing ----------
+
+  /**
+   * Lee el row del cliente actual y devuelve su estado de subscription.
+   * El RLS de SELECT en `clientes` ya filtra por current_cliente_id, así que
+   * con un select sin WHERE alcanza — solo devuelve el row del tenant logueado.
+   *
+   * Si el cliente no tiene billing configurado (period_end_date null), tratamos
+   * el caso como 'active' con daysOverdue 0 para no romper la UX. El admin
+   * sabe que hay clientes en trial / sin facturar y los maneja desde el panel.
+   */
+  async getSubscription(): Promise<Subscription> {
+    const { data, error } = await this.supabase
+      .from('clientes')
+      .select('subscription_status, period_end_date, last_payment_date')
+      .limit(1)
+      .maybeSingle();
+    if (error) throw new Error(`getSubscription: ${error.message}`);
+    if (!data) {
+      // Fallback defensivo (no debería pasar si el JWT está OK).
+      return { status: 'active', periodEndDate: null, lastPaymentDate: null, daysOverdue: 0 };
+    }
+    const status = (data.subscription_status ?? 'active') as SubscriptionStatus;
+    const periodEndDate = data.period_end_date as string | null;
+    const lastPaymentDate = data.last_payment_date as string | null;
+    return {
+      status,
+      periodEndDate,
+      lastPaymentDate,
+      daysOverdue: computeDaysOverdue(periodEndDate),
+    };
+  }
+
   // ---------- Catálogos ----------
 
   async listCampos(): Promise<Campo[]> {
@@ -580,7 +647,16 @@ export class SupabaseBackend implements IDataBackend {
     if (filters.desde) q = q.gte(fechaCol, filters.desde);
     if (filters.hasta) q = q.lte(fechaCol, filters.hasta);
     q = q.order(fechaCol, { ascending: false });
-    if (filters.limit) q = q.limit(filters.limit);
+    // IMPORTANTE: Supabase por default limita queries a 1000 filas. Si el cliente
+    // tiene más de 1000 pariciones (Ganaderas ya tiene 2.5k+), el count se quedaba
+    // pegado en "1.000 cargadas" y los nuevos eventos no aparecían.
+    // Fix: usar .range(0, 49999) para subir el cap a 50k, que cubre 20+ años de
+    // operación. Si algún día se aproximan, hay que paginar de verdad.
+    if (filters.limit) {
+      q = q.limit(filters.limit);
+    } else {
+      q = q.range(0, 49999);
+    }
     const { data, error } = await q;
     if (error) throw new Error(`listEventos(${tipo}): ${error.message}`);
     return (data ?? []).map((r: any) => rowParser(tipo)(r));

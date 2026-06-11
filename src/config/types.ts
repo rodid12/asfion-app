@@ -20,7 +20,10 @@ export type ModuloKey =
   | 'mortandad'
   | 'pastoreo'
   | 'compras'
-  | 'mediciones';
+  | 'mediciones'
+  // Módulo en roadmap, todavía no implementado. Aparece como tile "PRÓXIMAMENTE"
+  // en el Home (sin navegación) y como tab disabled en el dashboard web.
+  | 'ventas';
 
 /** Branding (logo + colores + nombre) que aparecen en login, header, etc. */
 export interface ClientBranding {
