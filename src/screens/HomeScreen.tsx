@@ -424,7 +424,10 @@ const styles = StyleSheet.create({
   // ---- BODY scroll ----
   scroll: {
     paddingHorizontal: spacing.base,
-    paddingTop: 0,
+    // Antes era 0 — los stat cards "HOY / SEMANA / SIN SYNC" pegaban
+    // contra el header con datos del usuario. Subimos a spacing.lg
+    // (20px) para separarlos visualmente y dar respiro.
+    paddingTop: spacing.lg,
     paddingBottom: spacing.xxxl,
     gap: spacing.lg,
   },

@@ -60,7 +60,10 @@ export const GANADERAS_CONFIG: ClientConfig = {
     },
     compras: {
       // Replica del módulo "Compra" del AppSheet de Ganaderas.
-      actividades: ['Destete Precoz', 'Engorde', 'Invernada'],
+      // "Recepción" se agregó en junio 2026 a pedido del cliente: cuando llega
+      // un camión con hacienda comprada, el peón carga primero una Recepción
+      // (peso de bajada y conteo) antes de definir actividad productiva.
+      actividades: ['Recepción', 'Destete Precoz', 'Engorde', 'Invernada'],
       plazos: ['Contado', '30 días', '60 días', '90 días'],
     },
   },
