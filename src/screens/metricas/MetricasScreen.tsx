@@ -147,7 +147,11 @@ export function MetricasScreen() {
   const [rango, setRango] = useState<Rango>('todo');
   const [metricaTab, setMetricaTab] = useState<MetricaTab>('resumen');
 
-  const load = useCallback(async () => {
+  // Patrón `cancelado` (audit 27-jun-2026): si el usuario navega fuera del
+  // tab antes de que terminen los 6 fetches en paralelo, abortamos los
+  // setState. Sin esto el spinner se queda colgado y se mezclan datos
+  // viejos con la próxima entrada al tab.
+  const load = useCallback(async (cancelado: () => boolean = () => false) => {
     setLoading(true);
     try {
       const [evs, lls, ms, ps, cps, cs] = await Promise.all([
@@ -158,6 +162,7 @@ export function MetricasScreen() {
         repo.listEventos('compra'),
         repo.listCampos(),
       ]);
+      if (cancelado()) return;
       setData(evs as Paricion[]);
       setLluvias(lls as Lluvia[]);
       setMortandad(ms as Mortandad[]);
@@ -167,21 +172,23 @@ export function MetricasScreen() {
       // Cargar todos los circuitos (un fetch por campo) — necesario para
       // mappear circuitoId → nombre en el chart "Movimientos por circuito".
       const allCircs = await Promise.all(cs.map(c => repo.listCircuitos(c.id)));
+      if (cancelado()) return;
       const map: Record<string, { nombre: string; campoId: string; hectareas: number }> = {};
       allCircs.flat().forEach(c => {
         map[c.id] = { nombre: c.nombre, campoId: c.campoId, hectareas: c.hectareas };
       });
       setCircuitosMap(map);
     } finally {
-      setLoading(false);
+      if (!cancelado()) setLoading(false);
     }
   }, [repo]);
 
   // Cargar al entrar al tab y al montarse.
   useEffect(() => {
-    if (currentTab === 'metricas') {
-      load();
-    }
+    if (currentTab !== 'metricas') return;
+    let cancelado = false;
+    load(() => cancelado);
+    return () => { cancelado = true; };
   }, [currentTab, load]);
 
   // Scope por rol (operario solo ve lo suyo).
@@ -642,24 +649,26 @@ export function MetricasScreen() {
     return scopedCompras.filter(c => c.fecha >= desde);
   }, [scopedCompras, rango]);
 
-  // Aggregations: por campo (count + kg destino total + inversión total).
+  // Aggregations: por campo (count + kg destino total).
+  // El campo "inversión" (precio × kg) se removió a pedido del cliente —
+  // expone precios sensibles a usuarios fuera del equipo comercial.
   const comprasPorCampo = useMemo(() => {
-    const map = new Map<string, { campoId: string; count: number; kgDestino: number; inversion: number }>();
+    const map = new Map<string, { campoId: string; count: number; kgDestino: number }>();
     filteredCompras.forEach(c => {
-      const entry = map.get(c.campoId) ?? { campoId: c.campoId, count: 0, kgDestino: 0, inversion: 0 };
+      const entry = map.get(c.campoId) ?? { campoId: c.campoId, count: 0, kgDestino: 0 };
       entry.count++;
-      entry.kgDestino += Number.isFinite(c.kgNetosDestino) ? c.kgNetosDestino : 0;
-      if (c.precio != null && Number.isFinite(c.precio)) {
-        entry.inversion += c.precio * (Number.isFinite(c.kgNetosDestino) ? c.kgNetosDestino : 0);
-      }
+      // kgNetosDestino es nullable post mig 0021 — compras "en tránsito"
+      // sin pesaje destino no suman a totales (no son data real).
+      const kgDest = c.kgNetosDestino != null && Number.isFinite(c.kgNetosDestino) ? c.kgNetosDestino : 0;
+      entry.kgDestino += kgDest;
       map.set(c.campoId, entry);
     });
     return campos
       .map(cmp => {
         const e = map.get(cmp.id);
-        return e ? { campo: cmp, count: e.count, kgDestino: Math.round(e.kgDestino), inversion: Math.round(e.inversion) } : null;
+        return e ? { campo: cmp, count: e.count, kgDestino: Math.round(e.kgDestino) } : null;
       })
-      .filter((r): r is { campo: Campo; count: number; kgDestino: number; inversion: number } => Boolean(r))
+      .filter((r): r is { campo: Campo; count: number; kgDestino: number } => Boolean(r))
       .sort((a, b) => b.count - a.count);
   }, [filteredCompras, campos]);
 
@@ -675,17 +684,38 @@ export function MetricasScreen() {
   // KPIs globales del sub-tab Compras.
   const totalCompras = filteredCompras.length;
   const totalKgCompras = useMemo(
-    () => Math.round(filteredCompras.reduce((acc, c) => acc + (Number.isFinite(c.kgNetosDestino) ? c.kgNetosDestino : 0), 0)),
+    () => Math.round(filteredCompras.reduce(
+      (acc, c) => acc + (c.kgNetosDestino != null && Number.isFinite(c.kgNetosDestino) ? c.kgNetosDestino : 0),
+      0,
+    )),
     [filteredCompras],
   );
-  const totalInversion = useMemo(() => {
-    let s = 0;
+  // Reemplazo del antiguo `totalInversion` — % machos / hembras del rango
+  // filtrado. Usa las columnas totalMachos/totalHembras (mig 0017) y cae
+  // a parsear cantCabYCat cuando no están.
+  const composicionMH = useMemo(() => {
+    let machos = 0, hembras = 0;
     filteredCompras.forEach(c => {
-      if (c.precio != null && Number.isFinite(c.precio) && Number.isFinite(c.kgNetosDestino)) {
-        s += c.precio * c.kgNetosDestino;
+      const tm = c.totalMachos ?? 0;
+      const th = c.totalHembras ?? 0;
+      if (tm > 0 || th > 0) {
+        machos += tm;
+        hembras += th;
+      } else {
+        // Fallback al texto libre — "83 machos · 27 hembras"
+        const txt = c.cantCabYCat ?? '';
+        const matchM = txt.match(/(\d+)\s*macho/i);
+        const matchH = txt.match(/(\d+)\s*hembra/i);
+        if (matchM?.[1]) machos += parseInt(matchM[1], 10) || 0;
+        if (matchH?.[1]) hembras += parseInt(matchH[1], 10) || 0;
       }
     });
-    return Math.round(s);
+    const total = machos + hembras;
+    return {
+      machos, hembras, total,
+      pctMachos:  total > 0 ? Math.round((machos / total) * 100) : 0,
+      pctHembras: total > 0 ? Math.round((hembras / total) * 100) : 0,
+    };
   }, [filteredCompras]);
   // Estimación gruesa de cabezas compradas — parseamos cantCabYCat buscando
   // números enteros y los sumamos. "83 machos. 27 hembras" → 110.
@@ -1416,11 +1446,23 @@ export function MetricasScreen() {
               />
             </View>
 
-            {totalInversion > 0 && (
+            {/* Composición machos/hembras — reemplazo del antiguo
+                "Inversión total ($)" que exponía precios. */}
+            {composicionMH.total > 0 && (
               <View style={styles.kpiRow}>
                 <Kpi
-                  value={totalInversion}
-                  label="INVERSIÓN TOTAL ($)"
+                  value={`${composicionMH.pctMachos}% / ${composicionMH.pctHembras}%`}
+                  label="MACHOS / HEMBRAS"
+                  color={colors.orange}
+                />
+                <Kpi
+                  value={composicionMH.machos}
+                  label="MACHOS"
+                  color={colors.navy}
+                />
+                <Kpi
+                  value={composicionMH.hembras}
+                  label="HEMBRAS"
                   color={colors.navy}
                 />
               </View>
@@ -1451,7 +1493,6 @@ export function MetricasScreen() {
             <Section
               title="Kg comprados por campo"
               subtitle="Suma de kg netos de destino"
-              footer="Inversión por campo aparece si las compras tienen precio cargado."
             >
               {comprasPorCampo.length === 0 ? (
                 <Empty msg="Sin compras cargadas" />
@@ -1464,9 +1505,7 @@ export function MetricasScreen() {
                       value={r.kgDestino}
                       max={maxComprasKg}
                       color={colors.amber}
-                      valueLabel={`${r.kgDestino.toLocaleString('es-AR')} kg${
-                        r.inversion > 0 ? ` · $${r.inversion.toLocaleString('es-AR')}` : ''
-                      }`}
+                      valueLabel={`${r.kgDestino.toLocaleString('es-AR')} kg`}
                     />
                   ))}
                 </View>
@@ -1626,11 +1665,14 @@ function SummaryCard({
 // estándar de "no aplica / aún no hay" y deja claro que no es un error.
 // Si más adelante queremos forzar el cero literal en algún caso, agregamos
 // un prop `showZero` y listo.
-function Kpi({ value, label, color }: { value: number; label: string; color: string }) {
+function Kpi({ value, label, color }: { value: number | string; label: string; color: string }) {
   // Rediseño post-rebrand: card blanca + strip lateral 4px del color del KPI,
   // mismo patrón que StatCard del Home — da consistencia visual entre las
   // dos pantallas principales de la app.
-  const isEmpty = value === 0;
+  //
+  // value acepta number o string — string para KPIs derivados (ej. "62% / 38%"
+  // de Machos/Hembras en Compras). Empty = 0 numérico o string vacío.
+  const isEmpty = value === 0 || value === '';
   const stripColor = isEmpty ? colors.borderSoft : color;
   const valueColor = isEmpty ? colors.textMuted : color;
   return (
