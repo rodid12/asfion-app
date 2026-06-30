@@ -18,6 +18,7 @@ import type {
   Campo,
   CaravanaColor,
   Circuito,
+  ClienteConfigRow,
   Evento,
   Lote,
   Parcela,
@@ -36,6 +37,32 @@ import type {
   UltimaCaravana,
 } from '../repository';
 import { computeDaysOverdue } from '../subscription';
+import { uploadFotosSiHaceFalta } from './photoUpload';
+import {
+  mapRow,
+  CAMPO_SCHEMA,
+  LOTE_SCHEMA,
+  PLUVIOMETRO_SCHEMA,
+  CIRCUITO_SCHEMA,
+  PARCELA_SCHEMA,
+  PARICION_SCHEMA,
+  LLUVIA_SCHEMA,
+  MORTANDAD_SCHEMA,
+  PASTOREO_SCHEMA,
+  COMPRA_SCHEMA,
+} from '../mapRow.canonical';
+import type {
+  CampoCanonical,
+  LoteCanonical,
+  PluviometroCanonical,
+  CircuitoCanonical,
+  ParcelaCanonical,
+  ParicionCanonical,
+  LluviaCanonical,
+  MortandadCanonical,
+  PastoreoCanonical,
+  CompraCanonical,
+} from '../types.canonical';
 
 // =============================================================================
 // Config
@@ -109,30 +136,14 @@ export function looksLikeRlsBlock(message: string): boolean {
 // Postgres usa snake_case por convención; TS usa camelCase. Mapeamos a mano
 // (no usamos un ORM porque el shape es chico y queremos control total).
 
-function rowToCampo(r: any): Campo {
-  return {
-    id: r.id,
-    nombre: r.nombre,
-    organizacionId: r.organizacion_id ?? '',
-    stockInicialVacas: r.stock_inicial_vacas ?? undefined,
-  };
-}
+// Mappers de catálogos. SCHEMAs declarativos en mapRow.canonical.ts —
+// agregás una columna ahí y el mapper se actualiza solo.
 
-function rowToLote(r: any): Lote {
-  return { id: r.id, campoId: r.campo_id, nombre: r.nombre };
-}
-
-function rowToPluviometro(r: any): Pluviometro {
-  return { id: r.id, campoId: r.campo_id, nombre: r.nombre };
-}
-
-function rowToCircuito(r: any): Circuito {
-  return { id: r.id, campoId: r.campo_id, nombre: r.nombre, hectareas: r.hectareas };
-}
-
-function rowToParcela(r: any): Parcela {
-  return { id: r.id, circuitoId: r.circuito_id, numero: r.numero, hectareas: r.hectareas };
-}
+function rowToCampo(r: any): Campo        { return mapRow<Campo>(r, CAMPO_SCHEMA); }
+function rowToLote(r: any): Lote          { return mapRow<Lote>(r, LOTE_SCHEMA); }
+function rowToPluviometro(r: any): Pluviometro { return mapRow<Pluviometro>(r, PLUVIOMETRO_SCHEMA); }
+function rowToCircuito(r: any): Circuito  { return mapRow<Circuito>(r, CIRCUITO_SCHEMA); }
+function rowToParcela(r: any): Parcela    { return mapRow<Parcela>(r, PARCELA_SCHEMA); }
 
 function rowToUsuario(r: any): Usuario {
   return {
@@ -155,88 +166,54 @@ function gpsFromRow(r: any): Evento['gps'] {
   };
 }
 
+// Mappers de eventos. La parte canónica (campos compartidos con dashboard)
+// se calcula con mapRow + SCHEMA; los EXTRAS específicos de la app móvil
+// (tipo discriminado, gps anidado, fotos, syncState) se agregan con spread.
+//
+// SYNC STATE: el backend siempre devuelve rows YA sincronizados → 'synced'.
+// El estado 'pending'/'syncing'/'failed' solo vive en la cola local de
+// AsyncStorage hasta que el flush exitoso los borra de ahí.
+
 function rowToParicion(r: any): Paricion {
   return {
+    ...mapRow<ParicionCanonical>(r, PARICION_SCHEMA),
     tipo: 'paricion',
-    id: r.id,
-    fecha: r.fecha,
-    campoId: r.campo_id,
-    loteId: r.lote_id ?? undefined,
-    usuarioEmail: r.usuario_email,
-    vacasGrupo: r.vacas_grupo,
-    evento: r.evento,
-    sexo: r.sexo ?? undefined,
-    asistencia: r.asistencia ?? undefined,
-    caravanaColor: r.caravana_color ?? undefined,
-    caravanaNumero: r.caravana_numero ?? undefined,
-    causaTipo: r.causa_tipo ?? undefined,
-    causaDetalle: r.causa_detalle ?? undefined,
-    observaciones: r.observaciones ?? undefined,
     gps: gpsFromRow(r),
     fotos: r.fotos ?? undefined,
-    createdAt: r.created_at,
     syncState: 'synced',
   };
 }
 
 function rowToLluvia(r: any): Evento {
   return {
+    ...mapRow<LluviaCanonical>(
+      { ...r, pluviometro: r.pluviometro_nombre ?? r.pluviometro ?? '' },
+      LLUVIA_SCHEMA,
+    ),
     tipo: 'lluvia',
-    id: r.id,
-    fecha: r.fecha,
-    campoId: r.campo_id,
-    pluviometroId: r.pluviometro_id ?? undefined,
     loteId: undefined,
-    usuarioEmail: r.usuario_email,
-    pluviometro: r.pluviometro_nombre ?? '',
-    milimetros: Number(r.milimetros),
-    createdAt: r.created_at,
+    gps: gpsFromRow(r),
+    fotos: r.fotos ?? undefined,
     syncState: 'synced',
   };
 }
 
 function rowToMortandad(r: any): Evento {
   return {
+    ...mapRow<MortandadCanonical>(r, MORTANDAD_SCHEMA),
     tipo: 'mortandad',
-    id: r.id,
-    fecha: r.fecha,
-    campoId: r.campo_id,
-    loteId: r.lote_id ?? undefined,
-    usuarioEmail: r.usuario_email,
-    categoria: r.categoria,
-    actividad: r.actividad ?? undefined,
-    causaTipo: r.causa_tipo ?? undefined,
-    causaDetalle: r.causa_detalle ?? undefined,
-    caravanaColor: r.caravana_color ?? undefined,
-    caravanaNumero: r.caravana_numero ?? undefined,
-    observaciones: r.observaciones ?? undefined,
     gps: gpsFromRow(r),
     fotos: r.fotos ?? undefined,
-    createdAt: r.created_at,
     syncState: 'synced',
   };
 }
 
 function rowToPastoreo(r: any): Evento {
   return {
+    ...mapRow<PastoreoCanonical>(r, PASTOREO_SCHEMA),
     tipo: 'pastoreo',
-    id: r.id,
-    fecha: r.fecha_entrada,
-    fechaSalida: r.fecha_salida ?? undefined,
-    campoId: r.campo_id,
-    circuitoId: r.circuito_id,
-    parcelaId: r.parcela_id,
-    parcelaNumero: r.parcela_numero ?? undefined,
-    usuarioEmail: r.usuario_email,
-    categoria: r.categoria,
-    evento: r.evento ?? undefined,
-    categoriaAnimal: r.categoria_animal ?? undefined,
-    caravanaNumero: r.caravana_numero ?? undefined,
-    causa: r.causa ?? undefined,
-    // Migration 0003 — datos productivos
-    animales:   r.animales    != null ? Number(r.animales)    : undefined,
-    kgPromedio: r.kg_promedio != null ? Number(r.kg_promedio) : undefined,
-    createdAt: r.created_at,
+    gps: gpsFromRow(r),
+    fotos: r.fotos ?? undefined,
     syncState: 'synced',
   };
 }
@@ -334,29 +311,10 @@ function pastoreoToRow(p: any, clienteId: string) {
 
 function rowToCompra(r: any): Evento {
   return {
+    ...mapRow<CompraCanonical>(r, COMPRA_SCHEMA),
     tipo: 'compra',
-    id: r.id,
-    fecha: r.fecha,
-    campoId: r.campo_id,
-    usuarioEmail: r.usuario_email,
-    // Físico
-    actividad:        r.actividad ?? undefined,
-    cantCabYCat:      r.cant_cab_y_cat ?? undefined,
-    kgNetosOrigen:    Number(r.kg_netos_origen),
-    kgNetosDestino:   Number(r.kg_netos_destino),
-    mermaPorcentaje:  r.merma_porcentaje != null ? Number(r.merma_porcentaje) : undefined,
-    kgCorregidos:     r.kg_corregidos    != null ? Number(r.kg_corregidos) : undefined,
-    // Comerciales
-    precio:           r.precio != null ? Number(r.precio) : undefined,
-    consignado:       r.consignado ?? undefined,
-    titular:          r.titular ?? undefined,
-    plazo:            r.plazo ?? undefined,
-    // Logística
-    numeroDte:        r.numero_dte ?? undefined,
-    numeroOperacion:  r.numero_operacion ?? undefined,
-    kmRecorrido:      r.km_recorrido != null ? Number(r.km_recorrido) : undefined,
-    observaciones:    r.observaciones ?? undefined,
-    createdAt: r.created_at,
+    gps: gpsFromRow(r),
+    fotos: r.fotos ?? undefined,
     syncState: 'synced',
   };
 }
@@ -470,10 +428,19 @@ export class SupabaseBackend implements IDataBackend {
    * sabe que hay clientes en trial / sin facturar y los maneja desde el panel.
    */
   async getSubscription(): Promise<Subscription> {
+    // .eq('id', currentClienteId) explícito — antes la query era un
+    // `select…limit(1)` que confiaba en que RLS filtrara. Con 1 cliente
+    // funcionaba pero con 50 clientes hace full-table scan antes del
+    // limit. El filter explícito usa el índice de PK (O(1)).
+    const user = await this.getCurrentUser();
+    const clienteId = user?.clienteId;
+    if (!clienteId) {
+      return { status: 'active', periodEndDate: null, lastPaymentDate: null, daysOverdue: 0 };
+    }
     const { data, error } = await this.supabase
       .from('clientes')
       .select('subscription_status, period_end_date, last_payment_date')
-      .limit(1)
+      .eq('id', clienteId)
       .maybeSingle();
     if (error) throw new Error(`getSubscription: ${error.message}`);
     if (!data) {
@@ -491,6 +458,41 @@ export class SupabaseBackend implements IDataBackend {
     };
   }
 
+  /**
+   * Trae la configuración runtime del cliente actual.
+   * Reemplaza el ACTIVE_CONFIG compile-time. RLS filtra automáticamente
+   * por el cliente del usuario logueado, así que esta query devuelve
+   * a lo sumo 1 row.
+   */
+  async getClienteConfig(): Promise<ClienteConfigRow | null> {
+    // Mismo razonamiento que getSubscription: .eq('id', ...) explícito
+    // para usar el índice de PK en vez de full-table scan + RLS filter.
+    const user = await this.getCurrentUser();
+    const clienteId = user?.clienteId;
+    if (!clienteId) return null;
+    const { data, error } = await this.supabase
+      .from('clientes')
+      .select('id, nombre, tagline, logo_url, accent_color, modulos_habilitados, catalogos')
+      .eq('id', clienteId)
+      .maybeSingle();
+    if (error) {
+      // Si la migración 0014 no aplicó todavía (algunos campos NULL), igual
+      // devolvemos lo que tengamos en lugar de tirar excepción.
+      console.warn('[getClienteConfig] error:', error.message);
+      return null;
+    }
+    if (!data) return null;
+    return {
+      id: data.id,
+      nombre: data.nombre,
+      tagline: data.tagline ?? undefined,
+      logoUrl: data.logo_url ?? undefined,
+      accentColor: data.accent_color ?? undefined,
+      modulosHabilitados: Array.isArray(data.modulos_habilitados) ? data.modulos_habilitados : [],
+      catalogos: (data.catalogos ?? {}) as Record<string, any>,
+    };
+  }
+
   // ---------- Catálogos ----------
 
   async listCampos(): Promise<Campo[]> {
@@ -502,10 +504,12 @@ export class SupabaseBackend implements IDataBackend {
     return (data ?? []).map(rowToCampo);
   }
 
+  // Q2 audit: cambio de select('*') a columnas explícitas. Ahorra bytes
+  // en transit en cada login mobile y deja el query plan más predecible.
   async listLotes(campoId: string): Promise<Lote[]> {
     const { data, error } = await this.supabase
       .from('lotes')
-      .select('*')
+      .select('id, campo_id, nombre')
       .eq('campo_id', campoId)
       .order('nombre');
     if (error) throw new Error(error.message);
@@ -515,7 +519,7 @@ export class SupabaseBackend implements IDataBackend {
   async listPluviometros(campoId: string): Promise<Pluviometro[]> {
     const { data, error } = await this.supabase
       .from('pluviometros')
-      .select('*')
+      .select('id, campo_id, nombre')
       .eq('campo_id', campoId)
       .order('nombre');
     if (error) throw new Error(error.message);
@@ -525,7 +529,7 @@ export class SupabaseBackend implements IDataBackend {
   async listCircuitos(campoId: string): Promise<Circuito[]> {
     const { data, error } = await this.supabase
       .from('circuitos')
-      .select('*')
+      .select('id, campo_id, nombre, hectareas')
       .eq('campo_id', campoId)
       .order('nombre');
     if (error) throw new Error(error.message);
@@ -535,7 +539,7 @@ export class SupabaseBackend implements IDataBackend {
   async listParcelas(circuitoId: string): Promise<Parcela[]> {
     const { data, error } = await this.supabase
       .from('parcelas')
-      .select('*')
+      .select('id, circuito_id, numero, hectareas')
       .eq('circuito_id', circuitoId)
       .order('numero');
     if (error) throw new Error(error.message);
@@ -618,7 +622,28 @@ export class SupabaseBackend implements IDataBackend {
       throw new SessionExpiredError('No se pudo resolver tu cliente — re-iniciá sesión.');
     }
     const table = tablaDeEvento(evento.tipo);
-    const row = eventoToRow(evento, user.clienteId);
+
+    // PASO 3: subir fotos al bucket fotos-eventos (migration 0013) y
+    // reemplazar las URIs locales (file://...) por URLs públicas. Si
+    // alguna foto falla, la URI local queda — el evento se guarda igual
+    // y la foto se reintenta en el próximo save. Pariciones, Mortandad,
+    // Pastoreo, Lluvias y Compras tienen `fotos?: string[]` opcional.
+    let eventoConFotos = evento;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const eventoCualquiera = evento as any;
+    if (Array.isArray(eventoCualquiera.fotos) && eventoCualquiera.fotos.length > 0) {
+      const tablaPhoto = table as 'pariciones' | 'mortandad' | 'pastoreo' | 'lluvias' | 'compras';
+      const fotosSubidas = await uploadFotosSiHaceFalta(
+        this.supabase,
+        user.clienteId,
+        tablaPhoto,
+        evento.id,
+        eventoCualquiera.fotos,
+      );
+      eventoConFotos = { ...evento, fotos: fotosSubidas } as Evento;
+    }
+
+    const row = eventoToRow(eventoConFotos, user.clienteId);
     const { error } = await this.supabase.from(table).upsert(row, { onConflict: 'id' });
     if (error) {
       // Errores de auth/RLS: marcamos como SessionExpired para que el caller
@@ -633,33 +658,55 @@ export class SupabaseBackend implements IDataBackend {
       }
       throw new Error(`saveEvento(${evento.tipo}): ${msg}`);
     }
-    return { ...evento, syncState: 'synced' };
+    return { ...eventoConFotos, syncState: 'synced' };
   }
 
   async listEventos(tipo: TipoEvento, filters: EventoFilters = {}): Promise<Evento[]> {
     const table = tablaDeEvento(tipo);
-    let q = this.supabase.from(table).select('*');
-    if (filters.campoId) q = q.eq('campo_id', filters.campoId);
-    if (filters.loteId) q = q.eq('lote_id', filters.loteId);
-    if (filters.usuarioEmail) q = q.eq('usuario_email', filters.usuarioEmail);
     // Pastoreo usa fecha_entrada en lugar de fecha
     const fechaCol = tipo === 'pastoreo' ? 'fecha_entrada' : 'fecha';
-    if (filters.desde) q = q.gte(fechaCol, filters.desde);
-    if (filters.hasta) q = q.lte(fechaCol, filters.hasta);
-    q = q.order(fechaCol, { ascending: false });
-    // IMPORTANTE: Supabase por default limita queries a 1000 filas. Si el cliente
-    // tiene más de 1000 pariciones (Ganaderas ya tiene 2.5k+), el count se quedaba
-    // pegado en "1.000 cargadas" y los nuevos eventos no aparecían.
-    // Fix: usar .range(0, 49999) para subir el cap a 50k, que cubre 20+ años de
-    // operación. Si algún día se aproximan, hay que paginar de verdad.
+
+    // Función que arma la query con todos los filtros aplicados — la
+    // llamamos por cada página para mantener los predicados.
+    const buildQuery = () => {
+      let q = this.supabase.from(table).select('*');
+      if (filters.campoId) q = q.eq('campo_id', filters.campoId);
+      if (filters.loteId) q = q.eq('lote_id', filters.loteId);
+      if (filters.usuarioEmail) q = q.eq('usuario_email', filters.usuarioEmail);
+      if (filters.desde) q = q.gte(fechaCol, filters.desde);
+      if (filters.hasta) q = q.lte(fechaCol, filters.hasta);
+      return q.order(fechaCol, { ascending: false });
+    };
+
+    // Si el caller pidió un limit explícito (ej. "últimos 50"), una sola
+    // query alcanza — no necesitamos paginar.
     if (filters.limit) {
-      q = q.limit(filters.limit);
-    } else {
-      q = q.range(0, 49999);
+      const { data, error } = await buildQuery().limit(filters.limit);
+      if (error) throw new Error(`listEventos(${tipo}): ${error.message}`);
+      return (data ?? []).map((r: any) => rowParser(tipo)(r));
     }
-    const { data, error } = await q;
-    if (error) throw new Error(`listEventos(${tipo}): ${error.message}`);
-    return (data ?? []).map((r: any) => rowParser(tipo)(r));
+
+    // PAGINACIÓN REAL:
+    // Supabase aplica un límite por defecto de 1000 rows en .select(). Si la
+    // tabla supera ese tamaño (Ganaderas tiene 2.5k+ pariciones), el query
+    // truncaba silenciosamente y la app mostraba data parcial. El workaround
+    // viejo de .range(0, 49999) NO funciona en todas las versiones del cliente
+    // JS — sólo es respetado a veces. La forma confiable es iterar con
+    // .range() por páginas hasta que llega menos del page size.
+    const PAGE_SIZE = 1000;
+    const out: any[] = [];
+    let from = 0;
+    // Tope de seguridad: 100k rows. Si alguna tabla llega a eso, tenemos un
+    // problema de schema; mejor lanzar warning explícito.
+    while (out.length < 100_000) {
+      const { data, error } = await buildQuery().range(from, from + PAGE_SIZE - 1);
+      if (error) throw new Error(`listEventos(${tipo}): ${error.message}`);
+      if (!data || data.length === 0) break;
+      out.push(...data);
+      if (data.length < PAGE_SIZE) break;
+      from += PAGE_SIZE;
+    }
+    return out.map((r: any) => rowParser(tipo)(r));
   }
 
   // ---------- Pending queue (offline) ----------
@@ -687,15 +734,27 @@ export class SupabaseBackend implements IDataBackend {
     let exitosos = 0;
     let fallidos = 0;
     const remaining: Evento[] = [];
-    for (const e of pending) {
-      try {
-        await this.saveEvento(e);
-        exitosos++;
-      } catch (err) {
-        fallidos++;
-        errors.push({ id: e.id, error: err instanceof Error ? err.message : String(err) });
-        remaining.push(e);
-      }
+
+    // Q4 audit: chunks de 8 en paralelo en lugar de iteración secuencial.
+    // Antes con 50 eventos pending hacíamos 50 round-trips uno detrás de
+    // otro — ahora son 7 round-trips de hasta 8 en paralelo. El límite de
+    // 8 lo elegimos para no saturar la conexión móvil del operario; podemos
+    // subirlo en wifi/lan pero no detectamos eso desde RN.
+    const CHUNK = 8;
+    for (let i = 0; i < pending.length; i += CHUNK) {
+      const slice = pending.slice(i, i + CHUNK);
+      const results = await Promise.allSettled(slice.map(e => this.saveEvento(e)));
+      results.forEach((r, idx) => {
+        const e = slice[idx]!; // length matches — siempre definido
+        if (r.status === 'fulfilled') {
+          exitosos++;
+        } else {
+          fallidos++;
+          const msg = r.reason instanceof Error ? r.reason.message : String(r.reason);
+          errors.push({ id: e.id, error: msg });
+          remaining.push(e);
+        }
+      });
     }
     await AsyncStorage.setItem(PENDING_KEY, JSON.stringify(remaining));
     return { intentados: pending.length, exitosos, fallidos, errores: errors };

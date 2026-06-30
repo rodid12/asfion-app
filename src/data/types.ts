@@ -9,6 +9,22 @@
 // - id, fecha, campo, lote, usuario, gps, sync state, fotos.
 
 import { v4 as uuidv4 } from 'uuid';
+import { dateAISO } from '@/utils/fechas';
+
+/** Row crudo de la tabla `clientes` — usado por el ClientConfigContext
+ *  para reemplazar el ACTIVE_CONFIG compile-time. El mapping al tipo
+ *  ClientConfig final lo hace el provider. */
+export interface ClienteConfigRow {
+  id: string;
+  nombre: string;
+  tagline?: string;
+  logoUrl?: string;
+  accentColor?: string;
+  modulosHabilitados: string[];
+  /** JSONB con los catálogos por módulo (pariciones, mortandad, pastoreo, compras).
+   *  El shape se valida cuando se mapea a ClientConfig en el provider. */
+  catalogos: Record<string, any>;
+}
 
 /** Identidad del usuario que carga (email es la clave natural, como en AppSheet). */
 export interface Usuario {
@@ -24,57 +40,14 @@ export interface Usuario {
   campoAsignadoId?: string; // el que se preselecciona en los forms
 }
 
-/** Campo / establecimiento (Agisot, Carolina, Margarita, Picaflor, Progreso, Quirquincho...). */
-export interface Campo {
-  id: string;
-  nombre: string;
-  organizacionId: string;
-  /**
-   * Stock inicial de vacas preñadas al comienzo de la temporada de parición.
-   * Alimenta las métricas "Vacas por parir" y "Terneros en pie".
-   * Opcional porque puede no estar configurado aún; las métricas lo omiten si falta.
-   * Editable desde el panel admin.
-   */
-  stockInicialVacas?: number;
-}
-
-/** Lote o subdivisión dentro de un campo (ej. "Progreso 3", "Ensenada Lote 15").
- *  Usado por Pariciones y Mortandad. */
-export interface Lote {
-  id: string;
-  campoId: string;
-  nombre: string;
-}
-
-/** Pluviómetro físico instalado en un campo (ej. "Casco", "Puesto", "D17").
- *  Usado por el módulo Lluvias. Los pluviómetros son distintos de los lotes:
- *  un campo tiene típicamente 1-3 pluviómetros y muchos lotes. Ej: en Picaflor
- *  hay 35 lotes pero solo ~14 pluviómetros (Casco/Puesto/D17/D20/...). */
-export interface Pluviometro {
-  id: string;
-  campoId: string;
-  nombre: string;
-}
-
-/** Circuito de pastoreo dentro de un campo. Cada circuito tiene una superficie
- *  total en hectáreas y se subdivide en parcelas (ver Parcela). Usado por el
- *  módulo Pastoreo. Ejemplos reales de Ganaderas: "1_3", "2_4", "5", "Lote10". */
-export interface Circuito {
-  id: string;
-  campoId: string;
-  nombre: string;
-  hectareas: number;          // superficie total del circuito
-}
-
-/** Parcela dentro de un circuito. Numeradas 1..N por circuito, cada una con
- *  su propia superficie. Cuando el operario carga un pastoreo, elige
- *  circuito+parcela y la app autocompleta hectáreas. */
-export interface Parcela {
-  id: string;
-  circuitoId: string;
-  numero: number;             // 1, 2, 3, ...
-  hectareas: number;
-}
+// Catálogos compartidos — vienen del canonical (sincronizado con dashboard).
+// La app usa estos types EXACTOS para los selects de campo/lote/circuito en
+// los forms y para resolver nombres en las cards de lista.
+export type { CampoCanonical as Campo,
+              LoteCanonical as Lote,
+              PluviometroCanonical as Pluviometro,
+              CircuitoCanonical as Circuito,
+              ParcelaCanonical as Parcela } from './types.canonical';
 
 /** Estado de sincronización de cada evento cargado. */
 export type SyncState = 'pending' | 'syncing' | 'synced' | 'failed';
@@ -98,41 +71,42 @@ export interface EventoBase {
 
 // ====== Módulo Pariciones ======
 
-// Valores sugeridos — la DB acepta cualquier string
-export type VacasGrupo = 'Vacas cabeza' | 'Vaca cuerpo' | 'Vaca cola';
-export type EventoParicion = 'Nacimiento' | 'Muerte' | 'Aborto' | 'Retacto';
-export type Sexo = 'Macho' | 'Hembra' | 'Orejano';
-export type SiNo = 'Si' | 'No';
+// Tipos compartidos — vienen del canonical (sincronizado con dashboard).
+// Import + re-export para que se puedan usar TANTO acá adentro (ej.
+// interface Mortandad usa CausaMuerteTipo) COMO desde otros archivos
+// que importan de '@/data/types'.
+import type {
+  VacasGrupo,
+  EventoParicion,
+  Sexo,
+  SiNo,
+  CaravanaColor,
+  CausaMuerteTipo,
+  ParicionCanonical,
+  LluviaCanonical,
+  MortandadCanonical,
+  PastoreoCanonical,
+} from './types.canonical';
+export type {
+  VacasGrupo,
+  EventoParicion,
+  Sexo,
+  SiNo,
+  CaravanaColor,
+  CausaMuerteTipo,
+};
 
-// Colores realmente en uso en los datos históricos (AppSheet)
-export type CaravanaColor = 'Amarillo' | 'Blanca' | 'Celeste' | 'Naranja';
-
-// Causa de muerte: cascade nivel 1 (tipo enum-corto) + nivel 2 (detalle texto libre)
-export type CausaMuerteTipo = 'Muerte Señalado' | 'Nacido Muerto' | 'Desconocido';
-
-export interface Paricion extends EventoBase {
+export interface Paricion extends EventoBase, Omit<ParicionCanonical, keyof EventoBase> {
   tipo: 'paricion';
-  vacasGrupo: VacasGrupo;
-  evento: EventoParicion;
-  sexo?: Sexo;                 // no aplica a Aborto
-  asistencia?: SiNo;
-  caravanaColor?: CaravanaColor;
-  caravanaNumero?: string;     // string porque el histórico mezcla formatos (0200, JT764O504)
-  causaTipo?: CausaMuerteTipo;  // nivel 1 — solo si evento es Muerte o Aborto
-  causaDetalle?: string;        // nivel 2 — texto libre (ej: "insolación", "cayó en canal")
-  observaciones?: string;
 
-  /** @deprecated usar causaTipo + causaDetalle */
+  /** @deprecated usar causaTipo + causaDetalle (mantiene compat con data histórica) */
   causaMuerte?: string;
 }
 
 // ====== Módulo Lluvias / Precipitaciones ======
-
-export interface Lluvia extends EventoBase {
+// Lluvia = LluviaCanonical (compartido) + EventoBase (gps/fotos/sync) + tipo
+export interface Lluvia extends EventoBase, Omit<LluviaCanonical, keyof EventoBase> {
   tipo: 'lluvia';
-  pluviometro: string;         // "Lote 9", "S", "Ensenada Lote 3"...
-  milimetros: number;
-  observaciones?: string;      // ej. "granizo al final", "llovizna toda la mañana"
 }
 
 // ====== Módulo Mortandad ======
@@ -146,18 +120,10 @@ export type CategoriaHacienda = 'vaca' | 'ternero' | 'toro' | 'novillo' | 'vaqui
 // Valores reales: Cria, engorde, Recria P, Invernada, Destete Precoz.
 export type ActividadMortandad = string;
 
-export interface Mortandad extends EventoBase {
+// Mortandad = MortandadCanonical (sin GPS — lo aporta EventoBase como
+// `gps: {lat, lon}` anidado). El dashboard tiene gpsLat/gpsLon aplanados.
+export interface Mortandad extends EventoBase, Omit<MortandadCanonical, keyof EventoBase> {
   tipo: 'mortandad';
-  // categoria ahora es string libre (alimentado por catálogo MORT_CATEGORIA
-  // por cliente). Antes era el enum CategoriaHacienda — lo dejamos como string
-  // para soportar valores como "Vc Preñ", "TernM", "Vaq 1° Servicio".
-  categoria: string;
-  actividad?: string;          // NUEVO — Cria/engorde/Recria P/Invernada/Destete Precoz
-  causaTipo?: CausaMuerteTipo;
-  causaDetalle?: string;
-  caravanaColor?: CaravanaColor;
-  caravanaNumero?: string;
-  observaciones?: string;
 }
 
 // ====== Módulo Pastoreo (modelo entrada/salida con circuito + parcela) ======
@@ -175,23 +141,19 @@ export interface Mortandad extends EventoBase {
 // circuitoId, parcelaId y categoria son OBLIGATORIOS (overrideamos circuitoId
 // con Omit + intersection). Sin ellos no podemos exportar al CSV con el orden
 // de columnas que pide el cliente.
-export interface Pastoreo extends Omit<EventoBase, 'circuitoId' | 'parcelaId'> {
+// Pastoreo = PastoreoCanonical + EventoBase + tipo.
+// Tricky: circuitoId y parcelaId existen en AMBOS — opcionales en EventoBase
+// y obligatorios en PastoreoCanonical. Queremos los del canonical (required).
+// Si usáramos `Omit<PastoreoCanonical, keyof EventoBase>` se omitirían
+// también esos dos, quedando undefined en Pastoreo. Por eso el Omit es
+// explícito (solo los campos REALMENTE duplicados sin override): id, fecha,
+// campoId, loteId, usuarioEmail, createdAt, cliente_id.
+export interface Pastoreo extends Omit<EventoBase, 'circuitoId' | 'parcelaId'>,
+                                  Omit<PastoreoCanonical,
+                                    'id' | 'fecha' | 'campoId' | 'loteId' |
+                                    'usuarioEmail' | 'createdAt' | 'cliente_id'
+                                  > {
   tipo: 'pastoreo';
-  circuitoId: string;             // required en pastoreo
-  parcelaId: string;              // required en pastoreo
-  parcelaNumero?: number;         // denormalizado para acceso rápido en lists
-  // fecha (heredado) = fecha de ENTRADA al circuito+parcela.
-  fechaSalida?: string;           // ISO 8601 (YYYY-MM-DD) — undefined = abierto
-  categoria: string;              // PAST_CATEGORIA (Novillito Grande, Vaquilla Meses, ...)
-  evento?: string;                // PAST_EVENTO (Entrada/Salida/Rotacion/Muerte)
-  categoriaAnimal?: string;       // PAST_CAT_ANIMAL (Toros, TernH, Vaq 1° Serv, ...)
-  caravanaNumero?: string;        // opcional — el cliente real raramente lo usa
-  causa?: string;                 // texto libre cuando aplica
-  // Datos productivos (migration 0003) — para los KPIs del dashboard
-  // (Animales, KG/Cab, Kg Totales, Carga). Opcionales para no romper la
-  // carga de stays viejos sin estos datos.
-  animales?: number;              // cantidad de cabezas en el stay
-  kgPromedio?: number;            // peso promedio (kg) de las cabezas
 }
 
 // ====== Módulo Mediciones (condicion corporal, pesadas, forraje) ======
@@ -209,27 +171,16 @@ export interface Medicion extends EventoBase {
 //
 // Replica el módulo "Compra" del AppSheet del cliente.
 // Se carga cuando el campo COMPRA hacienda (entrada al sistema, no nacimiento).
-// Mide datos físicos (kg origen vs destino), comerciales (precio, plazo,
-// titular) y logísticos (DTE, km, número de operación).
-export interface Compra extends EventoBase {
+//
+// Campos compartidos (actividad, kgNetosOrigen, kgNetosDestino, etc) vienen
+// de CompraCanonical en types.canonical.ts (compartido con el dashboard).
+// Acá los EXTENDEMOS con lo específico del app móvil:
+//   - extiende EventoBase → suma gps, fotos, syncState, syncError
+//   - tipo: 'compra' → para que el union Evento sea discriminado
+import type { CompraCanonical } from './types.canonical';
+
+export interface Compra extends EventoBase, Omit<CompraCanonical, keyof EventoBase> {
   tipo: 'compra';
-  // Detalle físico
-  actividad?: string;             // "Destete Precoz" | "Engorde" | "Invernada" (catalogo en ClientConfig)
-  cantCabYCat?: string;           // Texto libre. Ej: "83 machos. 27 hembras"
-  kgNetosOrigen: number;          // requerido — kg al subir al camión
-  kgNetosDestino: number;         // requerido — kg al bajar
-  mermaPorcentaje?: number;       // auto-calculado en el form: (origen-destino)/origen*100
-  kgCorregidos?: number;          // manual — fórmula propia de cada campo
-  // Comerciales
-  precio?: number;                // ARS/kg típicamente
-  consignado?: string;            // nombre del consignatario
-  titular?: string;               // nombre/dirección del vendedor
-  plazo?: string;                 // "Contado", "30 días", etc.
-  // Logística
-  numeroDte?: string;             // documento de tránsito electrónico
-  numeroOperacion?: string;       // auto-generado, formato "COR_28"
-  kmRecorrido?: number;
-  observaciones?: string;
 }
 
 // ====== Union type para el repositorio genérico ======
@@ -269,7 +220,9 @@ export function nuevoEventoBase(partial: Partial<EventoBase> & { campoId: string
   const now = new Date();
   return {
     id: partial.id ?? uuidv4(),
-    fecha: partial.fecha ?? now.toISOString().slice(0, 10),
+    // dateAISO usa zona LOCAL; toISOString() devuelve UTC y corre la fecha
+    // un día cuando se llama de noche en ART (bug TZ del audit 27-jun-2026).
+    fecha: partial.fecha ?? dateAISO(now),
     campoId: partial.campoId,
     loteId: partial.loteId,
     usuarioEmail: partial.usuarioEmail,

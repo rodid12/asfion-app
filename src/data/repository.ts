@@ -1,7 +1,7 @@
 // Repository pattern. Los screens NUNCA hablan con Sheets ni con Supabase directo.
 // Siempre pasan por acá. Eso nos permite cambiar el backend sin tocar la UI.
 
-import type { CaravanaColor, Campo, Circuito, Evento, Lote, Parcela, Pastoreo, Pluviometro, Subscription, TipoEvento, Usuario } from './types';
+import type { CaravanaColor, Campo, Circuito, ClienteConfigRow, Evento, Lote, Parcela, Pastoreo, Pluviometro, Subscription, TipoEvento, Usuario } from './types';
 import { isSessionExpiredError, looksLikeRlsBlock, SubscriptionBlockedError } from './backends/supabase';
 
 /** Última caravana cargada en un campo — alimenta el autocomplete del form. */
@@ -43,6 +43,10 @@ export interface IDataBackend {
 
   // Subscription / billing — estado del cliente para enforcement de cobranza.
   getSubscription(): Promise<Subscription>;
+
+  /** Trae la configuración runtime del cliente actual (branding, módulos
+   *  habilitados, catálogos). Reemplaza el ACTIVE_CONFIG compile-time. */
+  getClienteConfig?(): Promise<ClienteConfigRow | null>;
 
   // Catálogos
   listCampos(): Promise<Campo[]>;
@@ -139,6 +143,12 @@ export class Repository {
 
   // Subscription / billing
   getSubscription = () => this.backend.getSubscription();
+
+  /** Trae la configuración runtime del cliente (branding + módulos + catálogos)
+   *  desde el backend. Si el backend no la implementa (Memory en dev), devuelve
+   *  null y el caller usa el fallback compile-time. */
+  getClienteConfig = (): Promise<ClienteConfigRow | null> =>
+    this.backend.getClienteConfig ? this.backend.getClienteConfig() : Promise.resolve(null);
 
   // Catálogos
   listCampos = () => this.backend.listCampos();
