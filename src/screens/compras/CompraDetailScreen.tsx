@@ -27,6 +27,7 @@ import { fontSize, fontWeight } from '@/theme/typography';
 import { radius, spacing } from '@/theme/spacing';
 import type { RootStackParamList } from '@/navigation/types';
 import type { Campo, Compra } from '@/data/types';
+import { exportarPDF, type PdfSection } from '@/lib/pdfExport';
 
 type Nav = NativeStackNavigationProp<RootStackParamList, 'CompraDetail'>;
 type Rt = RouteProp<RootStackParamList, 'CompraDetail'>;
@@ -97,12 +98,66 @@ export function CompraDetailScreen() {
     return () => { cancelled = true; };
   }, [compra, repo]);
 
-  // Total compra calculado (precio × kg destino — si ambos están)
+  // Total compra calculado (precio × kg destino — si ambos están).
+  // Post mig 0021 kg_netos_destino es nullable: si NULL, no hay total real
+  // (la jaula todavía no se pesó al bajar, así que no se puede calcular plata).
   const total = useMemo(() => {
     if (!compra) return null;
-    if (compra.precio == null || !Number.isFinite(compra.kgNetosDestino)) return null;
+    if (compra.precio == null || compra.kgNetosDestino == null) return null;
+    if (!Number.isFinite(compra.kgNetosDestino)) return null;
     return compra.precio * compra.kgNetosDestino;
   }, [compra]);
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Export PDF — arma el payload usando el MISMO orden de secciones que la
+  // pantalla, para que el PDF sea fiel al resumen visual.
+  // ─────────────────────────────────────────────────────────────────────────
+  const onExportarPDF = async () => {
+    if (!compra) return;
+    const secciones: PdfSection[] = [
+      {
+        title: 'Hacienda',
+        rows: [
+          { label: 'Campo',              value: campo?.nombre ?? compra.campoId },
+          { label: 'Actividad',          value: compra.actividad },
+          { label: 'Cantidad / categ.',  value: compra.cantCabYCat },
+          { label: 'Kg origen',          value: `${compra.kgNetosOrigen.toLocaleString('es-AR')} kg` },
+          { label: 'Kg destino',         value: compra.kgNetosDestino != null ? `${compra.kgNetosDestino.toLocaleString('es-AR')} kg` : 'Sin pesaje destino' },
+          { label: 'Merma %',            value: compra.mermaPorcentaje != null ? `${compra.mermaPorcentaje.toFixed(2)} %` : '' },
+          { label: 'Kg corregidos',      value: compra.kgCorregidos != null ? `${compra.kgCorregidos.toLocaleString('es-AR')} kg` : '' },
+        ],
+      },
+      {
+        title: 'Logística',
+        rows: [
+          { label: 'Km recorrido', value: compra.kmRecorrido != null ? `${compra.kmRecorrido.toLocaleString('es-AR')} km` : '' },
+          { label: 'N° DTE',       value: compra.numeroDte },
+        ],
+      },
+      {
+        title: 'Comercial',
+        rows: [
+          { label: 'Precio',          value: compra.precio != null ? `$${compra.precio.toLocaleString('es-AR')} / kg` : '' },
+          { label: 'Total estimado',  value: total != null ? `$${Math.round(total).toLocaleString('es-AR')}` : '' },
+          { label: 'Consignado',      value: compra.consignado },
+          { label: 'Titular',         value: compra.titular },
+          { label: 'Plazo',           value: compra.plazo },
+        ],
+      },
+    ];
+
+    await exportarPDF(
+      {
+        titulo:       `Compra ${compra.numeroOperacion ?? '(sin n°)'}`,
+        subtitulo:    `${fechaLarga(compra.fecha)}${compra.consignado ? ` · ${compra.consignado}` : ''}`,
+        cargadoPor:   compra.usuarioEmail,
+        createdAt:    compra.createdAt,
+        secciones,
+        observaciones: compra.observaciones,
+      },
+      `compra-${compra.numeroOperacion ?? compra.id}`,
+    );
+  };
 
   if (loading && !compra) {
     return (
@@ -147,7 +202,11 @@ export function CompraDetailScreen() {
           />
           <Row
             label="Kg destino"
-            value={`${compra.kgNetosDestino.toLocaleString('es-AR')} kg`}
+            value={
+              compra.kgNetosDestino != null
+                ? `${compra.kgNetosDestino.toLocaleString('es-AR')} kg`
+                : 'Sin pesaje destino'
+            }
           />
           {compra.mermaPorcentaje != null && (
             <Row label="Merma %" value={`${compra.mermaPorcentaje.toFixed(2)} %`} />
@@ -216,12 +275,25 @@ export function CompraDetailScreen() {
         <View style={{ height: spacing.lg }} />
       </ScrollView>
 
-      {/* Action bar fijo abajo con botón Editar */}
+      {/* Action bar fijo abajo con 2 botones: PDF (ghost) y Editar (primario).
+          PDF a la izquierda porque es destructive-safe (no modifica nada);
+          Editar a la derecha como acción primaria. */}
       <View style={styles.actionBar}>
-        <PrimaryButton
-          label="Editar"
-          onPress={() => nav.replace('CompraForm', { compraId: compra.id })}
-        />
+        <View style={styles.actionRow}>
+          <View style={styles.actionHalf}>
+            <PrimaryButton
+              label="Exportar PDF"
+              variant="ghost"
+              onPress={onExportarPDF}
+            />
+          </View>
+          <View style={styles.actionHalf}>
+            <PrimaryButton
+              label="Editar"
+              onPress={() => nav.replace('CompraForm', { compraId: compra.id })}
+            />
+          </View>
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -327,4 +399,6 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.borderSoft,
   },
+  actionRow: { flexDirection: 'row', gap: spacing.sm },
+  actionHalf: { flex: 1 },
 });

@@ -1,19 +1,12 @@
 // LluviaFormScreen — modelo simplificado, alineado al AppSheet real.
 //
-// Cambios respecto de la v1:
-//
-//   - El selector que antes se llamaba "Lote" ahora es "Pluviómetro" y usa
-//     el catálogo real de pluviómetros del cliente (Casco, Puesto, D17, etc.)
-//     en lugar de los lotes. Conceptualmente: una lluvia se mide en un
-//     pluviómetro físico, no en un lote.
-//   - Sacamos el input de texto libre y las "sugerencias recientes" — el
-//     selector de chips del header ya cubre todos los pluviómetros del campo.
-//   - Sacamos el campo Observaciones (feedback Ro: nunca se usa).
-//   - Quedan solo los campos esenciales: Campo + Pluviómetro + Fecha + mm.
+// REFACTORIZADO con useEventoForm (A3 del audit). Lo que era boilerplate
+// común con los otros 4 forms (campoId/fecha state, edit-mode prefill con
+// flag cancelado, save flow con alerts, etc.) vive ahora en el hook.
+// Este file mantiene SOLO lo específico de Lluvia: pluviómetros y mm.
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -24,86 +17,79 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useRoute, type RouteProp } from '@react-navigation/native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { v4 as uuidv4 } from 'uuid';
 
 import { FaltaHint } from '@/components/FaltaHint';
 import { NoLotesBanner } from '@/components/NoLotesBanner';
 import { PrimaryButton } from '@/components/PrimaryButton';
-import { useAuth } from '@/auth/context';
-import { useRepository } from '@/data';
 import { colors } from '@/theme/colors';
 import { fontSize, fontWeight } from '@/theme/typography';
 import { radius, spacing } from '@/theme/spacing';
-import { useTabNav } from '@/navigation/TabContext';
+import { useEventoForm } from '@/hooks/useEventoForm';
 import type { RootStackParamList } from '@/navigation/types';
-import type { Campo, Lluvia, Pluviometro } from '@/data/types';
+import type { Lluvia, Pluviometro } from '@/data/types';
+import { fechaBonita } from '@/utils/fechas';
 
-type Nav = NativeStackNavigationProp<RootStackParamList, 'LluviaForm'>;
 type Rt = RouteProp<RootStackParamList, 'LluviaForm'>;
-
-// ---------- helpers ----------
-
-function hoyISO(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-function fechaBonita(iso: string): string {
-  const [yy, mm, dd] = iso.split('-').map(Number);
-  if (!yy || !mm || !dd) return iso;
-  const dow = ['DOM', 'LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB'][new Date(yy, mm - 1, dd).getDay()];
-  return `${dow} ${dd}/${mm}/${yy}`;
-}
 
 // ---------- pantalla ----------
 
 export function LluviaFormScreen() {
-  const nav = useNavigation<Nav>();
   const route = useRoute<Rt>();
-  const repo = useRepository();
-  const { user } = useAuth();
-  const { switchTab } = useTabNav();
-
   const lluviaId = route.params?.lluviaId;
-  const isEdit = Boolean(lluviaId);
 
-  // Form state
-  const [campoId, setCampoId] = useState<string>(user?.campoAsignadoId ?? '');
+  // ─── State específico de Lluvia ───
   const [pluviometroId, setPluviometroId] = useState<string>('');
-  const [fecha, setFecha] = useState<string>(hoyISO());
   const [milimetrosStr, setMilimetrosStr] = useState<string>('');
-
-  // UI state
-  const [campos, setCampos] = useState<Campo[]>([]);
   const [pluviometros, setPluviometros] = useState<Pluviometro[]>([]);
   const [pickerCampoOpen, setPickerCampoOpen] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [guardando, setGuardando] = useState(false);
-  const [cargandoExistente, setCargandoExistente] = useState<boolean>(isEdit);
-  const [createdAtOriginal, setCreatedAtOriginal] = useState<string | undefined>();
-  const [originalRecord, setOriginalRecord] = useState<Lluvia | null>(null);
-
   const [errores, setErrores] = useState<{ pluv?: string; mm?: string }>({});
 
+  // ─── State común vía useEventoForm ───
+  const ef = useEventoForm<Lluvia>({
+    tipo: 'lluvia',
+    eventoId: lluviaId,
+    titleNew: 'Nueva lluvia',
+    titleEdit: 'Editar lluvia',
+    tabName: 'lluvias',
+    buildEvento: ({ campoId, fecha, usuarioEmail, id, createdAt }) => {
+      const mmNum = parseFloat(milimetrosStr.replace(',', '.'));
+      if (!campoId || !pluviometroId || !Number.isFinite(mmNum)) return null;
+      const pluvActual = pluviometros.find(p => p.id === pluviometroId);
+      return {
+        tipo: 'lluvia',
+        id, campoId, fecha, usuarioEmail, createdAt,
+        pluviometroId,
+        pluviometro: pluvActual?.nombre ?? '',
+        milimetros: mmNum,
+        syncState: 'pending',
+      };
+    },
+    formatSummary: (e) => `${e.milimetros} mm en ${e.pluviometro}`,
+    resetEspecifico: () => {
+      setMilimetrosStr('');
+      setErrores({});
+      // Mantenemos campo/pluviómetro/fecha — patrón "cargar otra del mismo día"
+    },
+  });
+  // Aliases para no romper los handlers de UI con nombres largos
+  const { campoId, setCampoId, fecha, setFecha, campos, campoActual,
+          isEdit, cargandoExistente, originalRecord,
+          guardando, onGuardar, nav, repo } = ef;
+
+  // ─── Hidratación específica en edit mode ───
   useEffect(() => {
-    nav.setOptions({ title: isEdit ? 'Editar lluvia' : 'Nueva lluvia' });
-  }, [nav, isEdit]);
+    ef.registerPrefill((existing) => {
+      // Lluvias nuevas tienen pluviometroId; las legacy guardaban en loteId.
+      setPluviometroId(existing.pluviometroId ?? existing.loteId ?? '');
+      setMilimetrosStr(String(existing.milimetros));
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const loadCampos = useCallback(async () => {
-    const cs = await repo.listCampos();
-    setCampos(cs);
-    if (!campoId && cs.length === 1 && cs[0]) {
-      setCampoId(cs[0].id);
-    }
-  }, [repo, campoId]);
-
-  useEffect(() => { loadCampos(); }, [loadCampos]);
-
-  // ---------- cargar pluviómetros del campo ----------
-  // Auto-select cuando hay uno solo (mismo patrón que lote en otros forms).
+  // ─── Cargar pluviómetros del campo + auto-select cuando hay 1 ───
   useEffect(() => {
     if (!campoId) { setPluviometros([]); return; }
     let cancelado = false;
@@ -122,30 +108,7 @@ export function LluviaFormScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [campoId, repo]);
 
-  // ---------- prefill en edit mode ----------
-  useEffect(() => {
-    if (!isEdit || !lluviaId) return;
-    (async () => {
-      const list = await repo.listEventos('lluvia');
-      const existing = list.find(e => e.id === lluviaId) as Lluvia | undefined;
-      if (!existing) {
-        Alert.alert('No encontrada', 'Esta lluvia ya no existe.');
-        nav.goBack();
-        return;
-      }
-      setCampoId(existing.campoId);
-      // Lluvias nuevas tienen pluviometroId; las legacy guardaban en loteId
-      // (resabio del rediseño anterior). Tomamos cualquiera de los dos.
-      setPluviometroId(existing.pluviometroId ?? existing.loteId ?? '');
-      setFecha(existing.fecha);
-      setMilimetrosStr(String(existing.milimetros));
-      setCreatedAtOriginal(existing.createdAt);
-      setOriginalRecord(existing);
-      setCargandoExistente(false);
-    })();
-  }, [isEdit, lluviaId, repo, nav]);
-
-  // ---------- validación live ----------
+  // ─── Validación live ───
   const mm = useMemo(() => {
     const parsed = parseFloat(milimetrosStr.replace(',', '.'));
     return Number.isFinite(parsed) ? parsed : NaN;
@@ -180,11 +143,10 @@ export function LluviaFormScreen() {
     return f;
   }, [campoId, pluviometroId, milimetrosStr, mm, isEdit, isDirty]);
 
-  const campoActual = useMemo(() => campos.find(c => c.id === campoId), [campos, campoId]);
   const pluvActual = useMemo(() => pluviometros.find(p => p.id === pluviometroId), [pluviometros, pluviometroId]);
 
-  // ---------- guardar ----------
-  const onGuardar = async () => {
+  // ─── Guardar — validación específica primero, después delega al hook ───
+  const handleGuardar = async () => {
     const errs: { pluv?: string; mm?: string } = {};
     if (!pluviometroId) errs.pluv = 'Elegí un pluviómetro';
     if (!milimetrosStr.trim()) {
@@ -196,58 +158,7 @@ export function LluviaFormScreen() {
     }
     setErrores(errs);
     if (Object.keys(errs).length > 0) return;
-    if (!campoId || !pluviometroId || !user?.email) return;
-
-    setGuardando(true);
-    try {
-      const lluvia: Lluvia = {
-        tipo: 'lluvia',
-        id: lluviaId ?? uuidv4(),
-        fecha,
-        campoId,
-        pluviometroId,
-        usuarioEmail: user.email,
-        // Mantenemos el campo `pluviometro` (string) por compatibilidad con
-        // el shape histórico — exporta limpio al CSV del cliente con el nombre.
-        pluviometro: pluvActual?.nombre ?? '',
-        milimetros: mm,
-        createdAt: createdAtOriginal ?? new Date().toISOString(),
-        syncState: 'pending',
-      };
-      const saved = await repo.saveEvento(lluvia);
-      const sincronizada = saved.syncState === 'synced';
-      const base = `${lluvia.milimetros} mm en ${lluvia.pluviometro}`;
-      const detalle = !sincronizada && saved.syncError
-        ? `\n\nGuardado offline. Detalle: ${saved.syncError}`
-        : (!sincronizada ? '\n\nGuardado offline. Se sincroniza cuando haya señal.' : '');
-      const msg = base + detalle;
-
-      if (isEdit) {
-        Alert.alert(sincronizada ? 'Listo' : 'Guardado offline', msg, [{ text: 'OK', onPress: () => nav.goBack() }]);
-      } else {
-        Alert.alert(sincronizada ? 'Listo' : 'Guardado offline', msg, [
-          { text: 'Ver listado', onPress: () => { switchTab('lluvias'); nav.goBack(); } },
-          { text: 'Cargar otra', onPress: resetForm, style: 'cancel' },
-        ]);
-      }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      const esSesion = msg.toLowerCase().includes('sesión') || msg.toLowerCase().includes('jwt');
-      Alert.alert(
-        esSesion ? 'Sesión expirada' : 'Error al guardar',
-        esSesion ? `${msg}\n\nVolvé a Menú → Salir y entrá de nuevo.` : msg,
-      );
-    } finally {
-      setGuardando(false);
-    }
-  };
-
-  const resetForm = () => {
-    setMilimetrosStr('');
-    setErrores({});
-    // Mantenemos campo / pluviómetro / fecha — uso típico es cargar varias
-    // lluvias del mismo día/campo en distintos pluviómetros sería raro
-    // pero igual mantenemos el stub.
+    await onGuardar();
   };
 
   if (cargandoExistente) {
@@ -403,7 +314,7 @@ export function LluviaFormScreen() {
 
           <PrimaryButton
             label={isEdit ? 'GUARDAR CAMBIOS' : 'GUARDAR LLUVIA'}
-            onPress={onGuardar}
+            onPress={handleGuardar}
             disabled={!puedeGuardar}
             loading={guardando}
           />

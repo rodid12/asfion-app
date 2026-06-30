@@ -196,7 +196,7 @@ export function CompraListScreen() {
       const campoNombre = camposMap[c.campoId]?.nombre ?? c.campoId;
       const entry = byCampo.get(c.campoId) ?? { campoNombre, items: [], totalKg: 0 };
       entry.items.push(c);
-      entry.totalKg += Number.isFinite(c.kgNetosDestino) ? c.kgNetosDestino : 0;
+      entry.totalKg += c.kgNetosDestino != null && Number.isFinite(c.kgNetosDestino) ? c.kgNetosDestino : 0;
       byCampo.set(c.campoId, entry);
     });
     byCampo.forEach(e => e.items.sort((a, b) => b.fecha.localeCompare(a.fecha)));
@@ -264,7 +264,9 @@ export function CompraListScreen() {
           <View style={styles.kgBox}>
             <Text style={styles.kgLabel}>Destino</Text>
             <Text style={styles.kgValue}>
-              {Math.round(item.kgNetosDestino).toLocaleString('es-AR')} kg
+              {item.kgNetosDestino != null
+                ? `${Math.round(item.kgNetosDestino).toLocaleString('es-AR')} kg`
+                : '—'}
             </Text>
           </View>
           {mermaShow && (

@@ -19,7 +19,7 @@
 // Ediciones posteriores: el operario puede volver a la entrada para agregar
 // fechaSalida cuando termine la rotación (mismo patrón que el modelo anterior).
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -31,113 +31,123 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useRoute, type RouteProp } from '@react-navigation/native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { v4 as uuidv4 } from 'uuid';
 
 import { FaltaHint } from '@/components/FaltaHint';
 import { FormField } from '@/components/FormField';
 import { PrimaryButton } from '@/components/PrimaryButton';
-import { useAuth } from '@/auth/context';
-import { useRepository } from '@/data';
+import { useClientConfig } from '@/config/ClientConfigContext';
+import { useEventoForm } from '@/hooks/useEventoForm';
 import { colors } from '@/theme/colors';
 import { fontSize, fontWeight } from '@/theme/typography';
 import { radius, spacing } from '@/theme/spacing';
-import { useTabNav } from '@/navigation/TabContext';
 import type { RootStackParamList } from '@/navigation/types';
-import type {
-  Campo,
-  Circuito,
-  Parcela,
-  Pastoreo,
-} from '@/data/types';
-import { useClientConfig } from '@/config/ClientConfigContext';
+import type { Circuito, Parcela, Pastoreo } from '@/data/types';
+import { fechaBonita, hoyISO } from '@/utils/fechas';
 
-type Nav = NativeStackNavigationProp<RootStackParamList, 'PastoreoForm'>;
 type Rt = RouteProp<RootStackParamList, 'PastoreoForm'>;
-
-// ---------- helpers ----------
-
-function hoyISO(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-function fechaBonita(iso: string): string {
-  const [yy, mm, dd] = iso.split('-').map(Number);
-  if (!yy || !mm || !dd) return iso;
-  const dow = ['DOM', 'LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB'][new Date(yy, mm - 1, dd).getDay()];
-  return `${dow} ${dd}/${mm}/${yy}`;
-}
 
 // ---------- pantalla ----------
 
 export function PastoreoFormScreen() {
-  const nav = useNavigation<Nav>();
   const route = useRoute<Rt>();
-  const repo = useRepository();
-  const { user } = useAuth();
-  const { switchTab } = useTabNav();
-
   const pastoreoId = route.params?.pastoreoId;
-  const isEdit = Boolean(pastoreoId);
 
-  // Catálogos del cliente activo (Pastoreo: categorías, eventos, cat animal).
   const catPast = useClientConfig().catalogos.pastoreo;
   const PAST_CATEGORIAS = catPast.categorias;
   const PAST_EVENTOS = catPast.eventos;
   const PAST_CAT_ANIMAL = catPast.catAnimal;
 
-  // Form state
-  const [campoId, setCampoId] = useState<string>(user?.campoAsignadoId ?? '');
+  // ─── State específico de Pastoreo (circuito + parcela en lugar de lote) ───
   const [circuitoId, setCircuitoId] = useState<string>('');
   const [parcelaId, setParcelaId] = useState<string>('');
   const [parcelaNumero, setParcelaNumero] = useState<number | undefined>();
-  const [fechaEntrada, setFechaEntrada] = useState<string>(hoyISO());
   const [fechaSalida, setFechaSalida] = useState<string | undefined>();
   const [evento, setEvento] = useState<string | undefined>('Entrada');
   const [categoria, setCategoria] = useState<string | undefined>();
   const [categoriaAnimal, setCategoriaAnimal] = useState<string | undefined>();
   const [caravanaNumero, setCaravanaNumero] = useState('');
-  // Datos productivos (migration 0003) — alimentan los KPIs Animales,
-  // KG/Cab, Kg Totales y Carga del dashboard. Opcionales: si el peón no
-  // los carga, el stay se guarda igual (queda como movimiento "viejo"
-  // sin datos productivos).
+  // Datos productivos (migration 0003) — alimentan KPIs del dashboard
   const [animales, setAnimales] = useState('');
   const [kgPromedio, setKgPromedio] = useState('');
 
-  // UI state
-  const [campos, setCampos] = useState<Campo[]>([]);
+  // UI-only state
   const [circuitos, setCircuitos] = useState<Circuito[]>([]);
   const [parcelas, setParcelas] = useState<Parcela[]>([]);
   const [pickerCampoOpen, setPickerCampoOpen] = useState(false);
   const [showPickerEntrada, setShowPickerEntrada] = useState(false);
   const [showPickerSalida, setShowPickerSalida] = useState(false);
-  const [guardando, setGuardando] = useState(false);
-  const [cargandoExistente, setCargandoExistente] = useState<boolean>(isEdit);
-  const [createdAtOriginal, setCreatedAtOriginal] = useState<string | undefined>();
-  const [originalRecord, setOriginalRecord] = useState<Pastoreo | null>(null);
 
-  // ---------- títulos dinámicos ----------
+  // ─── State común vía useEventoForm ───
+  // Tricky: Pastoreo usa `fecha` como "fecha de entrada" — el hook llama
+  // setFecha/fecha igual, pero acá lo aliaseamos como `fechaEntrada` para
+  // mantener el naming local. fechaSalida queda específico del form.
+  const ef = useEventoForm<Pastoreo>({
+    tipo: 'pastoreo',
+    eventoId: pastoreoId,
+    titleNew: 'Nuevo pastoreo',
+    titleEdit: 'Editar pastoreo',
+    tabName: 'pastoreo',
+    buildEvento: ({ campoId, fecha, usuarioEmail, id, createdAt }) => {
+      if (!campoId || !circuitoId || !parcelaId || !categoria) return null;
+      const animalesNum = animales.trim() ? Number(animales.trim()) : undefined;
+      const kgNum       = kgPromedio.trim() ? Number(kgPromedio.trim()) : undefined;
+      return {
+        id, campoId, fecha, usuarioEmail, createdAt,
+        tipo: 'pastoreo',
+        fechaSalida: fechaSalida || undefined,
+        circuitoId,
+        parcelaId,
+        parcelaNumero,
+        categoria,
+        evento,
+        categoriaAnimal,
+        caravanaNumero: caravanaNumero.trim() || undefined,
+        animales: animalesNum != null && Number.isFinite(animalesNum) ? animalesNum : undefined,
+        kgPromedio: kgNum != null && Number.isFinite(kgNum) ? kgNum : undefined,
+        syncState: 'pending',
+      };
+    },
+    formatSummary: (p) => {
+      const cir = circuitos.find(c => c.id === p.circuitoId)?.nombre ?? '';
+      return `Cargado: ${p.categoria} en ${cir} parcela ${p.parcelaNumero ?? ''}`;
+    },
+    resetEspecifico: () => {
+      // Mantenemos campo/circuito/fecha — uso típico es cargar varias cargas
+      // a la misma parcela el mismo día.
+      setCategoria(undefined);
+      setCategoriaAnimal(undefined);
+      setCaravanaNumero('');
+      setFechaSalida(undefined);
+      setEvento('Entrada');
+      setAnimales('');
+      setKgPromedio('');
+    },
+  });
+  // Aliases — fecha es "fechaEntrada" conceptualmente en este form
+  const { user, repo, campoId, setCampoId, fecha: fechaEntrada, setFecha: setFechaEntrada,
+          campos, campoActual, isEdit, cargandoExistente, originalRecord,
+          guardando, onGuardar, nav } = ef;
+
+  // ─── Hidratación específica en edit mode ───
   useEffect(() => {
-    nav.setOptions({ title: isEdit ? 'Editar pastoreo' : 'Nuevo pastoreo' });
-  }, [nav, isEdit]);
+    ef.registerPrefill((existing) => {
+      setCircuitoId(existing.circuitoId ?? '');
+      setParcelaId(existing.parcelaId ?? '');
+      setParcelaNumero(existing.parcelaNumero);
+      setFechaSalida(existing.fechaSalida);
+      setEvento(existing.evento);
+      setCategoria(existing.categoria);
+      setCategoriaAnimal(existing.categoriaAnimal);
+      setCaravanaNumero(existing.caravanaNumero ?? '');
+      setAnimales(existing.animales != null ? String(existing.animales) : '');
+      setKgPromedio(existing.kgPromedio != null ? String(existing.kgPromedio) : '');
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // ---------- cargar campos ----------
-  const loadCampos = useCallback(async () => {
-    const cs = await repo.listCampos();
-    setCampos(cs);
-    if (!campoId && cs.length === 1 && cs[0]) {
-      setCampoId(cs[0].id);
-    }
-  }, [repo, campoId]);
-
-  useEffect(() => { loadCampos(); }, [loadCampos]);
-
-  // ---------- cargar circuitos del campo ----------
-  // Cuando cambia el campo, refrescamos circuitos. Si el circuito actual ya
-  // no pertenece al campo nuevo, lo reseteamos. Auto-select cuando hay solo uno.
+  // ─── Cargar circuitos del campo + auto-select cuando hay 1 ───
   useEffect(() => {
     if (!campoId) { setCircuitos([]); setCircuitoId(''); return; }
     let cancelado = false;
@@ -157,7 +167,7 @@ export function PastoreoFormScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [campoId, repo]);
 
-  // ---------- cargar parcelas del circuito ----------
+  // ─── Cargar parcelas del circuito ───
   useEffect(() => {
     if (!circuitoId) { setParcelas([]); setParcelaId(''); return; }
     let cancelado = false;
@@ -178,37 +188,7 @@ export function PastoreoFormScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [circuitoId, repo]);
 
-  // ---------- prefill en edit mode ----------
-  useEffect(() => {
-    if (!isEdit || !pastoreoId) return;
-    (async () => {
-      const list = await repo.listEventos('pastoreo');
-      const existing = list.find(e => e.id === pastoreoId) as Pastoreo | undefined;
-      if (!existing) {
-        Alert.alert('No encontrado', 'Este pastoreo ya no existe.');
-        nav.goBack();
-        return;
-      }
-      setCampoId(existing.campoId);
-      setCircuitoId(existing.circuitoId ?? '');
-      setParcelaId(existing.parcelaId ?? '');
-      setParcelaNumero(existing.parcelaNumero);
-      setFechaEntrada(existing.fecha);
-      setFechaSalida(existing.fechaSalida);
-      setEvento(existing.evento);
-      setCategoria(existing.categoria);
-      setCategoriaAnimal(existing.categoriaAnimal);
-      setCaravanaNumero(existing.caravanaNumero ?? '');
-      setAnimales(existing.animales != null ? String(existing.animales) : '');
-      setKgPromedio(existing.kgPromedio != null ? String(existing.kgPromedio) : '');
-      setCreatedAtOriginal(existing.createdAt);
-      setOriginalRecord(existing);
-      setCargandoExistente(false);
-    })();
-  }, [isEdit, pastoreoId, repo, nav]);
-
   // ---------- valores derivados ----------
-  const campoActual = useMemo(() => campos.find(c => c.id === campoId), [campos, campoId]);
   const circuitoActual = useMemo(() => circuitos.find(c => c.id === circuitoId), [circuitos, circuitoId]);
   const parcelaActual = useMemo(() => parcelas.find(p => p.id === parcelaId), [parcelas, parcelaId]);
 
@@ -251,92 +231,28 @@ export function PastoreoFormScreen() {
     return f;
   }, [campoId, circuitoId, parcelaId, categoria, fechaEntrada, fechaSalida, isEdit, isDirty]);
 
-  // ---------- guardar ----------
-  const onGuardar = async () => {
-    if (!campoId || !circuitoId || !parcelaId || !categoria || !user?.email) {
+  // ─── Guardar — valida campos específicos + rangos productivos, luego hook ───
+  const handleGuardar = async () => {
+    if (!campoId || !circuitoId || !parcelaId || !categoria) {
       Alert.alert('Faltan datos', 'Completá los campos obligatorios.');
       return;
     }
-
-    setGuardando(true);
-    try {
-      // Parseo defensivo de los datos productivos — si el texto está vacío
-      // o no es un número válido, queda undefined (= NULL en DB).
-      const animalesNum = animales.trim() ? Number(animales.trim()) : undefined;
-      const kgNum       = kgPromedio.trim() ? Number(kgPromedio.trim()) : undefined;
-      if (animalesNum != null && (!Number.isFinite(animalesNum) || animalesNum < 0)) {
-        setGuardando(false);
+    // Validación de cordura de datos productivos (rangos)
+    if (animales.trim()) {
+      const n = Number(animales.trim());
+      if (!Number.isFinite(n) || n < 0) {
         Alert.alert('Animales inválido', 'Cantidad de cabezas tiene que ser un número positivo.');
         return;
       }
-      if (kgNum != null && (!Number.isFinite(kgNum) || kgNum < 0 || kgNum > 2000)) {
-        setGuardando(false);
+    }
+    if (kgPromedio.trim()) {
+      const k = Number(kgPromedio.trim());
+      if (!Number.isFinite(k) || k < 0 || k > 2000) {
         Alert.alert('Kg promedio inválido', 'Tiene que ser un número entre 0 y 2000.');
         return;
       }
-
-      const pastoreo: Pastoreo = {
-        tipo: 'pastoreo',
-        id: pastoreoId ?? uuidv4(),
-        fecha: fechaEntrada,
-        fechaSalida: fechaSalida || undefined,
-        campoId,
-        circuitoId,
-        parcelaId,
-        parcelaNumero,
-        categoria,
-        evento,
-        categoriaAnimal,
-        caravanaNumero: caravanaNumero.trim() || undefined,
-        animales: animalesNum,
-        kgPromedio: kgNum,
-        usuarioEmail: user.email,
-        createdAt: createdAtOriginal ?? new Date().toISOString(),
-        syncState: 'pending',
-      };
-      const saved = await repo.saveEvento(pastoreo);
-      const sincronizada = saved.syncState === 'synced';
-
-      const cir = circuitoActual?.nombre ?? '';
-      const pNum = parcelaActual?.numero ?? '';
-      const accion = isEdit
-        ? (fechaSalida ? `Salida cargada (${cir}/P${pNum})` : `Pastoreo actualizado (${cir}/P${pNum})`)
-        : `Cargado: ${categoria} en ${cir} parcela ${pNum}`;
-      const detalle = !sincronizada && saved.syncError
-        ? `\n\nGuardado offline. Detalle: ${saved.syncError}`
-        : (!sincronizada ? '\n\nGuardado offline. Se sincroniza cuando haya señal.' : '');
-      const msg = accion + detalle;
-
-      if (isEdit) {
-        Alert.alert(sincronizada ? 'Listo' : 'Guardado offline', msg, [{ text: 'OK', onPress: () => nav.goBack() }]);
-      } else {
-        Alert.alert(sincronizada ? 'Listo' : 'Guardado offline', msg, [
-          { text: 'Ver listado', onPress: () => { switchTab('pastoreo'); nav.goBack(); } },
-          { text: 'Cargar otro', onPress: resetForm, style: 'cancel' },
-        ]);
-      }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      const esSesion = msg.toLowerCase().includes('sesión') || msg.toLowerCase().includes('jwt');
-      Alert.alert(
-        esSesion ? 'Sesión expirada' : 'Error al guardar',
-        esSesion ? `${msg}\n\nVolvé a Menú → Salir y entrá de nuevo.` : msg,
-      );
-    } finally {
-      setGuardando(false);
     }
-  };
-
-  const resetForm = () => {
-    // Mantenemos campo/circuito/fecha — uso típico es cargar varias cargas
-    // a la misma parcela el mismo día.
-    setCategoria(undefined);
-    setCategoriaAnimal(undefined);
-    setCaravanaNumero('');
-    setFechaSalida(undefined);
-    setEvento('Entrada');
-    setAnimales('');
-    setKgPromedio('');
+    await onGuardar();
   };
 
   const marcarSalidaHoy = () => setFechaSalida(hoyISO());
@@ -628,7 +544,7 @@ export function PastoreoFormScreen() {
 
           <PrimaryButton
             label={isEdit ? 'GUARDAR CAMBIOS' : 'GUARDAR PASTOREO'}
-            onPress={onGuardar}
+            onPress={handleGuardar}
             disabled={!puedeGuardar}
             loading={guardando}
           />

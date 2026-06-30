@@ -37,6 +37,7 @@ import { fontSize, fontWeight } from '@/theme/typography';
 import { radius, spacing } from '@/theme/spacing';
 import type { RootStackParamList } from '@/navigation/types';
 import type { Campo, EventoParicion, Lote, Paricion } from '@/data/types';
+import { exportarPDF, type PdfSection } from '@/lib/pdfExport';
 
 type Nav = NativeStackNavigationProp<RootStackParamList, 'ParicionDetail'>;
 type Rt = RouteProp<RootStackParamList, 'ParicionDetail'>;
@@ -224,12 +225,63 @@ export function ParicionDetailScreen() {
         <View style={{ height: spacing.lg }} />
       </ScrollView>
 
-      {/* Botón fijo abajo: Editar — usa replace para no apilar Detail+Form en el stack */}
+      {/* Botones fijos abajo: Exportar PDF (ghost) + Editar.
+          Editar usa replace para no apilar Detail+Form en el stack. */}
       <View style={styles.actionBar}>
-        <PrimaryButton
-          label="Editar"
-          onPress={() => nav.replace('ParicionForm', { paricionId: paricion.id })}
-        />
+        <View style={styles.actionRow}>
+          <View style={styles.actionHalf}>
+            <PrimaryButton
+              label="Exportar PDF"
+              variant="ghost"
+              onPress={async () => {
+                const secciones: PdfSection[] = [
+                  {
+                    title: 'Ubicación',
+                    rows: [
+                      { label: 'Fecha',  value: fechaLarga(paricion.fecha) },
+                      { label: 'Campo',  value: campo?.nombre ?? paricion.campoId },
+                      { label: 'Lote',   value: lote?.nombre ?? paricion.loteId },
+                    ],
+                  },
+                  {
+                    title: 'Animal',
+                    rows: [
+                      { label: 'Grupo',           value: paricion.vacasGrupo },
+                      { label: 'Sexo',            value: paricion.sexo },
+                      { label: 'Caravana color',  value: paricion.caravanaColor },
+                      { label: 'Caravana número', value: paricion.caravanaNumero },
+                    ],
+                  },
+                  {
+                    title: 'Evento',
+                    rows: [
+                      { label: 'Tipo',        value: paricion.evento },
+                      { label: 'Asistencia',  value: paricion.asistencia },
+                      { label: 'Causa',       value: causa },
+                    ],
+                  },
+                ];
+                await exportarPDF(
+                  {
+                    titulo:        `Parición · ${paricion.evento}`,
+                    subtitulo:     `${fechaLarga(paricion.fecha)}`,
+                    cargadoPor:    paricion.usuarioEmail,
+                    createdAt:     paricion.createdAt,
+                    secciones,
+                    observaciones: paricion.observaciones,
+                  },
+                  `paricion-${paricion.id}`,
+                );
+              }}
+            />
+          </View>
+          <View style={styles.actionHalf}>
+            <PrimaryButton
+              label="Editar"
+              onPress={() => nav.replace('ParicionForm', { paricionId: paricion.id })}
+            />
+          </View>
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -362,4 +414,6 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.borderSoft,
   },
+  actionRow: { flexDirection: 'row', gap: spacing.sm },
+  actionHalf: { flex: 1 },
 });

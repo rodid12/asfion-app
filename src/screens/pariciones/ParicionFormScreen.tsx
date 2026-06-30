@@ -25,12 +25,11 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
-import type { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as Location from 'expo-location';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { v4 as uuidv4 } from 'uuid';
 
 import { ChipGroup } from '@/components/ChipGroup';
 import { ColorDots } from '@/components/ColorDots';
@@ -39,16 +38,14 @@ import { FormField } from '@/components/FormField';
 import { NoLotesBanner } from '@/components/NoLotesBanner';
 import { PhotoStrip } from '@/components/PhotoStrip';
 import { PrimaryButton } from '@/components/PrimaryButton';
-import { useAuth } from '@/auth/context';
-import { useRepository } from '@/data';
 import { useClientConfig } from '@/config/ClientConfigContext';
+import { useEventoForm } from '@/hooks/useEventoForm';
 import { colors } from '@/theme/colors';
 import { fontSize, fontWeight } from '@/theme/typography';
 import { radius, spacing } from '@/theme/spacing';
 import type { RootStackParamList } from '@/navigation/types';
-import { useTabNav } from '@/navigation/TabContext';
+import { hoyISO } from '@/utils/fechas';
 import type {
-  Campo,
   CausaMuerteTipo,
   EventoParicion,
   Lote,
@@ -58,7 +55,6 @@ import type {
   VacasGrupo,
 } from '@/data/types';
 
-type Nav = NativeStackNavigationProp<RootStackParamList, 'ParicionForm'>;
 type Rt = RouteProp<RootStackParamList, 'ParicionForm'>;
 type Props = NativeStackScreenProps<RootStackParamList, 'ParicionForm'>;
 
@@ -69,12 +65,9 @@ type Props = NativeStackScreenProps<RootStackParamList, 'ParicionForm'>;
 // o (b) relajar a string en ese campo.
 
 export function ParicionFormScreen(_p: Props) {
-  const nav = useNavigation<Nav>();
   const route = useRoute<Rt>();
-  const { user } = useAuth();
-  const repo = useRepository();
-  const { switchTab } = useTabNav();
-  // Catálogo de Pariciones del cliente activo
+  const paricionId = route.params?.paricionId;
+
   const catParicion = useClientConfig().catalogos.pariciones;
   const VACAS_GRUPOS = catParicion.vacasGrupos as readonly VacasGrupo[];
   const EVENTOS = catParicion.eventos as readonly EventoParicion[];
@@ -83,23 +76,10 @@ export function ParicionFormScreen(_p: Props) {
   const CAUSAS_TIPO = catParicion.causaTipos as readonly CausaMuerteTipo[];
   const CAUSAS_FRECUENTES = catParicion.causasFrecuentes;
 
-  const paricionId = route.params?.paricionId;
-  const isEdit = Boolean(paricionId);
-
-  // Catálogos
-  const [campos, setCampos] = useState<Campo[]>([]);
+  // ─── State específico de Paricion ───
   const [lotes, setLotes] = useState<Lote[]>([]);
-
-  const [cargandoExistente, setCargandoExistente] = useState<boolean>(isEdit);
-  const [createdAtOriginal, setCreatedAtOriginal] = useState<string | undefined>();
-  const [originalRecord, setOriginalRecord] = useState<Paricion | null>(null);
-
-  // Estado del form — todos los campos del modelo
-  const [campoId, setCampoId] = useState<string | undefined>(user?.campoAsignadoId);
   const [pickerCampoOpen, setPickerCampoOpen] = useState(false);
   const [loteId, setLoteId] = useState<string | undefined>();
-  const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10));
-
   const [vacasGrupo, setVacasGrupo] = useState<VacasGrupo | undefined>();
   const [evento, setEvento] = useState<EventoParicion | undefined>('Nacimiento');
   const [sexo, setSexo] = useState<Sexo | undefined>();
@@ -110,55 +90,78 @@ export function ParicionFormScreen(_p: Props) {
   const [causaDetalle, setCausaDetalle] = useState('');
   const [observaciones, setObservaciones] = useState('');
   const [fotos, setFotos] = useState<string[]>([]);
-
   const [gps, setGps] = useState<Paricion['gps']>(undefined);
-  const [submitting, setSubmitting] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
 
-  useEffect(() => {
-    repo.listCampos().then(setCampos);
-  }, [repo]);
+  // ─── Visibility por tipo de evento (necesarios ANTES del hook ───
+  //     porque buildEvento los lee del closure) ───
+  const sexoRequerido     = evento === 'Nacimiento' || evento === 'Muerte';
+  const causaVisible      = evento === 'Muerte' || evento === 'Aborto';
+  const asistenciaVisible = evento === 'Nacimiento';
+  const caravanaVisible   = evento !== 'Retacto';
 
-  useEffect(() => {
-    nav.setOptions({ title: isEdit ? 'Editar parición' : 'Nueva parición' });
-  }, [nav, isEdit]);
+  // ─── State común vía useEventoForm ───
+  const ef = useEventoForm<Paricion>({
+    tipo: 'paricion',
+    eventoId: paricionId,
+    titleNew: 'Nueva parición',
+    titleEdit: 'Editar parición',
+    tabName: 'lista',  // Pariciones vive bajo la tab "lista" (no tiene tab propia)
+    buildEvento: ({ campoId, fecha, usuarioEmail, id, createdAt }) => {
+      if (!campoId || !loteId || !vacasGrupo || !evento) return null;
+      return {
+        id, campoId, fecha, usuarioEmail, createdAt,
+        tipo: 'paricion',
+        loteId,
+        gps,
+        fotos: fotos.length > 0 ? fotos : undefined,
+        vacasGrupo,
+        evento,
+        sexo: sexoRequerido ? sexo : undefined,
+        asistencia: asistenciaVisible ? asistencia : undefined,
+        caravanaColor: caravanaVisible ? caravanaColor : undefined,
+        caravanaNumero: caravanaVisible && caravanaNumero.trim() ? caravanaNumero.trim() : undefined,
+        causaTipo: causaVisible ? causaTipo : undefined,
+        causaDetalle: causaVisible ? (causaDetalle.trim() || undefined) : undefined,
+        observaciones: observaciones.trim() || undefined,
+        syncState: 'pending',
+      };
+    },
+    formatSummary: () => 'Parición guardada.',
+    resetEspecifico: () => {
+      setVacasGrupo(undefined);
+      setEvento('Nacimiento');
+      setSexo(undefined);
+      setAsistencia(undefined);
+      setCaravanaNumero('');
+      // Conservamos caravanaColor (probable misma tanda)
+      setCausaTipo(undefined);
+      setCausaDetalle('');
+      setObservaciones('');
+      setFotos([]);
+    },
+  });
+  const { user, repo, campoId, setCampoId, fecha, setFecha, campos, cargandoExistente,
+          originalRecord, isEdit, guardando: submitting, onGuardar, nav } = ef;
 
-  // Prefill en edit mode
+  // ─── Hidratación específica en edit mode ───
   useEffect(() => {
-    if (!isEdit || !paricionId) return;
-    (async () => {
-      try {
-        const list = await repo.listEventos('paricion');
-        const existing = list.find(e => e.id === paricionId) as Paricion | undefined;
-        if (!existing) {
-          Alert.alert('No encontrada', 'Esta parición ya no existe.');
-          nav.goBack();
-          return;
-        }
-        setCampoId(existing.campoId);
-        setLoteId(existing.loteId);
-        setFecha(existing.fecha);
-        setVacasGrupo(existing.vacasGrupo);
-        setEvento(existing.evento);
-        setSexo(existing.sexo);
-        setAsistencia(existing.asistencia);
-        setCaravanaColor(existing.caravanaColor);
-        setCaravanaNumero(existing.caravanaNumero ?? '');
-        setCausaTipo(existing.causaTipo);
-        setCausaDetalle(existing.causaDetalle ?? '');
-        setObservaciones(existing.observaciones ?? '');
-        setFotos(existing.fotos ?? []);
-        if (existing.gps) setGps(existing.gps);
-        setCreatedAtOriginal(existing.createdAt);
-        setOriginalRecord(existing);
-      } catch (err) {
-        Alert.alert('Error', err instanceof Error ? err.message : String(err));
-      } finally {
-        setCargandoExistente(false);
-      }
-    })();
+    ef.registerPrefill((existing) => {
+      setLoteId(existing.loteId);
+      setVacasGrupo(existing.vacasGrupo);
+      setEvento(existing.evento);
+      setSexo(existing.sexo);
+      setAsistencia(existing.asistencia);
+      setCaravanaColor(existing.caravanaColor);
+      setCaravanaNumero(existing.caravanaNumero ?? '');
+      setCausaTipo(existing.causaTipo);
+      setCausaDetalle(existing.causaDetalle ?? '');
+      setObservaciones(existing.observaciones ?? '');
+      setFotos(existing.fotos ?? []);
+      if (existing.gps) setGps(existing.gps);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isEdit, paricionId]);
+  }, []);
 
   // Lotes cuando cambia el campo + auto-select cuando hay uno solo
   useEffect(() => {
@@ -191,10 +194,8 @@ export function ParicionFormScreen(_p: Props) {
     })();
   }, []);
 
-  const sexoRequerido = evento === 'Nacimiento' || evento === 'Muerte';
-  const causaVisible = evento === 'Muerte' || evento === 'Aborto';
-  const asistenciaVisible = evento === 'Nacimiento';
-  const caravanaVisible = evento !== 'Retacto'; // sin animal cargado en retacto
+  // sexoRequerido / causaVisible / asistenciaVisible / caravanaVisible
+  // ya están declaradas arriba (antes del hook) porque buildEvento las usa.
 
   // isDirty: cualquier cambio respecto del original.
   const isDirty = useMemo(() => {
@@ -241,7 +242,7 @@ export function ParicionFormScreen(_p: Props) {
   const loteNombre = lotes.find(l => l.id === loteId)?.nombre ?? 'sin elegir';
 
   const fechaLabel = useMemo(() => {
-    const hoy = new Date().toISOString().slice(0, 10);
+    const hoy = hoyISO();
     const d = new Date(fecha + 'T00:00:00');
     const pretty = d.toLocaleDateString('es-AR', { day: 'numeric', month: 'short' });
     if (fecha === hoy) return `hoy (${pretty})`;
@@ -257,87 +258,11 @@ export function ParicionFormScreen(_p: Props) {
   }, [user]);
 
   const onSubmit = async () => {
-    if (!user) {
-      Alert.alert('Sesión expirada', 'Volvé a iniciar sesión.');
-      return;
-    }
     if (!valid || !campoId || !loteId || !vacasGrupo || !evento) {
       Alert.alert('Faltan datos', 'Completá los campos obligatorios.');
       return;
     }
-
-    setSubmitting(true);
-
-    const paricion: Paricion = {
-      id: paricionId ?? uuidv4(),
-      tipo: 'paricion',
-      fecha,
-      campoId,
-      loteId,
-      usuarioEmail: user.email,
-      gps,
-      createdAt: createdAtOriginal ?? new Date().toISOString(),
-      syncState: 'pending',
-      fotos: fotos.length > 0 ? fotos : undefined,
-      vacasGrupo,
-      evento,
-      sexo: sexoRequerido ? sexo : undefined,
-      asistencia: asistenciaVisible ? asistencia : undefined,
-      caravanaColor: caravanaVisible ? caravanaColor : undefined,
-      caravanaNumero: caravanaVisible && caravanaNumero.trim() ? caravanaNumero.trim() : undefined,
-      causaTipo: causaVisible ? causaTipo : undefined,
-      causaDetalle: causaVisible ? (causaDetalle.trim() || undefined) : undefined,
-      observaciones: observaciones.trim() || undefined,
-    };
-
-    try {
-      const saved = await repo.saveEvento(paricion);
-      const sincronizada = saved.syncState === 'synced';
-      const okMsg = sincronizada
-        ? (isEdit ? 'Cambios guardados y sincronizados.' : 'Parición guardada y sincronizada.')
-        : (isEdit ? 'Cambios guardados offline. Se sincronizan cuando haya señal.' : 'Parición guardada offline. Se sincroniza cuando haya señal.');
-      // Cuando NO se sincronizó, mostramos el error real (no genérico) — así
-      // si el problema no es "no hay red" (es RLS, FK, schema, etc.) podés
-      // verlo y reportarlo en vez de pensar que es offline.
-      const detalle = !sincronizada && saved.syncError ? `\n\nDetalle: ${saved.syncError}` : '';
-      const msg = okMsg + detalle;
-
-      if (isEdit) {
-        Alert.alert(sincronizada ? 'Listo' : 'Guardado offline', msg, [{ text: 'OK', onPress: () => nav.goBack() }]);
-      } else {
-        Alert.alert(sincronizada ? 'Listo' : 'Guardado offline', msg, [
-          { text: 'Ver listado', onPress: () => { switchTab('lista'); nav.goBack(); } },
-          { text: 'Cargar otra', onPress: () => resetForm(), style: 'cancel' },
-        ]);
-      }
-    } catch (err) {
-      // Errores no recuperables (incluye SessionExpiredError): los mostramos
-      // crudos y NO navegamos atrás — el usuario tiene que ver el mensaje
-      // y decidir (re-loguearse, intentar de nuevo, etc.).
-      const msg = err instanceof Error ? err.message : String(err);
-      const esSesion = msg.toLowerCase().includes('sesión') || msg.toLowerCase().includes('jwt');
-      Alert.alert(
-        esSesion ? 'Sesión expirada' : 'Error al guardar',
-        esSesion
-          ? `${msg}\n\nVolvé a Menú → Salir y entrá de nuevo.`
-          : msg,
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const resetForm = () => {
-    setVacasGrupo(undefined);
-    setEvento('Nacimiento');
-    setSexo(undefined);
-    setAsistencia(undefined);
-    setCaravanaNumero('');
-    // Conservamos caravanaColor (probable misma tanda)
-    setCausaTipo(undefined);
-    setCausaDetalle('');
-    setObservaciones('');
-    setFotos([]);
+    await onGuardar();
   };
 
   if (cargandoExistente) {
