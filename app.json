@@ -2,7 +2,7 @@
   "expo": {
     "name": "ASFION",
     "slug": "asfion-app",
-    "version": "0.2.0",
+    "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
@@ -15,8 +15,12 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.asfion.app",
+      "buildNumber": "1",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "ASFION usa tu ubicación para registrar dónde se carga cada evento del campo."
+        "NSLocationWhenInUseUsageDescription": "ASFION usa tu ubicación para registrar dónde se carga cada evento del campo (parición, muerte, entrada a parcela, etc.). Nunca se comparte con terceros.",
+        "NSCameraUsageDescription": "ASFION usa la cámara para adjuntar fotos a los eventos que cargás (crías, animales muertos, condición corporal, potreros). Las fotos se guardan solo dentro de tu cuenta.",
+        "NSPhotoLibraryUsageDescription": "ASFION accede a tus fotos para permitirte adjuntar imágenes ya tomadas a los eventos del campo. Nunca modifica ni comparte tu galería.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -35,7 +39,14 @@
     },
     "plugins": [
       "expo-secure-store",
-      "expo-location"
+      "expo-location",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "ASFION accede a tus fotos para adjuntarlas a los eventos del campo.",
+          "cameraPermission": "ASFION usa la cámara para tomar fotos y adjuntarlas a los eventos."
+        }
+      ]
     ],
     "extra": {
       "eas": {
