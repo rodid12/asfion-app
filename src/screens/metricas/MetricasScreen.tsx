@@ -46,6 +46,7 @@ import { fontSize, fontWeight } from '@/theme/typography';
 import { radius, spacing } from '@/theme/spacing';
 import type {
   Campo,
+  CampaniaReproductiva,
   CategoriaHacienda,
   CausaMuerteTipo,
   Compra,
@@ -140,6 +141,7 @@ export function MetricasScreen() {
   const [pastoreo, setPastoreo] = useState<Pastoreo[]>([]);
   const [compras, setCompras] = useState<Compra[]>([]);
   const [campos, setCampos] = useState<Campo[]>([]);
+  const [campaniasReproductivas, setCampaniasReproductivas] = useState<CampaniaReproductiva[]>([]);
   // Map circuitoId → {nombre, campoId} para los charts de pastoreo.
   // Cargamos circuitos de TODOS los campos visibles al entrar al tab.
   const [circuitosMap, setCircuitosMap] = useState<Record<string, { nombre: string; campoId: string; hectareas: number }>>({});
@@ -154,13 +156,14 @@ export function MetricasScreen() {
   const load = useCallback(async (cancelado: () => boolean = () => false) => {
     setLoading(true);
     try {
-      const [evs, lls, ms, ps, cps, cs] = await Promise.all([
+      const [evs, lls, ms, ps, cps, cs, camps] = await Promise.all([
         repo.listEventos('paricion'),
         repo.listEventos('lluvia'),
         repo.listEventos('mortandad'),
         repo.listEventos('pastoreo'),
         repo.listEventos('compra'),
         repo.listCampos(),
+        repo.listCampaniasReproductivas(),
       ]);
       if (cancelado()) return;
       setData(evs as Paricion[]);
@@ -169,6 +172,7 @@ export function MetricasScreen() {
       setPastoreo(ps as Pastoreo[]);
       setCompras(cps as Compra[]);
       setCampos(cs);
+      setCampaniasReproductivas(camps);
       // Cargar todos los circuitos (un fetch por campo) — necesario para
       // mappear circuitoId → nombre en el chart "Movimientos por circuito".
       const allCircs = await Promise.all(cs.map(c => repo.listCircuitos(c.id)));
@@ -196,6 +200,23 @@ export function MetricasScreen() {
     if (!esAdmin && user?.email) return data.filter(p => p.usuarioEmail === user.email);
     return data;
   }, [data, esAdmin, user]);
+
+  // Los KPIs reproductivos acumulativos usan únicamente la campaña activa.
+  // El fallback por fecha incluye eventos recién creados offline, antes de que
+  // el trigger de Supabase les complete `campania_id` al sincronizar.
+  const campaniaActiva = useMemo(
+    () => campaniasReproductivas.find(c => c.activa)
+      ?? [...campaniasReproductivas].sort((a, b) => b.fechaInicio.localeCompare(a.fechaInicio))[0],
+    [campaniasReproductivas],
+  );
+
+  const scopedCampania = useMemo(() => {
+    if (!campaniaActiva) return scoped;
+    return scoped.filter(p =>
+      p.campaniaId === campaniaActiva.id ||
+      (!p.campaniaId && p.fecha >= campaniaActiva.fechaInicio && p.fecha <= campaniaActiva.fechaFin),
+    );
+  }, [scoped, campaniaActiva]);
 
   // Aplicar rango.
   const filtered = useMemo(() => {
@@ -362,25 +383,31 @@ export function MetricasScreen() {
   );
 
   // ---------- 3. Vacas por parir ----------
-  // Por campo = stockInicial - nacimientos (no otros eventos).
+  // Por campo = Preñez inicial - partos - abortos.
   // Usamos scope sin filtro de fecha porque la temporada es acumulativa,
   // no depende del "Hoy/7d/30d" que es para la actividad reciente.
   const vacasPorParir = useMemo(() => {
-    const nacimientosPorCampo = new Map<string, number>();
-    scoped.forEach(p => {
-      if (p.evento !== 'Nacimiento') return;
-      nacimientosPorCampo.set(p.campoId, (nacimientosPorCampo.get(p.campoId) ?? 0) + 1);
+    const partosPorCampo = new Map<string, number>();
+    const abortosPorCampo = new Map<string, number>();
+    scopedCampania.forEach(p => {
+      if (p.evento === 'Aborto') {
+        abortosPorCampo.set(p.campoId, (abortosPorCampo.get(p.campoId) ?? 0) + 1);
+        return;
+      }
+      if (p.evento !== 'Nacimiento' && p.causaTipo !== 'Nacido Muerto') return;
+      partosPorCampo.set(p.campoId, (partosPorCampo.get(p.campoId) ?? 0) + 1);
     });
     return campos
       .map(c => {
         const stock = c.stockInicialVacas ?? 0;
-        const paridas = nacimientosPorCampo.get(c.id) ?? 0;
-        const restan = Math.max(0, stock - paridas);
-        return { campo: c, stock, paridas, restan };
+        const paridas = partosPorCampo.get(c.id) ?? 0;
+        const abortos = abortosPorCampo.get(c.id) ?? 0;
+        const restan = Math.max(0, stock - paridas - abortos);
+        return { campo: c, stock, paridas, abortos, restan };
       })
       .filter(r => r.stock > 0)
       .sort((a, b) => b.restan - a.restan);
-  }, [scoped, campos]);
+  }, [scopedCampania, campos]);
 
   const maxRestan = useMemo(
     () => vacasPorParir.reduce((m, r) => Math.max(m, r.restan), 0),
@@ -392,7 +419,7 @@ export function MetricasScreen() {
   const ternerosEnPie = useMemo(() => {
     const paridasPorCampo = new Map<string, number>();
     const muertesPorCampo = new Map<string, number>();
-    scoped.forEach(p => {
+    scopedCampania.forEach(p => {
       if (p.evento === 'Nacimiento') {
         paridasPorCampo.set(p.campoId, (paridasPorCampo.get(p.campoId) ?? 0) + 1);
       } else if (p.evento === 'Muerte') {
@@ -408,7 +435,7 @@ export function MetricasScreen() {
         return { campo: c, stock, paridas, muertes, enPie };
       })
       .filter(r => r.stock > 0 || r.paridas > 0);
-  }, [scoped, campos]);
+  }, [scopedCampania, campos]);
 
   // ---------- 5. Lluvias por campo ----------
   // mm acumulados por establecimiento dentro del rango filtrado.

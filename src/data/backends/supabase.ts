@@ -16,6 +16,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type {
   Campo,
+  CampaniaReproductiva,
   CaravanaColor,
   Circuito,
   ClienteConfigRow,
@@ -50,6 +51,7 @@ import {
   MORTANDAD_SCHEMA,
   PASTOREO_SCHEMA,
   COMPRA_SCHEMA,
+  CAMPANIA_REPRODUCTIVA_SCHEMA,
 } from '../mapRow.canonical';
 import type {
   CampoCanonical,
@@ -62,6 +64,7 @@ import type {
   MortandadCanonical,
   PastoreoCanonical,
   CompraCanonical,
+  CampaniaReproductivaCanonical,
 } from '../types.canonical';
 
 // =============================================================================
@@ -140,6 +143,9 @@ export function looksLikeRlsBlock(message: string): boolean {
 // agregás una columna ahí y el mapper se actualiza solo.
 
 function rowToCampo(r: any): Campo        { return mapRow<Campo>(r, CAMPO_SCHEMA); }
+function rowToCampaniaReproductiva(r: any): CampaniaReproductiva {
+  return mapRow<CampaniaReproductivaCanonical>(r, CAMPANIA_REPRODUCTIVA_SCHEMA);
+}
 function rowToLote(r: any): Lote          { return mapRow<Lote>(r, LOTE_SCHEMA); }
 function rowToPluviometro(r: any): Pluviometro { return mapRow<Pluviometro>(r, PLUVIOMETRO_SCHEMA); }
 function rowToCircuito(r: any): Circuito  { return mapRow<Circuito>(r, CIRCUITO_SCHEMA); }
@@ -227,6 +233,9 @@ function paricionToRow(p: Paricion, clienteId: string) {
   return {
     id: p.id,
     cliente_id: clienteId,
+    // En altas offline queda null y el trigger 0030 la asigna por fecha.
+    // En ediciones conservamos el valor ya leído del servidor.
+    campania_id: p.campaniaId ?? null,
     campo_id: p.campoId,
     lote_id: p.loteId ?? null,
     usuario_email: p.usuarioEmail,
@@ -502,6 +511,21 @@ export class SupabaseBackend implements IDataBackend {
       .order('nombre');
     if (error) throw new Error(error.message);
     return (data ?? []).map(rowToCampo);
+  }
+
+  async listCampaniasReproductivas(): Promise<CampaniaReproductiva[]> {
+    const { data, error } = await this.supabase
+      .from('campanias_reproductivas')
+      .select('id, nombre, servicio_anio, fecha_inicio, fecha_fin, activa')
+      .order('activa', { ascending: false })
+      .order('fecha_inicio', { ascending: false });
+    if (error) {
+      const msg = error.message.toLowerCase();
+      // Compatibilidad temporal si la app se publica antes de migration 0030.
+      if (msg.includes('does not exist') || msg.includes('relation')) return [];
+      throw new Error(`listCampaniasReproductivas: ${error.message}`);
+    }
+    return (data ?? []).map(rowToCampaniaReproductiva);
   }
 
   // Q2 audit: cambio de select('*') a columnas explícitas. Ahorra bytes

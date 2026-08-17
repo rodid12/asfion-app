@@ -98,6 +98,8 @@ export type CaravanaColor = 'Amarillo' | 'Blanca' | 'Celeste' | 'Naranja';
 export interface ParicionCanonical {
   id: string;
   cliente_id?: string;
+  /** Campaña asignada automáticamente por DB según `fecha` (mig 0030). */
+  campaniaId?: string;
   fecha: string;                          // 'YYYY-MM-DD'
   campoId: string;
   loteId?: string;
@@ -114,6 +116,20 @@ export interface ParicionCanonical {
   observaciones?: string;
 
   createdAt: string;
+}
+
+/**
+ * Campaña reproductiva que vincula la foto inicial de Preñez con los eventos
+ * de Pariciones. La campaña no guarda contadores: esos se derivan de tactos y
+ * eventos, evitando que el stock inicial se modifique con el tiempo.
+ */
+export interface CampaniaReproductivaCanonical {
+  id: string;
+  nombre: string;
+  servicioAnio: number;
+  fechaInicio: string;                    // 'YYYY-MM-DD'
+  fechaFin: string;                       // 'YYYY-MM-DD'
+  activa: boolean;
 }
 
 // ═════════════════════════════════════════════════════════════════════════════

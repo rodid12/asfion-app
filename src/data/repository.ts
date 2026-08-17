@@ -1,7 +1,7 @@
 // Repository pattern. Los screens NUNCA hablan con Sheets ni con Supabase directo.
 // Siempre pasan por acá. Eso nos permite cambiar el backend sin tocar la UI.
 
-import type { CaravanaColor, Campo, Circuito, ClienteConfigRow, Evento, Lote, Parcela, Pastoreo, Pluviometro, Subscription, TipoEvento, Usuario } from './types';
+import type { CampaniaReproductiva, CaravanaColor, Campo, Circuito, ClienteConfigRow, Evento, Lote, Parcela, Pastoreo, Pluviometro, Subscription, TipoEvento, Usuario } from './types';
 import { isSessionExpiredError, looksLikeRlsBlock, SubscriptionBlockedError } from './backends/supabase';
 
 /** Última caravana cargada en un campo — alimenta el autocomplete del form. */
@@ -50,6 +50,8 @@ export interface IDataBackend {
 
   // Catálogos
   listCampos(): Promise<Campo[]>;
+  /** Opcional para mantener compatibles backends legacy (Sheets/memory). */
+  listCampaniasReproductivas?(): Promise<CampaniaReproductiva[]>;
   listLotes(campoId: string): Promise<Lote[]>;
   listPluviometros(campoId: string): Promise<Pluviometro[]>;
   listCircuitos(campoId: string): Promise<Circuito[]>;
@@ -152,6 +154,10 @@ export class Repository {
 
   // Catálogos
   listCampos = () => this.backend.listCampos();
+  listCampaniasReproductivas = (): Promise<CampaniaReproductiva[]> =>
+    this.backend.listCampaniasReproductivas
+      ? this.backend.listCampaniasReproductivas()
+      : Promise.resolve([]);
   listLotes = (campoId: string) => this.backend.listLotes(campoId);
   listPluviometros = (campoId: string) => this.backend.listPluviometros(campoId);
   listCircuitos = (campoId: string) => this.backend.listCircuitos(campoId);

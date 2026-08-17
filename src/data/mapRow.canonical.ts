@@ -40,6 +40,7 @@ import type {
   PluviometroCanonical,
   CircuitoCanonical,
   ParcelaCanonical,
+  CampaniaReproductivaCanonical,
   ParicionCanonical,
   LluviaCanonical,
   MortandadCanonical,
@@ -68,6 +69,7 @@ export type FieldSpec =
   | { from: string; type: 'number' }
   | { from: string; type: 'number?' }
   | { from: string; type: 'number|null' }
+  | { from: string; type: 'boolean' }
   | { from: string; type: 'as-is' };
 
 export type Schema<T> = { [K in keyof T]: FieldSpec };
@@ -113,6 +115,9 @@ export function mapRow<T>(row: Record<string, any>, schema: Schema<T>): T {
         break;
       case 'number|null':
         out[key] = raw != null ? Number(raw) : null;
+        break;
+      case 'boolean':
+        out[key] = Boolean(raw);
         break;
       case 'as-is':
         out[key] = raw;
@@ -167,6 +172,15 @@ export const PARCELA_SCHEMA: Schema<ParcelaCanonical> = {
   hectareas:   { from: 'hectareas',   type: 'number' },
 };
 
+export const CAMPANIA_REPRODUCTIVA_SCHEMA: Schema<CampaniaReproductivaCanonical> = {
+  id:           { from: 'id',            type: 'string'  },
+  nombre:       { from: 'nombre',        type: 'string'  },
+  servicioAnio: { from: 'servicio_anio', type: 'number'  },
+  fechaInicio:  { from: 'fecha_inicio',   type: 'string'  },
+  fechaFin:     { from: 'fecha_fin',      type: 'string'  },
+  activa:       { from: 'activa',         type: 'boolean' },
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Eventos
 // ─────────────────────────────────────────────────────────────────────────────
@@ -174,6 +188,7 @@ export const PARCELA_SCHEMA: Schema<ParcelaCanonical> = {
 export const PARICION_SCHEMA: Schema<ParicionCanonical> = {
   id:             { from: 'id',              type: 'string'  },
   cliente_id:     { from: 'cliente_id',      type: 'string?' },
+  campaniaId:     { from: 'campania_id',     type: 'string?' },
   fecha:          { from: 'fecha',           type: 'string'  },
   campoId:        { from: 'campo_id',        type: 'string'  },
   loteId:         { from: 'lote_id',         type: 'string?' },
