@@ -34,7 +34,7 @@ export const TABS_CATALOGO: TabDef[] = [
   { key: 'lluvias',   label: 'Lluvias',       emoji: '🌧️', enabled: true },
   { key: 'mortandad', label: 'Mortandad',     emoji: '⚠️', enabled: true },
   { key: 'pastoreo',  label: 'Pastoreo',      emoji: '🌾', enabled: true },
-  { key: 'compras',   label: 'Compras',       emoji: '🛒', enabled: true },
+  { key: 'compras',   label: 'Comercial',     emoji: '🤝', enabled: true },
   { key: 'metricas',  label: 'Métricas',      emoji: '📊', enabled: true },
 ];
 

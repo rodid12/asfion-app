@@ -82,6 +82,16 @@ export interface SupabaseBackendConfig {
 const LEGACY_PENDING_KEY = 'asfion.supabase.pending.v1';
 const PENDING_PREFIX = 'asfion.supabase.pending.v2:';
 
+function esRefreshTokenInvalido(error: unknown): boolean {
+  const msg = error instanceof Error
+    ? error.message
+    : String((error as any)?.message ?? error ?? '');
+  const t = msg.toLowerCase();
+  return t.includes('invalid refresh token')
+    || t.includes('refresh token not found')
+    || t.includes('refresh_token_not_found');
+}
+
 // =============================================================================
 // Error tipado: sesión expirada / problemas de auth
 // =============================================================================
@@ -466,15 +476,24 @@ export class SupabaseBackend implements IDataBackend {
 
   async getCurrentUser(): Promise<Usuario | null> {
     if (this.currentUserCache) return this.currentUserCache;
-    const { data } = await this.supabase.auth.getUser();
-    if (!data.user?.email) return null;
-    try {
-      const profile = await this.fetchUserProfile(data.user.email);
-      this.currentUserCache = profile;
-      return profile;
-    } catch {
-      return null;
+    const { data, error } = await this.supabase.auth.getUser();
+    if (error) {
+      if (esRefreshTokenInvalido(error)) {
+        // La sesión local quedó apuntando a un refresh token revocado o ya
+        // consumido. Limpiamos SOLO el dispositivo: el próximo render muestra
+        // Login y el error no reaparece en cada inicio.
+        try { await this.supabase.auth.signOut({ scope: 'local' }); } catch { /* best effort */ }
+        this.currentUserCache = null;
+        return null;
+      }
+      // Red caída / timeout: AuthProvider conserva el perfil local y permite
+      // seguir trabajando offline. No confundimos esto con sesión vencida.
+      throw new Error(error.message);
     }
+    if (!data.user?.email) return null;
+    const profile = await this.fetchUserProfile(data.user.email);
+    this.currentUserCache = profile;
+    return profile;
   }
 
   /**

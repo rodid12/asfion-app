@@ -98,7 +98,8 @@ export function VentaFormScreen() {
     titleEdit: 'Editar venta',
     // La lista de ventas vive en el Stack. Al volver del form queda visible;
     // detrás dejamos Menú como tab base.
-    tabName: 'menu',
+    // Ventas comparte el acceso inferior "Comercial" con Compras.
+    tabName: 'compras',
     buildEvento: ({ campoId, fecha, usuarioEmail, id, createdAt }) => {
       if (gruposCalculados.some(g => g == null)) return null;
       const importeNum = importe.trim() ? decimal(importe) : undefined;
@@ -128,6 +129,7 @@ export function VentaFormScreen() {
 
   const {
     campoId, setCampoId, fecha, setFecha, campos, campoActual,
+    camposLoading, camposError, reloadCampos,
     isEdit, cargandoExistente, originalRecord, guardando, onGuardar,
   } = ef;
 
@@ -251,11 +253,35 @@ export function VentaFormScreen() {
             </View>
             <View style={styles.headerRow}>
               <Text style={styles.headerLabel}>Campo *</Text>
-              <Pressable style={styles.headerPicker} onPress={() => setPickerCampoOpen(v => !v)}>
-                <Text style={[styles.headerValue, !campoId && styles.muted]} numberOfLines={1}>{campoActual?.nombre ?? 'Elegir campo'}</Text>
+              <Pressable
+                style={[styles.headerPicker, camposLoading && styles.pickerDisabled]}
+                disabled={camposLoading}
+                onPress={() => {
+                  if (campos.length === 0) {
+                    void reloadCampos();
+                    return;
+                  }
+                  setPickerCampoOpen(v => !v);
+                }}
+              >
+                <Text style={[styles.headerValue, !campoId && styles.muted]} numberOfLines={1}>
+                  {camposLoading ? 'Cargando campos…' : campoActual?.nombre ?? 'Elegir campo'}
+                </Text>
                 <Text style={styles.chev}>▾</Text>
               </Pressable>
             </View>
+            {camposError && (
+              <Pressable style={styles.catalogError} onPress={() => void reloadCampos()}>
+                <Text style={styles.catalogErrorText} numberOfLines={2}>
+                  No se pudieron cargar los campos. Tocá para reintentar.
+                </Text>
+              </Pressable>
+            )}
+            {!camposLoading && !camposError && campos.length === 0 && (
+              <Pressable style={styles.catalogError} onPress={() => void reloadCampos()}>
+                <Text style={styles.catalogErrorText}>No hay campos disponibles. Tocá para actualizar.</Text>
+              </Pressable>
+            )}
             {pickerCampoOpen && (
               <View style={styles.options}>
                 {campos.map(c => (
@@ -375,6 +401,20 @@ const styles = StyleSheet.create({
   headerValue: { flex: 1, color: colors.textDark, fontSize: fontSize.sm, fontWeight: fontWeight.semibold as '600' },
   muted: { color: colors.textMuted },
   headerPicker: { flex: 1, flexDirection: 'row', alignItems: 'center' },
+  pickerDisabled: { opacity: 0.65 },
+  catalogError: {
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+    backgroundColor: colors.orangeSoft,
+  },
+  catalogErrorText: {
+    color: colors.navyDeep,
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.semibold as '600',
+    textAlign: 'center',
+  },
   chev: { color: colors.orange, fontWeight: fontWeight.bold as '700' },
   options: { paddingVertical: spacing.sm, gap: spacing.xs },
   option: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radius.md, backgroundColor: colors.bgLight },

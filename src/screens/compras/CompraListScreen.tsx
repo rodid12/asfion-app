@@ -57,8 +57,8 @@ const RANGO_PRESETS: readonly DatePreset[] = (['30d', '90d', 'year', 'todo'] as 
 
 function rangoDesde(r: RangoFecha): string | null {
   const d = new Date();
-  if (r === '30d') d.setDate(d.getDate() - 30);
-  else if (r === '90d') d.setDate(d.getDate() - 90);
+  if (r === '30d') d.setDate(d.getDate() - 29);
+  else if (r === '90d') d.setDate(d.getDate() - 89);
   else if (r === 'year') return `${d.getFullYear()}-01-01`;
   else return null;
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -74,6 +74,10 @@ function primerNombre(email: string): string {
   const local = email.split('@')[0] ?? email;
   const first = local.split(/[.\-_]/)[0] ?? local;
   return first.charAt(0).toUpperCase() + first.slice(1);
+}
+
+function contarOperaciones(rows: Compra[]): number {
+  return new Set(rows.map(c => c.numeroOperacion?.trim() || c.id)).size;
 }
 
 // ---------- pantalla ----------
@@ -119,6 +123,10 @@ export function CompraListScreen() {
       });
       setData(ordered);
       setCamposMap(Object.fromEntries(cs.map(c => [c.id, c])));
+    } catch (err) {
+      if (!opts?.silent) {
+        Alert.alert('No se pudo actualizar', err instanceof Error ? err.message : 'Revisá la conexión e intentá nuevamente.');
+      }
     } finally {
       setLoading(false);
     }
@@ -129,7 +137,7 @@ export function CompraListScreen() {
     return unsub;
   }, [nav, load]);
   useEffect(() => {
-    if (currentTab === 'menu') load({ silent: true });
+    if (currentTab === 'compras') load({ silent: true });
   }, [currentTab, load]);
 
   // Scope auto para operario: solo sus compras.
@@ -205,7 +213,8 @@ export function CompraListScreen() {
     );
     return keys.map(k => ({
       title: byCampo.get(k)!.campoNombre,
-      count: byCampo.get(k)!.items.length,
+      count: contarOperaciones(byCampo.get(k)!.items),
+      rowsCount: byCampo.get(k)!.items.length,
       totalKg: Math.round(byCampo.get(k)!.totalKg),
       data: byCampo.get(k)!.items,
     }));
@@ -307,12 +316,13 @@ export function CompraListScreen() {
     );
   };
 
-  const renderSectionHeader = ({ section }: { section: { title: string; count: number; totalKg: number } }) => (
+  const renderSectionHeader = ({ section }: { section: { title: string; count: number; rowsCount: number; totalKg: number } }) => (
     <View style={styles.sectionHeader}>
       <View style={{ flex: 1 }}>
         <Text style={styles.sectionTitle}>{section.title}</Text>
         <Text style={styles.sectionSub}>
-          {section.count} {section.count === 1 ? 'compra' : 'compras'}
+          {section.count} {section.count === 1 ? 'operación' : 'operaciones'}
+          {section.rowsCount !== section.count ? ` · ${section.rowsCount} renglones` : ''}
         </Text>
       </View>
       <View style={styles.sectionTotalBox}>
@@ -332,8 +342,8 @@ export function CompraListScreen() {
   const isoToday = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
   const aWeekAgo = new Date(today); aWeekAgo.setDate(today.getDate() - 6);
   const isoWeekAgo = `${aWeekAgo.getFullYear()}-${String(aWeekAgo.getMonth() + 1).padStart(2, '0')}-${String(aWeekAgo.getDate()).padStart(2, '0')}`;
-  const hoy = scopedData.filter(c => c.fecha === isoToday).length;
-  const semana = scopedData.filter(c => c.fecha >= isoWeekAgo).length;
+  const hoy = contarOperaciones(scopedData.filter(c => c.fecha === isoToday));
+  const semana = contarOperaciones(scopedData.filter(c => c.fecha >= isoWeekAgo));
   const novedad = pendientes > 0
     ? { emoji: '⚠️', text: `${pendientes} sin sync` }
     : (hoy > 0 ? { emoji: '🛒', text: `${hoy} hoy` }
@@ -435,7 +445,7 @@ export function CompraListScreen() {
 
   return (
     <View style={styles.safe}>
-      <ScreenHeader title="Compras" count={scopedData.length} countLabel="operaciones" novedad={novedad} />
+      <ScreenHeader title="Compras" count={contarOperaciones(scopedData)} countLabel="operaciones" novedad={novedad} />
 
       <SectionList
         style={{ flex: 1 }}

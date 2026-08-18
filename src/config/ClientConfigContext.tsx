@@ -27,6 +27,7 @@ import type {
   CompraCatalogos,
 } from './types';
 import { useRepository } from '@/data';
+import { useAuth } from '@/auth/context';
 
 const CACHE_PREFIX = 'asfion:cliente-config:';
 
@@ -53,28 +54,36 @@ interface ProviderProps {
 
 export function ClientConfigProvider({ config: override, children }: ProviderProps) {
   const repo = useRepository();
+  const { user, loading: authLoading } = useAuth();
   const [config, setConfig] = useState<ClientConfig>(override ?? ACTIVE_CONFIG);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fetchConfig = useCallback(async () => {
     if (override) return; // tests: nunca tocar el fetch
+    // No tocar Supabase hasta que Auth haya validado la sesión persistida.
+    // Antes este provider se montaba por fuera de Auth y `getCurrentUser()`
+    // intentaba refrescar un token viejo en cada arranque.
+    if (authLoading) return;
+    const clienteId = user?.clienteId;
+    if (!clienteId) {
+      setConfig(ACTIVE_CONFIG);
+      setLoading(false);
+      setError(null);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
       // 1) Cache primero — paint rápido con la última config conocida.
-      const user = await repo.getCurrentUser();
-      const clienteId = user?.clienteId;
-      if (clienteId) {
-        try {
-          const cached = await AsyncStorage.getItem(CACHE_PREFIX + clienteId);
-          if (cached) {
-            const parsed = JSON.parse(cached) as ClientConfig;
-            setConfig(parsed);
-          }
-        } catch {
-          // cache corrupto — lo ignoramos, fetch lo va a reemplazar
+      try {
+        const cached = await AsyncStorage.getItem(CACHE_PREFIX + clienteId);
+        if (cached) {
+          const parsed = JSON.parse(cached) as ClientConfig;
+          setConfig(parsed);
         }
+      } catch {
+        // cache corrupto — lo ignoramos, fetch lo va a reemplazar
       }
 
       // 2) Fetch fresco. El backend Supabase implementa getClienteConfig;
@@ -100,7 +109,7 @@ export function ClientConfigProvider({ config: override, children }: ProviderPro
     } finally {
       setLoading(false);
     }
-  }, [repo, override]);
+  }, [repo, override, authLoading, user?.clienteId]);
 
   // Boot: trigger del fetch una vez al montar.
   useEffect(() => {

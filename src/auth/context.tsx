@@ -71,12 +71,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const raw = await storageGet(USER_KEY);
         if (cancelado) return;
         if (raw) {
-          const u: Usuario = JSON.parse(raw);
-          setUser(u);
-          // Primamos el cache del backend con el user persistido (ver
-          // explicación abajo del por qué).
-          repo.setCurrentUser(u);
+          const persistido: Usuario = JSON.parse(raw);
+          try {
+            // Validar primero la sesión REAL de Supabase. Si el refresh token
+            // fue revocado/no existe, el backend lo limpia y devuelve null.
+            // Si estamos offline lanza: en ese caso conservamos el perfil
+            // local para que la app siga permitiendo carga en cola.
+            const vigente = await repo.getCurrentUser();
+            if (cancelado) return;
+            if (vigente) {
+              await storageSet(USER_KEY, JSON.stringify(vigente));
+              repo.setCurrentUser(vigente);
+              setUser(vigente);
+            } else {
+              await storageRemove(USER_KEY);
+              repo.setCurrentUser(null);
+              setUser(null);
+            }
+          } catch {
+            // Sin red: modo offline con el perfil persistido. Una sesión
+            // explícitamente inválida NO llega acá; el backend devuelve null.
+            repo.setCurrentUser(persistido);
+            setUser(persistido);
+          }
+        } else {
+          // Puede existir una sesión Supabase válida aunque se haya perdido
+          // solo nuestro perfil local (p. ej. tras actualizar la app).
+          try {
+            const vigente = await repo.getCurrentUser();
+            if (!cancelado && vigente) {
+              await storageSet(USER_KEY, JSON.stringify(vigente));
+              repo.setCurrentUser(vigente);
+              setUser(vigente);
+            }
+          } catch {
+            // Sin sesión o sin red y sin perfil local: mostrar Login.
+          }
         }
+      } catch {
+        // Perfil local corrupto: limpiarlo en lugar de bloquear el arranque.
+        await storageRemove(USER_KEY);
+        repo.setCurrentUser(null);
+        if (!cancelado) setUser(null);
       } finally {
         if (!cancelado) setLoading(false);
       }

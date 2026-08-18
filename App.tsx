@@ -1,12 +1,14 @@
 // Root de la app. Orden de providers importa:
-//   SafeAreaProvider → RepositoryProvider → ClientConfigProvider → NetworkProvider → AuthProvider → RootNavigator
+//   SafeAreaProvider → RepositoryProvider → NetworkProvider → AuthProvider → ClientConfigProvider → RootNavigator
 //
 // Antes ClientConfigProvider iba lo más afuera posible, pero al hacer el
 // rewrite a runtime fetch (post-multi-cliente) ahora depende del
 // RepositoryProvider para llamar a repo.getClienteConfig() — por eso el
 // orden está invertido: Repository PRIMERO, luego ClientConfig.
 //
-// AuthProvider sigue dependiendo del Repository para hacer login.
+// AuthProvider depende del Repository para hacer login. ClientConfigProvider
+// vive DESPUÉS de AuthProvider para no consultar Supabase con una sesión vieja
+// antes de que Auth termine de validar/restaurar el refresh token.
 
 import 'react-native-get-random-values'; // polyfill para uuid en RN
 import React from 'react';
@@ -24,14 +26,14 @@ export default function App() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <RepositoryProvider kind="supabase">
-          <ClientConfigProvider>
-            <NetworkProvider>
-              <AuthProvider>
+          <NetworkProvider>
+            <AuthProvider>
+              <ClientConfigProvider>
                 <RootNavigator />
                 <StatusBar style="light" />
-              </AuthProvider>
-            </NetworkProvider>
-          </ClientConfigProvider>
+              </ClientConfigProvider>
+            </AuthProvider>
+          </NetworkProvider>
         </RepositoryProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

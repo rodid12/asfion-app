@@ -123,6 +123,8 @@ export function useEventoForm<T extends Evento>(opts: UseEventoFormOpts<T>) {
   const [campoId, setCampoId] = useState<string>(user?.campoAsignadoId ?? '');
   const [fecha, setFecha] = useState<string>(hoyISO());
   const [campos, setCampos] = useState<Campo[]>([]);
+  const [camposLoading, setCamposLoading] = useState(true);
+  const [camposError, setCamposError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [cargandoExistente, setCargandoExistente] = useState<boolean>(isEdit);
   const [createdAtOriginal, setCreatedAtOriginal] = useState<string | undefined>();
@@ -139,12 +141,27 @@ export function useEventoForm<T extends Evento>(opts: UseEventoFormOpts<T>) {
   // Cargar lista de campos + auto-select si hay 1 solo
   // ─────────────────────────────────────────────────────────────────────────
   const loadCampos = useCallback(async () => {
-    const cs = await repo.listCampos();
-    setCampos(cs);
-    if (!campoId && cs.length === 1 && cs[0]) {
-      setCampoId(cs[0].id);
+    setCamposLoading(true);
+    setCamposError(null);
+    try {
+      const cs = await repo.listCampos();
+      setCampos(cs);
+      setCampoId(actual => {
+        // Respetar campo asignado; si quedó un id viejo que ya no existe,
+        // limpiarlo para que el usuario pueda elegir uno válido.
+        if (actual && cs.some(c => c.id === actual)) return actual;
+        if (user?.campoAsignadoId && cs.some(c => c.id === user.campoAsignadoId)) {
+          return user.campoAsignadoId;
+        }
+        return cs.length === 1 && cs[0] ? cs[0].id : '';
+      });
+    } catch (err) {
+      setCampos([]);
+      setCamposError(err instanceof Error ? err.message : 'No se pudieron cargar los campos.');
+    } finally {
+      setCamposLoading(false);
     }
-  }, [repo, campoId]);
+  }, [repo, user?.campoAsignadoId]);
 
   useEffect(() => { loadCampos(); }, [loadCampos]);
 
@@ -272,6 +289,7 @@ export function useEventoForm<T extends Evento>(opts: UseEventoFormOpts<T>) {
     campoId, setCampoId,
     fecha, setFecha,
     campos, campoActual,
+    camposLoading, camposError, reloadCampos: loadCampos,
     cargandoExistente,
     createdAtOriginal,
     originalRecord,
