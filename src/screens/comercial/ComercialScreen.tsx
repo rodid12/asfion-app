@@ -4,6 +4,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/auth/context';
 import { useClientConfig } from '@/config/ClientConfigContext';
@@ -32,29 +33,39 @@ export function ComercialScreen() {
 
   return (
     <View style={styles.root}>
-      {opciones.length > 1 && (
-        <View style={styles.switchWrap}>
-          <View style={styles.switcher} accessibilityRole="tablist">
-            <Opcion
-              label="Compras"
-              emoji="🛒"
-              activa={seccion === 'compras'}
-              onPress={() => setSeccion('compras')}
-            />
-            <Opcion
-              label="Ventas"
-              emoji="💰"
-              activa={seccion === 'ventas'}
-              onPress={() => setSeccion('ventas')}
-            />
+      {/* Un único header compacto. Antes el selector blanco estaba POR ENCIMA
+          del ScreenHeader de Compras; el segundo SafeArea agregaba nuevamente
+          la altura del notch y dejaba un bloque enorme. Ahora el selector es
+          el propio encabezado del módulo y los listados se montan embedded. */}
+      <View style={styles.headerWrap}>
+        <SafeAreaView edges={['top']}>
+          <View style={styles.headerInner}>
+            <View style={styles.switcher} accessibilityRole="tablist">
+              {puedeCompras && (
+                <Opcion
+                  label="Compras"
+                  emoji="🛒"
+                  activa={seccion === 'compras'}
+                  onPress={() => setSeccion('compras')}
+                />
+              )}
+              {puedeVentas && (
+                <Opcion
+                  label="Ventas"
+                  emoji="💰"
+                  activa={seccion === 'ventas'}
+                  onPress={() => setSeccion('ventas')}
+                />
+              )}
+            </View>
           </View>
-        </View>
-      )}
+        </SafeAreaView>
+      </View>
 
       <View style={styles.body}>
         {seccion === 'ventas' && puedeVentas
           ? <VentaListScreen />
-          : <CompraListScreen />}
+          : <CompraListScreen embedded />}
       </View>
     </View>
   );
@@ -87,37 +98,37 @@ function Opcion({
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bgLight },
-  switchWrap: {
+  headerWrap: { backgroundColor: colors.navyDeep },
+  headerInner: {
     paddingHorizontal: spacing.base,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.xs,
-    backgroundColor: colors.white,
+    paddingTop: 6,
+    paddingBottom: spacing.sm,
   },
   switcher: {
     flexDirection: 'row',
-    padding: 4,
+    padding: 3,
     borderRadius: radius.lg,
-    backgroundColor: colors.bgLight,
+    backgroundColor: 'rgba(255,255,255,0.10)',
     borderWidth: 1,
-    borderColor: colors.borderSoft,
+    borderColor: 'rgba(255,255,255,0.16)',
   },
   option: {
     flex: 1,
-    minHeight: 42,
+    minHeight: 36,
     borderRadius: radius.md,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.xs,
   },
-  optionActive: { backgroundColor: colors.navyDeep },
+  optionActive: { backgroundColor: colors.orange },
   optionPressed: { opacity: 0.82 },
-  optionEmoji: { fontSize: 16 },
+  optionEmoji: { fontSize: 14 },
   optionLabel: {
-    color: colors.textMuted,
+    color: colors.textOnDarkMuted,
     fontSize: fontSize.sm,
     fontWeight: fontWeight.bold as '700',
   },
-  optionLabelActive: { color: colors.white },
+  optionLabelActive: { color: colors.navyDeep },
   body: { flex: 1 },
 });

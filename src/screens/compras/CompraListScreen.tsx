@@ -82,7 +82,7 @@ function contarOperaciones(rows: Compra[]): number {
 
 // ---------- pantalla ----------
 
-export function CompraListScreen() {
+export function CompraListScreen({ embedded = false }: { embedded?: boolean } = {}) {
   const nav = useNavigation<Nav>();
   const repo = useRepository();
   const { user } = useAuth();
@@ -445,7 +445,9 @@ export function CompraListScreen() {
 
   return (
     <View style={styles.safe}>
-      <ScreenHeader title="Compras" count={contarOperaciones(scopedData)} countLabel="operaciones" novedad={novedad} />
+      {!embedded && (
+        <ScreenHeader title="Compras" count={contarOperaciones(scopedData)} countLabel="operaciones" novedad={novedad} />
+      )}
 
       <SectionList
         style={{ flex: 1 }}
