@@ -65,10 +65,7 @@ const TODOS_LOS_MODULOS: Modulo[] = [
   { key: 'pastoreo',   label: 'Pastoreo',   emoji: '🌾', descripcion: 'Movimiento de hacienda',                go: nav => nav.navigate('PastoreoForm', {}) },
   { key: 'compras',    label: 'Compras',    emoji: '🛒', descripcion: 'Compra de hacienda',                    go: nav => nav.navigate('CompraForm', {}) },
   { key: 'mediciones', label: 'Mediciones', emoji: '📏', descripcion: 'Pesadas, condición, forraje' },
-  // Teaser: aparece en el Home con badge PRÓXIMAMENTE para todos los clientes,
-  // sin requerir entrada en modulosHabilitados. Cuando se implemente Ventas,
-  // borrar el tease, agregar el `go` y dar de alta en config de cada cliente.
-  { key: 'ventas',     label: 'Ventas',     emoji: '💰', descripcion: 'Operaciones de venta de hacienda',     tease: true },
+  { key: 'ventas',     label: 'Ventas',     emoji: '💰', descripcion: 'Operaciones comerciales (solo admin)', go: nav => nav.navigate('VentaList') },
 ];
 
 // ---------- helpers ----------
@@ -106,8 +103,11 @@ export function HomeScreen() {
       // Tease modules se muestran siempre, independiente del clientConfig.
       // Los demás solo si están en modulosHabilitados.
       .filter(m => m.tease || clientConfig.modulosHabilitados.includes(m.key))
+      // El cliente confirmó que Ventas es administrado únicamente por los
+      // responsables; no se ofrece a operarios ni moderadores.
+      .filter(m => m.key !== 'ventas' || user?.rol === 'administrador')
       .map(m => ({ ...m, enabled: Boolean(m.go) })),
-    [clientConfig],
+    [clientConfig, user?.rol],
   );
 
   const [pendientes, setPendientes] = useState(0);
@@ -460,7 +460,7 @@ const styles = StyleSheet.create({
   // ---- TILES grid uniforme (2 columnas, todos navy con orange) ----
   // Filosofía: cada tile = mini-hero card. Navy bg + bubble naranja
   // grande + label blanco + desc en gris claro. Da color y "peso visual"
-  // a los 5 módulos por igual. Más memorable que 5 tiles blancos.
+  // a los módulos por igual. Más memorable que tiles blancos.
   modulesGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',

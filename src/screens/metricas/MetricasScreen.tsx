@@ -1,4 +1,4 @@
-// Pantalla Métricas — dashboard resumen de los 4 módulos productivos.
+// Pantalla Métricas — dashboard de módulos productivos y comerciales.
 //
 // Gráficos (inspirados en las pantallas del AppSheet original):
 //   PARICIONES
@@ -55,6 +55,7 @@ import type {
   Mortandad,
   Paricion,
   Pastoreo,
+  Venta,
 } from '@/data/types';
 import { useTabNav } from '@/navigation/TabContext';
 
@@ -69,8 +70,8 @@ const RANGO_LABEL: Record<Rango, string> = {
 // Sub-tab del dashboard. "resumen" muestra KPIs + cards con CTAs a cada módulo;
 // los demás muestran los gráficos detallados de ese módulo. Cuando sumemos
 // Medición, agregamos la key acá y la envolvemos igual.
-type MetricaTab = 'resumen' | 'pariciones' | 'lluvias' | 'mortandad' | 'pastoreo' | 'compras';
-const METRICA_TABS: MetricaTab[] = ['resumen', 'pariciones', 'lluvias', 'mortandad', 'pastoreo', 'compras'];
+type MetricaTab = 'resumen' | 'pariciones' | 'lluvias' | 'mortandad' | 'pastoreo' | 'compras' | 'ventas';
+const METRICA_TABS: MetricaTab[] = ['resumen', 'pariciones', 'lluvias', 'mortandad', 'pastoreo', 'compras', 'ventas'];
 const METRICA_LABEL: Record<MetricaTab, string> = {
   resumen: 'Resumen',
   pariciones: 'Pariciones',
@@ -78,6 +79,7 @@ const METRICA_LABEL: Record<MetricaTab, string> = {
   mortandad: 'Mortandad',
   pastoreo: 'Pastoreo',
   compras: 'Compras',
+  ventas: 'Ventas',
 };
 
 // Paletas accent por módulo — alineadas con las pantallas List de cada uno.
@@ -85,6 +87,19 @@ const MORTANDAD_ACCENT = colors.danger;
 const LLUVIAS_ACCENT = '#1F4E6A';
 const PASTOREO_ACCENT = colors.amber;
 const COMPRAS_ACCENT = colors.navy;
+const VENTAS_ACCENT = colors.orange;
+
+// Pluviómetro representativo acordado para Ganaderas. En campos nuevos sin
+// configuración usamos el promedio diario entre estaciones, nunca la suma.
+const PLUVIOMETRO_PRINCIPAL: Record<string, string> = {
+  QUIRQUINCHO: 'PUESTO',
+  AGISOT: 'S',
+  'ICO POZO': 'TANQUI',
+  PICAFLOR: 'PUESTO',
+  CAROLINA: 'CASCO',
+  PROGRESO: 'CASCO',
+  MARGARITA: 'CASCO',
+};
 
 // Categorías de hacienda en orden estable.
 const CATEGORIA_ORDEN: CategoriaHacienda[] = ['vaca', 'ternero', 'toro', 'novillo', 'vaquillona'];
@@ -117,6 +132,18 @@ function rangoDesde(r: Rango): string | null {
   return null;
 }
 
+function ventaCategoria(texto: string): string {
+  return texto.replace(/^\s*\d+(?:[.,]\d+)?\s*/, '').trim() || texto.trim();
+}
+
+function sexoVenta(texto: string): 'macho' | 'hembra' | undefined {
+  const t = texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const macho = /(^|[^a-z])(macho|machos|novillo|novillos|novillito|novillitos|toro|toros|tm\d*)($|[^a-z0-9])/.test(t);
+  const hembra = /(^|[^a-z])(hembra|hembras|vaquillona|vaquillonas|vaca|vacas|ternera|terneras|th\d*)($|[^a-z0-9])/.test(t);
+  if (macho === hembra) return undefined;
+  return macho ? 'macho' : 'hembra';
+}
+
 // Paleta por tipo de evento (consistente con los chips del form).
 const EVENTO_COLOR: Record<EventoParicion, string> = {
   Nacimiento: colors.orange,
@@ -140,28 +167,32 @@ export function MetricasScreen() {
   const [mortandad, setMortandad] = useState<Mortandad[]>([]);
   const [pastoreo, setPastoreo] = useState<Pastoreo[]>([]);
   const [compras, setCompras] = useState<Compra[]>([]);
+  const [ventas, setVentas] = useState<Venta[]>([]);
   const [campos, setCampos] = useState<Campo[]>([]);
   const [campaniasReproductivas, setCampaniasReproductivas] = useState<CampaniaReproductiva[]>([]);
   // Map circuitoId → {nombre, campoId} para los charts de pastoreo.
   // Cargamos circuitos de TODOS los campos visibles al entrar al tab.
   const [circuitosMap, setCircuitosMap] = useState<Record<string, { nombre: string; campoId: string; hectareas: number }>>({});
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [rango, setRango] = useState<Rango>('todo');
   const [metricaTab, setMetricaTab] = useState<MetricaTab>('resumen');
 
   // Patrón `cancelado` (audit 27-jun-2026): si el usuario navega fuera del
-  // tab antes de que terminen los 6 fetches en paralelo, abortamos los
+  // tab antes de que terminen los fetches en paralelo, abortamos los
   // setState. Sin esto el spinner se queda colgado y se mezclan datos
   // viejos con la próxima entrada al tab.
   const load = useCallback(async (cancelado: () => boolean = () => false) => {
     setLoading(true);
+    setLoadError(null);
     try {
-      const [evs, lls, ms, ps, cps, cs, camps] = await Promise.all([
+      const [evs, lls, ms, ps, cps, vts, cs, camps] = await Promise.all([
         repo.listEventos('paricion'),
         repo.listEventos('lluvia'),
         repo.listEventos('mortandad'),
         repo.listEventos('pastoreo'),
         repo.listEventos('compra'),
+        repo.listEventos('venta'),
         repo.listCampos(),
         repo.listCampaniasReproductivas(),
       ]);
@@ -171,6 +202,7 @@ export function MetricasScreen() {
       setMortandad(ms as Mortandad[]);
       setPastoreo(ps as Pastoreo[]);
       setCompras(cps as Compra[]);
+      setVentas(vts as Venta[]);
       setCampos(cs);
       setCampaniasReproductivas(camps);
       // Cargar todos los circuitos (un fetch por campo) — necesario para
@@ -182,6 +214,10 @@ export function MetricasScreen() {
         map[c.id] = { nombre: c.nombre, campoId: c.campoId, hectareas: c.hectareas };
       });
       setCircuitosMap(map);
+    } catch (err) {
+      if (!cancelado()) {
+        setLoadError(err instanceof Error ? err.message : 'No se pudieron cargar las métricas.');
+      }
     } finally {
       if (!cancelado()) setLoading(false);
     }
@@ -221,9 +257,9 @@ export function MetricasScreen() {
   // Aplicar rango.
   const filtered = useMemo(() => {
     const desde = rangoDesde(rango);
-    if (!desde) return scoped;
-    return scoped.filter(p => p.fecha >= desde);
-  }, [scoped, rango]);
+    if (!desde) return scopedCampania;
+    return scopedCampania.filter(p => p.fecha >= desde);
+  }, [scopedCampania, rango]);
 
   // Scope + rango para lluvias (mismo criterio que pariciones).
   const scopedLluvias = useMemo(() => {
@@ -258,7 +294,8 @@ export function MetricasScreen() {
       .sort((a, b) => a.nombre.localeCompare(b.nombre));
   }, [filteredLluviasRango, campos]);
 
-  // PROMEDIO entre pluviómetros por (campo, fecha).
+  // Una lectura representativa por (campo, fecha), igual que la web:
+  // pluviómetro principal configurado o promedio para campos sin mapeo.
   //
   // Cliente final: un campo puede tener varios pluviómetros (3+) y cae lluvia
   // DISTINTA en cada uno. Sumar todas las lecturas como hacíamos antes triple-
@@ -270,24 +307,30 @@ export function MetricasScreen() {
   // Futuro: agregar un flag `es_principal` en pluviometros y, si está
   // seteado, usar ese único valor en vez del promedio. Por ahora, promedio.
   const lluviaPorCampoFecha = useMemo(() => {
-    // bucket: campoId|fecha → [mm, mm, ...]
-    const buckets = new Map<string, number[]>();
+    const campoNombre = new Map(campos.map(c => [c.id, c.nombre.toUpperCase().trim()]));
+    // bucket: campoId|fecha → lecturas del día
+    const buckets = new Map<string, Lluvia[]>();
     filteredLluvias.forEach(l => {
       if (!Number.isFinite(l.milimetros)) return;
       const key = `${l.campoId}|${l.fecha}`;
       const arr = buckets.get(key) ?? [];
-      arr.push(l.milimetros);
+      arr.push(l);
       buckets.set(key, arr);
     });
     const out: Array<{ campoId: string; fecha: string; mm: number }> = [];
-    buckets.forEach((mms, key) => {
+    buckets.forEach((lecturas, key) => {
       const [campoId, fecha] = key.split('|');
       if (!campoId || !fecha) return;
-      const avg = mms.reduce((s, n) => s + n, 0) / mms.length;
+      const principal = PLUVIOMETRO_PRINCIPAL[campoNombre.get(campoId) ?? ''];
+      const elegidas = principal
+        ? lecturas.filter(l => (l.pluviometro ?? '').toUpperCase().trim() === principal)
+        : lecturas;
+      if (elegidas.length === 0) return;
+      const avg = elegidas.reduce((s, l) => s + l.milimetros, 0) / elegidas.length;
       out.push({ campoId, fecha, mm: avg });
     });
     return out;
-  }, [filteredLluvias]);
+  }, [filteredLluvias, campos]);
 
   // Scope + rango para mortandad.
   const scopedMortandad = useMemo(() => {
@@ -415,14 +458,16 @@ export function MetricasScreen() {
   );
 
   // ---------- 4. Terneros en pie ----------
-  // Aproximación: paridas - muertes de terneros (eventos Muerte).
+  // Fórmula DAX usada también en la web:
+  // nacimientos (sin Orejano) − causa "Muerte Señalado".
   const ternerosEnPie = useMemo(() => {
     const paridasPorCampo = new Map<string, number>();
     const muertesPorCampo = new Map<string, number>();
     scopedCampania.forEach(p => {
-      if (p.evento === 'Nacimiento') {
+      if (p.evento === 'Nacimiento' && p.sexo !== 'Orejano') {
         paridasPorCampo.set(p.campoId, (paridasPorCampo.get(p.campoId) ?? 0) + 1);
-      } else if (p.evento === 'Muerte') {
+      }
+      if (p.causaTipo === 'Muerte Señalado') {
         muertesPorCampo.set(p.campoId, (muertesPorCampo.get(p.campoId) ?? 0) + 1);
       }
     });
@@ -540,10 +585,14 @@ export function MetricasScreen() {
 
   // ---------- 7. Mortandad por campo ----------
   const mortandadPorCampo = useMemo(() => {
-    const counts = new Map<string, number>();
-    filteredMortandad.forEach(m => counts.set(m.campoId, (counts.get(m.campoId) ?? 0) + 1));
+    const counts = new Map<string, Set<string>>();
+    filteredMortandad.forEach(m => {
+      const set = counts.get(m.campoId) ?? new Set<string>();
+      set.add(m.caravanaNumero?.trim() || '__SIN_CARAVANA__');
+      counts.set(m.campoId, set);
+    });
     return campos
-      .map(c => ({ campo: c, count: counts.get(c.id) ?? 0 }))
+      .map(c => ({ campo: c, count: counts.get(c.id)?.size ?? 0 }))
       .filter(r => r.count > 0)
       .sort((a, b) => b.count - a.count);
   }, [filteredMortandad, campos]);
@@ -558,13 +607,15 @@ export function MetricasScreen() {
   // Vc Preñ, TernM, TernH, etc.) — agregamos dinámicamente en lugar de usar
   // el enum chico de antes.
   const mortandadPorCategoria = useMemo(() => {
-    const counts = new Map<string, number>();
+    const counts = new Map<string, Set<string>>();
     filteredMortandad.forEach(m => {
       const cat = m.categoria || 'Sin categoría';
-      counts.set(cat, (counts.get(cat) ?? 0) + 1);
+      const set = counts.get(cat) ?? new Set<string>();
+      set.add(m.caravanaNumero?.trim() || '__SIN_CARAVANA__');
+      counts.set(cat, set);
     });
     return Array.from(counts.entries())
-      .map(([categoria, count]) => ({ categoria, count }))
+      .map(([categoria, ids]) => ({ categoria, count: ids.size }))
       .sort((a, b) => b.count - a.count);
   }, [filteredMortandad]);
 
@@ -575,12 +626,14 @@ export function MetricasScreen() {
 
   // ---------- 9. Mortandad por causa ----------
   const mortandadPorCausa = useMemo(() => {
-    const counts = new Map<CausaMuerteTipo | 'Sin especificar', number>();
+    const counts = new Map<CausaMuerteTipo | 'Sin especificar', Set<string>>();
     filteredMortandad.forEach(m => {
       const key = m.causaTipo ?? 'Sin especificar';
-      counts.set(key, (counts.get(key) ?? 0) + 1);
+      const set = counts.get(key) ?? new Set<string>();
+      set.add(m.caravanaNumero?.trim() || '__SIN_CARAVANA__');
+      counts.set(key, set);
     });
-    return CAUSA_ORDEN.map(c => ({ causa: c, count: counts.get(c) ?? 0 })).filter(r => r.count > 0);
+    return CAUSA_ORDEN.map(c => ({ causa: c, count: counts.get(c)?.size ?? 0 })).filter(r => r.count > 0);
   }, [filteredMortandad]);
 
   const maxMortandadCausa = useMemo(
@@ -680,10 +733,10 @@ export function MetricasScreen() {
   // El campo "inversión" (precio × kg) se removió a pedido del cliente —
   // expone precios sensibles a usuarios fuera del equipo comercial.
   const comprasPorCampo = useMemo(() => {
-    const map = new Map<string, { campoId: string; count: number; kgDestino: number }>();
+    const map = new Map<string, { campoId: string; operaciones: Set<string>; kgDestino: number }>();
     filteredCompras.forEach(c => {
-      const entry = map.get(c.campoId) ?? { campoId: c.campoId, count: 0, kgDestino: 0 };
-      entry.count++;
+      const entry = map.get(c.campoId) ?? { campoId: c.campoId, operaciones: new Set<string>(), kgDestino: 0 };
+      entry.operaciones.add(c.numeroOperacion?.trim() || c.id);
       // kgNetosDestino es nullable post mig 0021 — compras "en tránsito"
       // sin pesaje destino no suman a totales (no son data real).
       const kgDest = c.kgNetosDestino != null && Number.isFinite(c.kgNetosDestino) ? c.kgNetosDestino : 0;
@@ -693,7 +746,7 @@ export function MetricasScreen() {
     return campos
       .map(cmp => {
         const e = map.get(cmp.id);
-        return e ? { campo: cmp, count: e.count, kgDestino: Math.round(e.kgDestino) } : null;
+        return e ? { campo: cmp, count: e.operaciones.size, kgDestino: Math.round(e.kgDestino) } : null;
       })
       .filter((r): r is { campo: Campo; count: number; kgDestino: number } => Boolean(r))
       .sort((a, b) => b.count - a.count);
@@ -709,7 +762,10 @@ export function MetricasScreen() {
   );
 
   // KPIs globales del sub-tab Compras.
-  const totalCompras = filteredCompras.length;
+  const totalCompras = useMemo(
+    () => new Set(filteredCompras.map(c => c.numeroOperacion?.trim() || c.id)).size,
+    [filteredCompras],
+  );
   const totalKgCompras = useMemo(
     () => Math.round(filteredCompras.reduce(
       (acc, c) => acc + (c.kgNetosDestino != null && Number.isFinite(c.kgNetosDestino) ? c.kgNetosDestino : 0),
@@ -744,11 +800,17 @@ export function MetricasScreen() {
       pctHembras: total > 0 ? Math.round((hembras / total) * 100) : 0,
     };
   }, [filteredCompras]);
-  // Estimación gruesa de cabezas compradas — parseamos cantCabYCat buscando
-  // números enteros y los sumamos. "83 machos. 27 hembras" → 110.
+  // Cabezas compradas: prioriza las columnas estructuradas y usa el texto
+  // libre solo para históricos. Así no terminamos sumando otros números que
+  // puedan aparecer en la descripción.
   const totalCabezasEstimadas = useMemo(() => {
     let total = 0;
     filteredCompras.forEach(c => {
+      const estructuradas = (c.totalMachos ?? 0) + (c.totalHembras ?? 0);
+      if (estructuradas > 0) {
+        total += estructuradas;
+        return;
+      }
       const txt = c.cantCabYCat ?? '';
       const matches = txt.match(/\d+/g);
       if (matches) {
@@ -758,15 +820,83 @@ export function MetricasScreen() {
     return total;
   }, [filteredCompras]);
 
-  const totalMortandad = filteredMortandad.length;
-  const totalMovimientos = filteredPastoreo.length;
-  // Animales "abiertos" = todavía en el lote (sin fechaSalida). Es el número
-  // operativamente más útil del módulo: dice cuántos animales hay activamente
-  // en lotes ahora mismo.
-  const totalAbiertos = useMemo(
-    () => filteredPastoreo.filter(p => !p.fechaSalida).length,
-    [filteredPastoreo],
+  // ====== VENTAS ======
+  // Información comercial sensible: únicamente el administrador la ve en la
+  // app. Los operarios y moderadores no reciben previews ni KPIs de ventas.
+  const scopedVentas = useMemo(
+    () => user?.rol === 'administrador' ? ventas : [],
+    [ventas, user?.rol],
   );
+  const filteredVentas = useMemo(() => {
+    const desde = rangoDesde(rango);
+    return desde ? scopedVentas.filter(v => v.fecha >= desde) : scopedVentas;
+  }, [scopedVentas, rango]);
+  const gruposVenta = useMemo(() => filteredVentas.flatMap(v => v.grupos), [filteredVentas]);
+  const ventasKpis = useMemo(() => {
+    let cabezas = 0, kgNetos = 0, precioPond = 0;
+    let machos = 0, hembras = 0, sinSexo = 0, importe = 0, conImporte = 0;
+    gruposVenta.forEach(g => {
+      cabezas += g.cabezas;
+      kgNetos += g.kgNetos;
+      precioPond += g.precio * g.kgNetos;
+      const sexo = sexoVenta(g.cantCabYCat);
+      if (sexo === 'macho') machos += g.cabezas;
+      else if (sexo === 'hembra') hembras += g.cabezas;
+      else sinSexo += g.cabezas;
+    });
+    filteredVentas.forEach(v => {
+      if (v.importeTotal != null && Number.isFinite(v.importeTotal)) {
+        importe += v.importeTotal;
+        conImporte++;
+      }
+    });
+    const clasificados = machos + hembras;
+    return {
+      ventas: filteredVentas.length, cabezas, kgNetos,
+      kgPromedio: cabezas > 0 ? kgNetos / cabezas : 0,
+      precioPromedio: kgNetos > 0 ? precioPond / kgNetos : 0,
+      machos, hembras, sinSexo,
+      pctMachos: clasificados > 0 ? Math.round(machos / clasificados * 100) : 0,
+      pctHembras: clasificados > 0 ? Math.round(hembras / clasificados * 100) : 0,
+      importe, conImporte,
+    };
+  }, [filteredVentas, gruposVenta]);
+  const ventasPorCategoria = useMemo(() => {
+    const map = new Map<string, { cabezas: number; kgNetos: number }>();
+    gruposVenta.forEach(g => {
+      const key = ventaCategoria(g.cantCabYCat) || 'Sin categoría';
+      const cur = map.get(key) ?? { cabezas: 0, kgNetos: 0 };
+      cur.cabezas += g.cabezas;
+      cur.kgNetos += g.kgNetos;
+      map.set(key, cur);
+    });
+    return [...map.entries()].map(([categoria, v]) => ({ categoria, ...v }))
+      .sort((a, b) => b.cabezas - a.cabezas);
+  }, [gruposVenta]);
+  const maxVentasCategoria = useMemo(
+    () => ventasPorCategoria.reduce((m, r) => Math.max(m, r.cabezas), 0),
+    [ventasPorCategoria],
+  );
+
+  // Misma medida que Power BI/web: DISTINCTCOUNT(N° Caravana), incluyendo
+  // todos los blanks como un único valor.
+  const totalMortandad = useMemo(() => {
+    const ids = new Set<string>();
+    filteredMortandad.forEach(m => ids.add(m.caravanaNumero?.trim() || '__SIN_CARAVANA__'));
+    return ids.size;
+  }, [filteredMortandad]);
+  const totalMovimientos = filteredPastoreo.length;
+  // Animales "abiertos" = suma de cabezas en stays sin fecha de salida.
+  // Antes contábamos registros (un movimiento con 120 animales valía 1).
+  const abiertosAhora = useMemo(() => {
+    const abiertos = filteredPastoreo.filter(p => !p.fechaSalida);
+    const conCantidad = abiertos.filter(p => p.animales != null && Number.isFinite(p.animales));
+    return {
+      total: conCantidad.reduce((s, p) => s + (p.animales ?? 0), 0),
+      sinCantidad: abiertos.length > 0 && conCantidad.length === 0,
+    };
+  }, [filteredPastoreo]);
+  const totalAbiertos = abiertosAhora.total;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -779,17 +909,26 @@ export function MetricasScreen() {
           </Text>
         </View>
         <View style={styles.headerStatWrap}>
-          <Text style={styles.headerStat}>
+          <Text
+            style={styles.headerStat}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.45}
+          >
             {headerStatValue(metricaTab, {
               totalEventos,
               totalMM,
               totalMortandad,
+              totalMortandadRegistros: filteredMortandad.length,
               totalMovimientos,
               totalCompras,
+              totalComprasRegistros: filteredCompras.length,
+              totalVentas: ventasKpis.ventas,
+              totalVentasRegistros: filteredVentas.length,
               // En Resumen sumamos los conteos crudos de cada módulo (no los
               // KPIs de "mm" o equivalentes que son magnitudes distintas).
               totalLluvias: filteredLluvias.length,
-            })}
+            }).toLocaleString('es-AR')}
           </Text>
           <Text style={styles.headerStatLbl}>
             {headerStatLabel(metricaTab)}
@@ -806,11 +945,10 @@ export function MetricasScreen() {
           sin scroll. shrink + numberOfLines + adjustsFontSizeToFit blindan
           el caso de un device extra-angosto o usuario con accessibility
           font scale alto. */}
-      {/* Sub-tabs en 2 filas (feedback Ro):
+      {/* Sub-tabs: Resumen arriba y módulos en filas de hasta 3 chips.
             Fila 1: "Resumen" full-width — es la vista por default y la más
                     importante (resumen ejecutivo), merece su propia fila.
-            Fila 2: los 5 módulos (Pariciones / Lluvias / Mortandad /
-                    Pastoreo / Compras) reparten el ancho parejo.
+            Debajo: los módulos reparten el ancho en una grilla legible.
           Esta separación da:
             (a) más ancho a cada chip de módulo (era apretado con 6 chips)
             (b) jerarquía visual: Resumen es "primero entre iguales"
@@ -828,7 +966,10 @@ export function MetricasScreen() {
           </Text>
         </Pressable>
         <View style={styles.subTabModuleRow}>
-          {METRICA_TABS.filter(t => t !== 'resumen').map(t => (
+          {METRICA_TABS
+            .filter(t => t !== 'resumen')
+            .filter(t => t !== 'ventas' || user?.rol === 'administrador')
+            .map(t => (
             <Pressable
               key={t}
               onPress={() => setMetricaTab(t)}
@@ -872,10 +1013,22 @@ export function MetricasScreen() {
           <RefreshControl refreshing={loading} onRefresh={load} tintColor={colors.navy} />
         }
       >
+        {loadError && (
+          <View style={styles.errorBanner}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.errorTitle}>No se pudieron actualizar las métricas</Text>
+              <Text style={styles.errorText} numberOfLines={2}>{loadError}</Text>
+            </View>
+            <Pressable onPress={() => void load()} style={styles.errorRetry} hitSlop={6}>
+              <Text style={styles.errorRetryText}>Reintentar</Text>
+            </Pressable>
+          </View>
+        )}
+
         {/* ============ RESUMEN ============ */}
         {metricaTab === 'resumen' && (
           <>
-            {/* KPI tiles — mix de los 4 módulos. 2 filas de 2 para que entren
+            {/* KPI tiles — resumen de los módulos. 2 filas de 2 para que entren
                 cómodas en iPhone sin que las cifras grandes se corten. */}
             <View style={styles.kpiRow}>
               <Kpi value={totalNacimientos} label="NACIMIENTOS" color={colors.orange} />
@@ -886,7 +1039,12 @@ export function MetricasScreen() {
               {/* En el nuevo modelo "stay log" no existe cabezas movidas;
                   el conteo natural es animales con pastoreo abierto AHORA
                   (todavía en un lote). Es lo más operativamente útil. */}
-              <Kpi value={totalAbiertos} label="EN LOTE AHORA" color={PASTOREO_ACCENT} />
+              <Kpi
+                value={totalAbiertos}
+                label="EN LOTE AHORA"
+                color={PASTOREO_ACCENT}
+                empty={abiertosAhora.sinCantidad}
+              />
             </View>
 
             {/* Card Pariciones — preview con top 3 campos + CTA */}
@@ -975,6 +1133,25 @@ export function MetricasScreen() {
               ctaLabel="Ver detalle de compras →"
               onCta={() => setMetricaTab('compras')}
             />
+
+            {user?.rol === 'administrador' && (
+              <SummaryCard
+                title="Ventas"
+                stat={ventasKpis.ventas}
+                statLabel={ventasKpis.ventas === 1 ? 'venta' : 'ventas'}
+                accent={VENTAS_ACCENT}
+                previewLabel="3 categorías principales en el rango"
+                rows={ventasPorCategoria.slice(0, 3).map(r => ({
+                  label: r.categoria,
+                  value: r.cabezas,
+                  max: maxVentasCategoria,
+                  valueLabel: `${r.cabezas.toLocaleString('es-AR')} cab`,
+                }))}
+                empty={ventasPorCategoria.length === 0 ? 'Sin ventas en el rango' : undefined}
+                ctaLabel="Ver detalle de ventas →"
+                onCta={() => setMetricaTab('ventas')}
+              />
+            )}
           </>
         )}
 
@@ -1055,7 +1232,7 @@ export function MetricasScreen() {
             <Section
               title="Terneros en pie"
               subtitle="Por campo"
-              footer="Aproximado: nacimientos − muertes. El conteo real requiere el módulo Mortandad."
+              footer="Fórmula Power BI: nacimientos (sin Orejano) − Muerte Señalado."
             >
               {ternerosEnPie.length === 0 ? (
                 <Empty msg="Sin datos" />
@@ -1244,6 +1421,7 @@ export function MetricasScreen() {
                     : 'TOP CATEGORÍA'
                 }
                 color={colors.terracota}
+                empty={!categoriaTop}
               />
             </View>
 
@@ -1376,7 +1554,12 @@ export function MetricasScreen() {
 
             <View style={styles.kpiRow}>
               <Kpi value={totalMovimientos} label="MOVIMIENTOS" color={PASTOREO_ACCENT} />
-              <Kpi value={totalAbiertos} label="EN LOTE AHORA" color={colors.navy} />
+              <Kpi
+                value={totalAbiertos}
+                label="EN LOTE AHORA"
+                color={colors.navy}
+                empty={abiertosAhora.sinCantidad}
+              />
               <Kpi value={movimientosPorCampo.length} label="CAMPOS" color={colors.terracota} />
             </View>
 
@@ -1403,14 +1586,14 @@ export function MetricasScreen() {
             </Section>
 
             {/* Drill por circuito (Campo → Circuito → Fecha).
-                Top 12 circuitos con más movimientos en el rango. El label
+                12 circuitos con más movimientos en el rango. El label
                 muestra "Circuito · Campo" porque distintos campos pueden
                 tener nombres de circuito iguales (ej: "5" en Agisot vs "5"
                 en otro campo).
                 valueLabel incluye registros y abiertos: "10 (3 abiertos)". */}
             <Section
               title="Movimientos por circuito"
-              subtitle="Top 12 circuitos por actividad"
+              subtitle="12 circuitos con más actividad"
               footer="Tappear el listado de Pastoreo para ver el detalle por circuito."
             >
               {pastoreoPorCircuito.length === 0 ? (
@@ -1478,17 +1661,12 @@ export function MetricasScreen() {
             {composicionMH.total > 0 && (
               <View style={styles.kpiRow}>
                 <Kpi
-                  value={`${composicionMH.pctMachos}% / ${composicionMH.pctHembras}%`}
-                  label="MACHOS / HEMBRAS"
+                  value={`${composicionMH.machos.toLocaleString('es-AR')} (${composicionMH.pctMachos}%)`}
+                  label="MACHOS"
                   color={colors.orange}
                 />
                 <Kpi
-                  value={composicionMH.machos}
-                  label="MACHOS"
-                  color={colors.navy}
-                />
-                <Kpi
-                  value={composicionMH.hembras}
+                  value={`${composicionMH.hembras.toLocaleString('es-AR')} (${composicionMH.pctHembras}%)`}
                   label="HEMBRAS"
                   color={colors.navy}
                 />
@@ -1541,6 +1719,73 @@ export function MetricasScreen() {
           </>
         )}
 
+        {/* ============ VENTAS (solo administrador) ============ */}
+        {metricaTab === 'ventas' && user?.rol === 'administrador' && (
+          <>
+            <View style={styles.kpiRow}>
+              <Kpi value={ventasKpis.ventas} label="VENTAS" color={VENTAS_ACCENT} />
+              <Kpi value={ventasKpis.cabezas} label="CABEZAS" color={colors.navy} />
+              <Kpi value={Math.round(ventasKpis.kgNetos)} label="KG NETOS" color={colors.amber} />
+            </View>
+            <View style={styles.kpiRow}>
+              <Kpi value={ventasKpis.kgPromedio.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} label="KG PROMEDIO" color={colors.navy} />
+              <Kpi value={`$${ventasKpis.precioPromedio.toLocaleString('es-AR', { maximumFractionDigits: 2 })}`} label="PRECIO PROM." color={colors.terracota} />
+            </View>
+            {(ventasKpis.machos + ventasKpis.hembras) > 0 && (
+              <View style={styles.kpiRow}>
+                <Kpi value={`${ventasKpis.machos.toLocaleString('es-AR')} (${ventasKpis.pctMachos}%)`} label="MACHOS" color={colors.orange} />
+                <Kpi value={`${ventasKpis.hembras.toLocaleString('es-AR')} (${ventasKpis.pctHembras}%)`} label="HEMBRAS" color={colors.navy} />
+              </View>
+            )}
+            <Section title="Cabezas por categoría" subtitle="Totales por denominación; no por venta">
+              {ventasPorCategoria.length === 0 ? (
+                <Empty msg="Sin ventas cargadas" />
+              ) : (
+                <View style={styles.chartBody}>
+                  {ventasPorCategoria.map(r => (
+                    <HBar
+                      key={r.categoria}
+                      label={r.categoria}
+                      value={r.cabezas}
+                      max={maxVentasCategoria}
+                      color={VENTAS_ACCENT}
+                      valueLabel={`${r.cabezas.toLocaleString('es-AR')} cab`}
+                    />
+                  ))}
+                </View>
+              )}
+            </Section>
+            <Section title="Kg netos por categoría" subtitle="Desbaste fijo del 8% aplicado a kg brutos">
+              {ventasPorCategoria.length === 0 ? (
+                <Empty msg="Sin ventas cargadas" />
+              ) : (
+                <View style={styles.chartBody}>
+                  {ventasPorCategoria.map(r => (
+                    <HBar
+                      key={r.categoria}
+                      label={r.categoria}
+                      value={r.kgNetos}
+                      max={Math.max(...ventasPorCategoria.map(x => x.kgNetos), 0)}
+                      color={colors.amber}
+                      valueLabel={`${Math.round(r.kgNetos).toLocaleString('es-AR')} kg`}
+                    />
+                  ))}
+                </View>
+              )}
+            </Section>
+            <Section title="Importe informado" subtitle="Manual; la app nunca lo calcula desde precio y kg">
+              <View style={styles.kpiRow}>
+                <Kpi
+                  value={ventasKpis.conImporte > 0 ? `$${Math.round(ventasKpis.importe).toLocaleString('es-AR')}` : '—'}
+                  label={`${ventasKpis.conImporte} DE ${ventasKpis.ventas} VENTAS`}
+                  color={colors.terracota}
+                  empty={ventasKpis.conImporte === 0}
+                />
+              </View>
+            </Section>
+          </>
+        )}
+
         <View style={{ height: spacing.xxxl }} />
       </ScrollView>
     </SafeAreaView>
@@ -1552,8 +1797,8 @@ export function MetricasScreen() {
 // Helper: cifra grande del header según el sub-tab activo. Cambia de contexto
 // para que el "stat principal" sea siempre relevante al módulo elegido.
 //
-// IMPORTANTE: en modo "resumen" sumamos los registros de los 4 módulos
-// (pariciones + lluvias + mortandad + pastoreo). Antes mostrábamos solo
+// IMPORTANTE: en modo "resumen" sumamos los registros de todos los módulos
+// visibles, incluida Ventas para administradores. Antes mostrábamos solo
 // totalEventos (= pariciones), lo que era confuso: el header decía "13
 // EVENTOS" pero ignoraba lluvias/mortandad/pastoreo. Ahora el número refleja
 // TODO lo cargado en el rango, y el label cambia a "REGISTROS" para no
@@ -1564,9 +1809,13 @@ function headerStatValue(
     totalEventos: number;
     totalMM: number;
     totalMortandad: number;
+    totalMortandadRegistros: number;
     totalLluvias: number;
     totalMovimientos: number;
     totalCompras: number;
+    totalComprasRegistros: number;
+    totalVentas: number;
+    totalVentasRegistros: number;
   },
 ): number {
   switch (tab) {
@@ -1577,13 +1826,15 @@ function headerStatValue(
     // es el conteo natural (cabezas movidas ya no existe).
     case 'pastoreo':   return totals.totalMovimientos;
     case 'compras':    return totals.totalCompras;
+    case 'ventas':     return totals.totalVentas;
     case 'resumen':
       return (
         totals.totalEventos +
         totals.totalLluvias +
-        totals.totalMortandad +
+        totals.totalMortandadRegistros +
         totals.totalMovimientos +
-        totals.totalCompras
+        totals.totalComprasRegistros +
+        totals.totalVentasRegistros
       );
   }
 }
@@ -1595,6 +1846,7 @@ function headerStatLabel(tab: MetricaTab): string {
     case 'mortandad':  return 'muertes';
     case 'pastoreo':   return 'movimientos';
     case 'compras':    return 'compras';
+    case 'ventas':     return 'ventas';
     // En "Resumen" usamos "registros" porque sumamos eventos de TODOS los
     // módulos — no son solo pariciones. "Registros" es genérico y honesto.
     case 'resumen':    return 'registros';
@@ -1637,6 +1889,7 @@ function SummaryCard({
   empty,
   ctaLabel,
   onCta,
+  previewLabel = '3 campos principales en el rango',
 }: {
   title: string;
   stat: number;
@@ -1646,16 +1899,24 @@ function SummaryCard({
   empty?: string;
   ctaLabel: string;
   onCta: () => void;
+  previewLabel?: string;
 }) {
   return (
     <View style={styles.section}>
       <View style={styles.summaryHead}>
         <View style={{ flex: 1 }}>
           <Text style={styles.sectionTitle}>{title}</Text>
-          <Text style={styles.sectionSub}>Top 3 campos en el rango</Text>
+          <Text style={styles.sectionSub}>{previewLabel}</Text>
         </View>
         <View style={styles.summaryStatWrap}>
-          <Text style={[styles.summaryStat, { color: accent }]}>{stat}</Text>
+          <Text
+            style={[styles.summaryStat, { color: accent }]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.4}
+          >
+            {stat.toLocaleString('es-AR')}
+          </Text>
           <Text style={styles.summaryStatLbl}>{statLabel}</Text>
         </View>
       </View>
@@ -1686,28 +1947,40 @@ function SummaryCard({
 
 // Kpi — tile compacto con número + label.
 //
-// Cuando value === 0 mostramos "—" en lugar del cero literal: visualmente
-// "0 MUERTES" o "0 CABEZAS MOV." se leían como "valor faltante / sin datos"
-// y al peón le pesaba más que la ausencia. El guión largo es el patrón
-// estándar de "no aplica / aún no hay" y deja claro que no es un error.
-// Si más adelante queremos forzar el cero literal en algún caso, agregamos
-// un prop `showZero` y listo.
-function Kpi({ value, label, color }: { value: number | string; label: string; color: string }) {
+// Cero es un resultado válido (especialmente "0 muertes") y se muestra como
+// tal. `empty` se usa únicamente cuando el dato realmente no existe.
+function Kpi({
+  value,
+  label,
+  color,
+  empty = false,
+}: {
+  value: number | string;
+  label: string;
+  color: string;
+  empty?: boolean;
+}) {
   // Rediseño post-rebrand: card blanca + strip lateral 4px del color del KPI,
   // mismo patrón que StatCard del Home — da consistencia visual entre las
   // dos pantallas principales de la app.
   //
   // value acepta number o string — string para KPIs derivados (ej. "62% / 38%"
-  // de Machos/Hembras en Compras). Empty = 0 numérico o string vacío.
-  const isEmpty = value === 0 || value === '';
+  // de Machos/Hembras en Compras).
+  const isEmpty = empty || value === '';
   const stripColor = isEmpty ? colors.borderSoft : color;
   const valueColor = isEmpty ? colors.textMuted : color;
+  const displayValue = typeof value === 'number' ? value.toLocaleString('es-AR') : value;
   return (
     <View style={styles.kpi}>
       <View style={[styles.kpiStrip, { backgroundColor: stripColor }]} />
       <View style={styles.kpiBody}>
-        <Text style={[styles.kpiVal, { color: valueColor }]}>
-          {isEmpty ? '—' : value}
+        <Text
+          style={[styles.kpiVal, { color: valueColor }]}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.3}
+        >
+          {isEmpty ? '—' : displayValue}
         </Text>
         <Text style={styles.kpiLbl}>{label}</Text>
       </View>
@@ -1741,7 +2014,14 @@ function HBar({
           ]}
         />
       </View>
-      <Text style={styles.hbarValue}>{valueLabel ?? String(value)}</Text>
+      <Text
+        style={styles.hbarValue}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.45}
+      >
+        {valueLabel ?? value.toLocaleString('es-AR')}
+      </Text>
     </View>
   );
 }
@@ -1793,7 +2073,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
   },
 
-  // Sub-tab bar — segmented (sin scroll), 5 chips con flex:1.
+  // Sub-tab bar — segmented sin scroll.
   //
   // Cambio respecto del approach anterior (ScrollView horizontal): los chips
   // se solapaban porque "Pariciones" y "Mortandad" son largos y al
@@ -1802,8 +2082,7 @@ const styles = StyleSheet.create({
   // y reparten el ancho disponible parejito. El padding horizontal lo bajamos
   // a 4 para que las palabras largas no se compriman, y la fuente se autoajusta
   // hasta 85% si el device es muy angosto.
-  // Layout en 2 filas: Resumen (full-width arriba) + 5 chips de módulos abajo.
-  // Da más ancho a cada módulo y jerarquía visual al Resumen.
+  // Resumen ocupa todo el ancho; los módulos se acomodan en filas de tres.
   subTabBarCol: {
     paddingHorizontal: spacing.base,
     paddingTop: spacing.sm,
@@ -1841,13 +2120,16 @@ const styles = StyleSheet.create({
     color: colors.white,
   },
 
-  // Fila de 5 chips: Pariciones / Lluvias / Mortandad / Pastoreo / Compras.
+  // Grilla de módulos: 3 por fila para que Ventas no comprima los nombres.
   subTabModuleRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 6,
   },
   subTab: {
-    flex: 1,
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: '30%',
     paddingVertical: 11,
     paddingHorizontal: 4,
     alignItems: 'center',
@@ -1868,9 +2150,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   subTabTxt: {
-    // Subido a 14pt — antes era 13 para que entraran 6 chips. Con la
-    // separación de Resumen en su propia fila, los 5 módulos restantes
-    // tienen más ancho y caben con texto más grande / legible.
+    // Tres por fila: incluso Mortandad queda legible en iPhone Mini.
     fontSize: 14,
     color: colors.textMuted,
     fontWeight: fontWeight.semibold as '600',
@@ -1946,6 +2226,38 @@ const styles = StyleSheet.create({
     padding: spacing.base,
     paddingTop: 0,
     gap: spacing.base,
+  },
+
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.danger,
+    backgroundColor: '#FFF1F0',
+  },
+  errorTitle: {
+    color: colors.danger,
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.bold as '700',
+  },
+  errorText: {
+    color: colors.textMuted,
+    fontSize: fontSize.xs,
+    marginTop: 2,
+  },
+  errorRetry: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.round,
+    backgroundColor: colors.danger,
+  },
+  errorRetryText: {
+    color: colors.white,
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.bold as '700',
   },
 
   // KPIs

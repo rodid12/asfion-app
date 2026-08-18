@@ -87,6 +87,7 @@ import type {
   LluviaCanonical,
   MortandadCanonical,
   PastoreoCanonical,
+  VentaCanonical,
 } from './types.canonical';
 export type {
   VacasGrupo,
@@ -184,9 +185,19 @@ export interface Compra extends EventoBase, Omit<CompraCanonical, keyof EventoBa
   tipo: 'compra';
 }
 
+// ====== Módulo Ventas ======
+//
+// Una venta es una operación única con 1..4 grupos/categorías. Los cálculos
+// físicos se muestran en el form y la DB los normaliza otra vez al guardar.
+export interface Venta extends EventoBase, Omit<VentaCanonical, keyof EventoBase> {
+  tipo: 'venta';
+}
+
+export type { VentaGrupoCanonical as VentaGrupo } from './types.canonical';
+
 // ====== Union type para el repositorio genérico ======
 
-export type Evento = Paricion | Lluvia | Mortandad | Pastoreo | Medicion | Compra;
+export type Evento = Paricion | Lluvia | Mortandad | Pastoreo | Medicion | Compra | Venta;
 export type TipoEvento = Evento['tipo'];
 
 // ====== Subscription / billing state ======

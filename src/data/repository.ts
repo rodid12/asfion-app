@@ -119,6 +119,7 @@ export class Repository {
   // background para refrescar. Resultado: no se ve más el spinner cada
   // vez que volvés a la tab, salvo en el primer arranque del día.
   private listCache = new Map<string, Evento[]>();
+  private userScope = '';
 
   private cacheKey(tipo: TipoEvento, filters?: EventoFilters): string {
     return JSON.stringify([tipo, filters ?? {}]);
@@ -138,10 +139,27 @@ export class Repository {
   }
 
   // Auth passthroughs
-  login = (email: string, password: string) => this.backend.login(email, password);
+  async login(email: string, password: string): Promise<Usuario> {
+    const user = await this.backend.login(email, password);
+    this.setCurrentUser(user);
+    return user;
+  }
   getCurrentUser = () => this.backend.getCurrentUser();
-  logout = () => this.backend.logout();
-  setCurrentUser = (user: Usuario | null) => this.backend.setCurrentUser?.(user);
+  async logout(): Promise<void> {
+    await this.backend.logout();
+    this.setCurrentUser(null);
+  }
+  setCurrentUser = (user: Usuario | null) => {
+    const nextScope = user ? `${user.clienteId ?? ''}:${user.email.trim().toLowerCase()}` : '';
+    if (nextScope !== this.userScope) {
+      // El Repository vive por encima de AuthProvider. Sin limpiar este Map,
+      // una segunda persona podía ver por un instante la lista cacheada de la
+      // sesión anterior en un dispositivo compartido.
+      this.listCache.clear();
+      this.userScope = nextScope;
+    }
+    this.backend.setCurrentUser?.(user);
+  };
 
   // Subscription / billing
   getSubscription = () => this.backend.getSubscription();
@@ -280,6 +298,23 @@ function validar(e: Evento) {
     }
     if (e.evento === 'Muerte' && !e.sexo) {
       throw new Error('Falta sexo para muerte');
+    }
+  }
+
+  if (e.tipo === 'venta') {
+    if (!Array.isArray(e.grupos) || e.grupos.length < 1 || e.grupos.length > 4) {
+      throw new Error('La venta debe tener entre 1 y 4 categorías');
+    }
+    if (!e.consignado || !e.titular || !e.pago || !e.frigorifico || !e.numeroDte || !e.correlativo || !e.tropa || !e.observaciones) {
+      throw new Error('Faltan datos comerciales obligatorios de la venta');
+    }
+    for (const [index, g] of e.grupos.entries()) {
+      if (!/^\s*\d+/.test(g.cantCabYCat)) {
+        throw new Error(`La categoría ${index + 1} debe comenzar con la cantidad de animales`);
+      }
+      if (!Number.isFinite(g.kgBrutos) || g.kgBrutos <= 0 || !Number.isFinite(g.precio) || g.precio <= 0) {
+        throw new Error(`Kg brutos o precio inválido en la categoría ${index + 1}`);
+      }
     }
   }
 }

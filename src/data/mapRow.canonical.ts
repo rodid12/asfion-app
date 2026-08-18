@@ -46,6 +46,7 @@ import type {
   MortandadCanonical,
   PastoreoCanonical,
   CompraCanonical,
+  VentaCanonical,
 } from './types.canonical';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -278,4 +279,23 @@ export const COMPRA_SCHEMA: Schema<CompraCanonical> = {
   kmRecorrido:     { from: 'km_recorrido',      type: 'number?'     },
   observaciones:   { from: 'observaciones',     type: 'string?'     },
   createdAt:       { from: 'created_at',        type: 'string'      },
+};
+
+export const VENTA_SCHEMA: Schema<VentaCanonical> = {
+  id:            { from: 'id',             type: 'string'  },
+  cliente_id:    { from: 'cliente_id',     type: 'string?' },
+  fecha:         { from: 'fecha',          type: 'string'  },
+  campoId:       { from: 'campo_id',       type: 'string'  },
+  usuarioEmail:  { from: 'usuario_email',  type: 'string'  },
+  grupos:        { from: 'grupos',         type: 'as-is'   },
+  consignado:    { from: 'consignado',     type: 'string'  },
+  titular:       { from: 'titular',        type: 'string'  },
+  pago:          { from: 'pago',           type: 'string'  },
+  frigorifico:   { from: 'frigorifico',    type: 'string'  },
+  numeroDte:     { from: 'numero_dte',     type: 'string'  },
+  correlativo:   { from: 'correlativo',    type: 'string'  },
+  tropa:         { from: 'tropa',          type: 'string'  },
+  importeTotal:  { from: 'importe_total',  type: 'number?' },
+  observaciones: { from: 'observaciones',  type: 'string'  },
+  createdAt:     { from: 'created_at',      type: 'string'  },
 };

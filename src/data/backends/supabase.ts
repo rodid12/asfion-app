@@ -29,6 +29,7 @@ import type {
   SubscriptionStatus,
   TipoEvento,
   Usuario,
+  Venta,
 } from '../types';
 import type {
   EventoFilters,
@@ -51,6 +52,7 @@ import {
   MORTANDAD_SCHEMA,
   PASTOREO_SCHEMA,
   COMPRA_SCHEMA,
+  VENTA_SCHEMA,
   CAMPANIA_REPRODUCTIVA_SCHEMA,
 } from '../mapRow.canonical';
 import type {
@@ -64,6 +66,7 @@ import type {
   MortandadCanonical,
   PastoreoCanonical,
   CompraCanonical,
+  VentaCanonical,
   CampaniaReproductivaCanonical,
 } from '../types.canonical';
 
@@ -76,7 +79,8 @@ export interface SupabaseBackendConfig {
   anonKey: string;
 }
 
-const PENDING_KEY = 'asfion.supabase.pending.v1';
+const LEGACY_PENDING_KEY = 'asfion.supabase.pending.v1';
+const PENDING_PREFIX = 'asfion.supabase.pending.v2:';
 
 // =============================================================================
 // Error tipado: sesión expirada / problemas de auth
@@ -130,6 +134,15 @@ export function looksLikeRlsBlock(message: string): boolean {
     m.includes('violates row level security') ||
     m.includes('new row violates') ||
     m.includes('rls')
+  );
+}
+
+function tablaOpcionalNoExiste(tipo: TipoEvento, error: { message?: string; code?: string }): boolean {
+  if (tipo !== 'venta') return false;
+  const msg = String(error.message ?? '').toLowerCase();
+  return (
+    error.code === '42P01' || error.code === 'PGRST205' ||
+    msg.includes('does not exist') || msg.includes('relation') || msg.includes('schema cache')
   );
 }
 
@@ -352,6 +365,37 @@ function compraToRow(c: any, clienteId: string) {
   };
 }
 
+// ====== Ventas (migration 0031) ======
+
+function rowToVenta(r: any): Evento {
+  return {
+    ...mapRow<VentaCanonical>(r, VENTA_SCHEMA),
+    tipo: 'venta',
+    syncState: 'synced',
+  } as Venta;
+}
+
+function ventaToRow(v: Venta, clienteId: string) {
+  return {
+    id: v.id,
+    cliente_id: clienteId,
+    campo_id: v.campoId,
+    usuario_email: v.usuarioEmail,
+    fecha: v.fecha,
+    grupos: v.grupos,
+    consignado: v.consignado,
+    titular: v.titular,
+    pago: v.pago,
+    frigorifico: v.frigorifico,
+    numero_dte: v.numeroDte,
+    correlativo: v.correlativo,
+    tropa: v.tropa,
+    importe_total: v.importeTotal ?? null,
+    observaciones: v.observaciones,
+    created_at: v.createdAt,
+  };
+}
+
 // =============================================================================
 // SupabaseBackend
 // =============================================================================
@@ -360,6 +404,39 @@ export class SupabaseBackend implements IDataBackend {
   readonly name = 'supabase';
   private supabase: SupabaseClient;
   private currentUserCache: Usuario | null = null;
+
+  /** Cola offline aislada por cliente+usuario para dispositivos compartidos. */
+  private async pendingKey(): Promise<string | null> {
+    const user = await this.getCurrentUser();
+    if (!user?.email || !user.clienteId) return null;
+    return `${PENDING_PREFIX}${user.clienteId}:${user.email.trim().toLowerCase()}`;
+  }
+
+  /** Migra únicamente eventos del usuario actual desde la antigua cola global. */
+  private async migrateLegacyPending(key: string, userEmail: string): Promise<void> {
+    const legacyRaw = await AsyncStorage.getItem(LEGACY_PENDING_KEY);
+    if (!legacyRaw) return;
+    let legacy: Evento[];
+    try {
+      legacy = JSON.parse(legacyRaw) as Evento[];
+    } catch {
+      await AsyncStorage.removeItem(LEGACY_PENDING_KEY);
+      return;
+    }
+    const email = userEmail.trim().toLowerCase();
+    const propias = legacy.filter(e => e.usuarioEmail?.trim().toLowerCase() === email);
+    const ajenas = legacy.filter(e => e.usuarioEmail?.trim().toLowerCase() !== email);
+    if (propias.length > 0) {
+      const currentRaw = await AsyncStorage.getItem(key);
+      let current: Evento[] = [];
+      try { current = currentRaw ? JSON.parse(currentRaw) as Evento[] : []; } catch { current = []; }
+      const merged = new Map(current.map(e => [e.id, e]));
+      propias.forEach(e => merged.set(e.id, e));
+      await AsyncStorage.setItem(key, JSON.stringify([...merged.values()]));
+    }
+    if (ajenas.length > 0) await AsyncStorage.setItem(LEGACY_PENDING_KEY, JSON.stringify(ajenas));
+    else await AsyncStorage.removeItem(LEGACY_PENDING_KEY);
+  }
 
   constructor(config: SupabaseBackendConfig) {
     this.supabase = createClient(config.url, config.anonKey, {
@@ -656,7 +733,7 @@ export class SupabaseBackend implements IDataBackend {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const eventoCualquiera = evento as any;
     if (Array.isArray(eventoCualquiera.fotos) && eventoCualquiera.fotos.length > 0) {
-      const tablaPhoto = table as 'pariciones' | 'mortandad' | 'pastoreo' | 'lluvias' | 'compras';
+      const tablaPhoto = table as 'pariciones' | 'mortandad' | 'pastoreo' | 'lluvias' | 'compras' | 'ventas';
       const fotosSubidas = await uploadFotosSiHaceFalta(
         this.supabase,
         user.clienteId,
@@ -706,7 +783,10 @@ export class SupabaseBackend implements IDataBackend {
     // query alcanza — no necesitamos paginar.
     if (filters.limit) {
       const { data, error } = await buildQuery().limit(filters.limit);
-      if (error) throw new Error(`listEventos(${tipo}): ${error.message}`);
+      if (error) {
+        if (tablaOpcionalNoExiste(tipo, error)) return [];
+        throw new Error(`listEventos(${tipo}): ${error.message}`);
+      }
       return (data ?? []).map((r: any) => rowParser(tipo)(r));
     }
 
@@ -724,7 +804,10 @@ export class SupabaseBackend implements IDataBackend {
     // problema de schema; mejor lanzar warning explícito.
     while (out.length < 100_000) {
       const { data, error } = await buildQuery().range(from, from + PAGE_SIZE - 1);
-      if (error) throw new Error(`listEventos(${tipo}): ${error.message}`);
+      if (error) {
+        if (tablaOpcionalNoExiste(tipo, error)) return [];
+        throw new Error(`listEventos(${tipo}): ${error.message}`);
+      }
       if (!data || data.length === 0) break;
       out.push(...data);
       if (data.length < PAGE_SIZE) break;
@@ -740,19 +823,27 @@ export class SupabaseBackend implements IDataBackend {
   // sincronizar todo.
 
   async enqueuePending(evento: Evento): Promise<void> {
+    const key = await this.pendingKey();
+    if (!key) throw new SessionExpiredError('No hay un usuario autenticado para guardar la cola offline.');
     const pending = await this.listPending();
     // Reemplazar si el id ya estaba pendiente (re-edit antes de sincronizar)
     const next = [...pending.filter(e => e.id !== evento.id), evento];
-    await AsyncStorage.setItem(PENDING_KEY, JSON.stringify(next));
+    await AsyncStorage.setItem(key, JSON.stringify(next));
   }
 
   async listPending(): Promise<Evento[]> {
-    const raw = await AsyncStorage.getItem(PENDING_KEY);
+    const key = await this.pendingKey();
+    const user = this.currentUserCache;
+    if (!key || !user?.email) return [];
+    await this.migrateLegacyPending(key, user.email);
+    const raw = await AsyncStorage.getItem(key);
     if (!raw) return [];
     try { return JSON.parse(raw); } catch { return []; }
   }
 
   async flushPending(): Promise<FlushResult> {
+    const key = await this.pendingKey();
+    if (!key) return { intentados: 0, exitosos: 0, fallidos: 0, errores: [] };
     const pending = await this.listPending();
     const errors: Array<{ id: string; error: string }> = [];
     let exitosos = 0;
@@ -780,7 +871,7 @@ export class SupabaseBackend implements IDataBackend {
         }
       });
     }
-    await AsyncStorage.setItem(PENDING_KEY, JSON.stringify(remaining));
+    await AsyncStorage.setItem(key, JSON.stringify(remaining));
     return { intentados: pending.length, exitosos, fallidos, errores: errors };
   }
 }
@@ -796,6 +887,7 @@ function tablaDeEvento(tipo: TipoEvento): string {
     case 'mortandad': return 'mortandad';
     case 'pastoreo':  return 'pastoreo';
     case 'compra':    return 'compras';
+    case 'venta':     return 'ventas';
     case 'medicion':  return 'mediciones';  // FUTURO
   }
 }
@@ -807,6 +899,7 @@ function rowParser(tipo: TipoEvento): (r: any) => Evento {
     case 'mortandad': return rowToMortandad;
     case 'pastoreo':  return rowToPastoreo;
     case 'compra':    return rowToCompra;
+    case 'venta':     return rowToVenta;
     case 'medicion':  return (r) => r as Evento;  // FUTURO
   }
 }
@@ -818,6 +911,7 @@ function eventoToRow(e: Evento, clienteId: string): any {
     case 'mortandad': return mortandadToRow(e, clienteId);
     case 'pastoreo':  return pastoreoToRow(e, clienteId);
     case 'compra':    return compraToRow(e, clienteId);
+    case 'venta':     return ventaToRow(e as Venta, clienteId);
     case 'medicion':  return { ...e, cliente_id: clienteId };
   }
 }

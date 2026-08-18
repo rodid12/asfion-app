@@ -323,6 +323,55 @@ export interface CompraCanonical {
   createdAt: string;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// VENTA (mig 0031)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Una venta puede contener de 1 a 4 grupos/categorías. El texto
+// `cantCabYCat` se conserva EXACTAMENTE como lo escribe el administrador
+// porque los separadores forman parte de la denominación del cliente.
+//
+// Los únicos valores derivados son físicos y siguen la regla confirmada:
+//   kgNetos    = kgBrutos × 0,92  (desbaste fijo 8%)
+//   kgPromedio = kgNetos / primer número de cantCabYCat
+//
+// La DB vuelve a calcular ambos valores en un trigger para que una importación
+// de Excel y la app móvil produzcan siempre el mismo resultado.
+
+export interface VentaGrupoCanonical {
+  orden: 1 | 2 | 3 | 4;
+  cantCabYCat: string;
+  cabezas: number;
+  kgBrutos: number;
+  kgNetos: number;
+  kgPromedio: number;
+  precio: number;                         // precio por kg neto
+}
+
+export interface VentaCanonical {
+  id: string;
+  cliente_id?: string;
+  fecha: string;                          // 'YYYY-MM-DD'
+  campoId: string;                        // asociación interna; no se exporta al Excel
+  usuarioEmail: string;
+
+  grupos: VentaGrupoCanonical[];          // 1..4, mismo orden que los sufijos del Excel
+
+  consignado: string;
+  titular: string;
+  pago: string;
+  frigorifico: string;
+  numeroDte: string;
+  /** Número de operación/correlativo: manual y único dentro del cliente. */
+  correlativo: string;
+  tropa: string;
+  /** Importe total manual. Nunca se deriva de precio × kg. */
+  importeTotal?: number;
+  observaciones: string;
+
+  createdAt: string;
+}
+
 // =============================================================================
 // CHANGELOG — anotar cada vez que se modifica este archivo
 // =============================================================================
@@ -330,4 +379,6 @@ export interface CompraCanonical {
 // 2026-06-29  — Creación inicial. CompraCanonical migrada desde duplicación
 //               en types.ts de cada repo. Aprovecha el null de kgNetosDestino
 //               del hotfix de la mañana.
+// 2026-08-17  — VentaCanonical: venta con 1..4 grupos, desbaste fijo 8% y
+//               denominaciones exactas del Excel del cliente.
 // =============================================================================

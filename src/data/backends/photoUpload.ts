@@ -44,7 +44,7 @@ function inferirExtension(uri: string, mime?: string): string {
 export async function uploadFotosSiHaceFalta(
   supabase: SupabaseClient,
   clienteId: string,
-  tabla: 'pariciones' | 'mortandad' | 'pastoreo' | 'lluvias' | 'compras',
+  tabla: 'pariciones' | 'mortandad' | 'pastoreo' | 'lluvias' | 'compras' | 'ventas',
   eventoId: string,
   fotos: string[],
 ): Promise<string[]> {

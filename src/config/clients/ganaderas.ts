@@ -36,8 +36,8 @@ export const GANADERAS_CONFIG: ClientConfig = {
     tagline: 'Gestión integral del campo',
     logo: null, // null = se usan iniciales del nombre
   },
-  // Los 5 módulos activos (Compras agregado post-AppSheet).
-  modulosHabilitados: ['pariciones', 'lluvias', 'mortandad', 'pastoreo', 'compras'],
+  // Módulos activos configurados para Ganaderas.
+  modulosHabilitados: ['pariciones', 'lluvias', 'mortandad', 'pastoreo', 'compras', 'ventas'],
   catalogos: {
     pariciones: {
       vacasGrupos: GANADERAS_VACAS_GRUPOS,

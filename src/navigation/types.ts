@@ -20,4 +20,8 @@ export type RootStackParamList = {
   // sería entrar a editar sin querer en cargas comerciales sensibles.
   CompraDetail: { compraId: string };
   CompraForm: { compraId?: string } | undefined;
+  // Ventas queda fuera de la barra inferior para no comprimir ocho tabs.
+  // Se abre desde Menú y contiene su propio listado + formulario.
+  VentaList: undefined;
+  VentaForm: { ventaId?: string } | undefined;
 };
