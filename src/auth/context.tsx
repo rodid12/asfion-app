@@ -59,6 +59,20 @@ async function storageRemove(key: string): Promise<void> {
   try { await AsyncStorage.removeItem(key); } catch { /* ignore */ }
 }
 
+function esErrorDeRed(error: unknown): boolean {
+  const msg = error instanceof Error
+    ? error.message
+    : String((error as any)?.message ?? error ?? '');
+  const t = msg.toLowerCase();
+  return t.includes('network request failed')
+    || t.includes('failed to fetch')
+    || t.includes('fetch failed')
+    || t.includes('network error')
+    || t.includes('timeout')
+    || t.includes('timed out')
+    || t.includes('connection');
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const repo = useRepository();
   const [user, setUser] = useState<Usuario | null>(null);
@@ -88,11 +102,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               repo.setCurrentUser(null);
               setUser(null);
             }
-          } catch {
-            // Sin red: modo offline con el perfil persistido. Una sesión
-            // explícitamente inválida NO llega acá; el backend devuelve null.
-            repo.setCurrentUser(persistido);
-            setUser(persistido);
+          } catch (error) {
+            if (esErrorDeRed(error)) {
+              // Solo una falla inequívocamente de red habilita modo offline.
+              repo.setCurrentUser(persistido);
+              setUser(persistido);
+            } else {
+              // Error de Auth/perfil: nunca entrar con un perfil local sin
+              // JWT, porque RLS respondería 0 filas en todos los módulos.
+              try { await repo.logout(); } catch { /* ya se limpia local */ }
+              await storageRemove(USER_KEY);
+              repo.setCurrentUser(null);
+              setUser(null);
+            }
           }
         } else {
           // Puede existir una sesión Supabase válida aunque se haya perdido

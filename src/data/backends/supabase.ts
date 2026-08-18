@@ -476,14 +476,27 @@ export class SupabaseBackend implements IDataBackend {
 
   async getCurrentUser(): Promise<Usuario | null> {
     if (this.currentUserCache) return this.currentUserCache;
-    const { data, error } = await this.supabase.auth.getUser();
+    let result: Awaited<ReturnType<typeof this.supabase.auth.getUser>>;
+    try {
+      result = await this.supabase.auth.getUser();
+    } catch (error) {
+      // Algunas versiones de supabase-js DEVUELVEN AuthApiError y otras lo
+      // lanzan durante el refresh automático. Ambos caminos deben limpiar la
+      // sesión; si no, AuthProvider cree que está offline y deja entrar con un
+      // perfil sin JWT: RLS responde arrays vacíos y toda la app muestra 0.
+      if (esRefreshTokenInvalido(error)) {
+        await this.clearLocalAuthSession();
+        return null;
+      }
+      throw error;
+    }
+    const { data, error } = result;
     if (error) {
       if (esRefreshTokenInvalido(error)) {
         // La sesión local quedó apuntando a un refresh token revocado o ya
         // consumido. Limpiamos SOLO el dispositivo: el próximo render muestra
         // Login y el error no reaparece en cada inicio.
-        try { await this.supabase.auth.signOut({ scope: 'local' }); } catch { /* best effort */ }
-        this.currentUserCache = null;
+        await this.clearLocalAuthSession();
         return null;
       }
       // Red caída / timeout: AuthProvider conserva el perfil local y permite
@@ -507,8 +520,26 @@ export class SupabaseBackend implements IDataBackend {
   }
 
   async logout(): Promise<void> {
-    await this.supabase.auth.signOut();
+    try {
+      await this.supabase.auth.signOut();
+    } finally {
+      // Aunque el servidor rechace un refresh token viejo, la salida local
+      // siempre debe completarse para no restaurar una sesión fantasma.
+      await this.clearLocalAuthSession();
+    }
+  }
+
+  private async clearLocalAuthSession(): Promise<void> {
+    try { await this.supabase.auth.signOut({ scope: 'local' }); } catch { /* best effort */ }
     this.currentUserCache = null;
+    // Defensa extra: si signOut falla antes de limpiar storage, removemos la
+    // key privada que supabase-js usa en AsyncStorage para este proyecto.
+    try {
+      const key = (this.supabase.auth as any).storageKey;
+      if (typeof key === 'string' && key) {
+        await AsyncStorage.multiRemove([key, `${key}-code-verifier`]);
+      }
+    } catch { /* best effort */ }
   }
 
   private async fetchUserProfile(email: string): Promise<Usuario> {
