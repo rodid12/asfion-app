@@ -141,6 +141,10 @@ export function LluviaListScreen() {
       });
       setData(ordered);
       setCamposMap(Object.fromEntries(cs.map(c => [c.id, c])));
+    } catch (err) {
+      if (!opts?.silent) {
+        Alert.alert('No se pudo actualizar', err instanceof Error ? err.message : 'Revisá la conexión e intentá nuevamente.');
+      }
     } finally {
       setLoading(false);
     }
@@ -195,14 +199,16 @@ export function LluviaListScreen() {
 
   const activosCount = useMemo(() => {
     let n = 0;
-    if (rango !== 'todo') n++;
+    // "Este año" es la campaña operativa por defecto; no lo contamos como
+    // filtro extra ni lo borramos al tocar Limpiar.
+    if (rango !== 'year') n++;
     if (desdeCustom || hastaCustom) n++;
     if (campoFiltro) n++;
     return n;
   }, [rango, desdeCustom, hastaCustom, campoFiltro]);
 
   const clearFilters = () => {
-    setRango('todo');
+    setRango('year');
     setDesdeCustom(undefined);
     setHastaCustom(undefined);
     setCampoFiltro(null);

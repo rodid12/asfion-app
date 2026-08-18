@@ -114,7 +114,9 @@ export function PastoreoListScreen() {
   const [query, setQuery] = useState('');
 
   const [estado, setEstado] = useState<EstadoFilter>('todos');
-  const [rango, setRango] = useState<RangoFecha>('todo');
+  // Nueva campaña: abrir siempre con los movimientos del año actual. El
+  // histórico sigue disponible con el filtro "Todo"; no borramos DB.
+  const [rango, setRango] = useState<RangoFecha>('year');
   const [desdeCustom, setDesdeCustom] = useState<string | undefined>();
   const [hastaCustom, setHastaCustom] = useState<string | undefined>();
   const [campoFiltro, setCampoFiltro] = useState<string | null>(null);
@@ -150,6 +152,10 @@ export function PastoreoListScreen() {
       const circs = await Promise.all(campoIds.map(id => repo.listCircuitos(id)));
       const allCircs = circs.flat();
       setCircuitosMap(Object.fromEntries(allCircs.map(c => [c.id, c])));
+    } catch (err) {
+      if (!opts?.silent) {
+        Alert.alert('No se pudo actualizar', err instanceof Error ? err.message : 'Revisá la conexión e intentá nuevamente.');
+      }
     } finally {
       setLoading(false);
     }
@@ -236,7 +242,7 @@ export function PastoreoListScreen() {
   const activosCount = useMemo(() => {
     let n = 0;
     if (estado !== 'todos') n++;
-    if (rango !== 'todo') n++;
+    if (rango !== 'year') n++;
     if (desdeCustom || hastaCustom) n++;
     if (campoFiltro) n++;
     if (circuitoFiltro) n++;
@@ -245,7 +251,7 @@ export function PastoreoListScreen() {
 
   const clearFilters = () => {
     setEstado('todos');
-    setRango('todo');
+    setRango('year');
     setDesdeCustom(undefined);
     setHastaCustom(undefined);
     setCampoFiltro(null);

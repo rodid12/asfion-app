@@ -141,6 +141,10 @@ export function MortandadListScreen() {
       });
       setData(ordered);
       setCamposMap(Object.fromEntries(cs.map(c => [c.id, c])));
+    } catch (err) {
+      if (!opts?.silent) {
+        Alert.alert('No se pudo actualizar', err instanceof Error ? err.message : 'Revisá la conexión e intentá nuevamente.');
+      }
     } finally {
       setLoading(false);
     }
@@ -203,14 +207,14 @@ export function MortandadListScreen() {
 
   const activosCount = useMemo(() => {
     let n = 0;
-    if (rango !== 'todo') n++;
+    if (rango !== 'year') n++;
     if (desdeCustom || hastaCustom) n++;
     if (campoFiltro) n++;
     return n;
   }, [rango, desdeCustom, hastaCustom, campoFiltro]);
 
   const clearFilters = () => {
-    setRango('todo');
+    setRango('year');
     setDesdeCustom(undefined);
     setHastaCustom(undefined);
     setCampoFiltro(null);

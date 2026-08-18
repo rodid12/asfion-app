@@ -25,7 +25,9 @@
 //  - Administrador/moderador: todos los eventos del cliente.
 //  - Operario: solo lo que él cargó (consistente con la Lista).
 //
-// Filtro disponible: rango de fecha (hoy / 7d / 30d / todo).
+// Filtro disponible: rango de fecha (hoy / 7d / 30d / este año / todo).
+// La vista inicial es "Este año" para que cada campaña anual empiece en cero
+// sin eliminar el histórico de la base.
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -59,11 +61,12 @@ import type {
 } from '@/data/types';
 import { useTabNav } from '@/navigation/TabContext';
 
-type Rango = 'hoy' | '7d' | '30d' | 'todo';
+type Rango = 'hoy' | '7d' | '30d' | 'year' | 'todo';
 const RANGO_LABEL: Record<Rango, string> = {
   hoy: 'Hoy',
   '7d': '7 días',
   '30d': '30 días',
+  year: 'Este año',
   todo: 'Todo',
 };
 
@@ -129,6 +132,7 @@ function rangoDesde(r: Rango): string | null {
   if (r === 'hoy') return isoDaysAgo(0);
   if (r === '7d') return isoDaysAgo(6);
   if (r === '30d') return isoDaysAgo(29);
+  if (r === 'year') return `${new Date().getFullYear()}-01-01`;
   return null;
 }
 
@@ -175,7 +179,9 @@ export function MetricasScreen() {
   const [circuitosMap, setCircuitosMap] = useState<Record<string, { nombre: string; campoId: string; hectareas: number }>>({});
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [rango, setRango] = useState<Rango>('todo');
+  // Lluvias, mortandad y pastoreo arrancan en cero para cada año sin borrar
+  // historia. "Todo" queda disponible para auditoría de campañas anteriores.
+  const [rango, setRango] = useState<Rango>('year');
   const [metricaTab, setMetricaTab] = useState<MetricaTab>('resumen');
 
   // Patrón `cancelado` (audit 27-jun-2026): si el usuario navega fuera del
@@ -989,11 +995,11 @@ export function MetricasScreen() {
         </View>
       </View>
 
-      {/* Filtro rango — row sin scroll, 4 chips caben cómodos en iPhone.
+      {/* Filtro rango — cinco chips compactos en una fila.
           Evitamos horizontal ScrollView que cortaba visualmente los chips
           en iPhone 15 Pro (bug reportado por Ro). */}
       <View style={styles.filterBar}>
-        {(['hoy', '7d', '30d', 'todo'] as Rango[]).map(r => (
+        {(['hoy', '7d', '30d', 'year', 'todo'] as Rango[]).map(r => (
           <Pressable
             key={r}
             onPress={() => setRango(r)}

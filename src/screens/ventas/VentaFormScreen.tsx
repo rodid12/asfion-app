@@ -6,7 +6,7 @@
 //   kg promedio = kg netos / primer número de CANT CAB Y CAT
 // La DB repite el cálculo al guardar para blindar importaciones y ediciones.
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -69,6 +69,20 @@ function calcularGrupo(d: GrupoDraft, index: number): VentaGrupo | null {
   };
 }
 
+/** Siguiente tropa numérica del tenant. La DB vuelve a asignarla dentro de
+ * una transacción (migration 0032), por lo que este valor es el preview y el
+ * fallback offline; la base mantiene la autoridad ante cargas simultáneas. */
+function siguienteTropa(ventas: Venta[]): string {
+  let max = 0;
+  ventas.forEach(v => {
+    const raw = v.tropa?.trim();
+    if (!raw || !/^\d+$/.test(raw)) return;
+    const n = Number(raw);
+    if (Number.isSafeInteger(n) && n > max) max = n;
+  });
+  return String(max + 1);
+}
+
 export function VentaFormScreen() {
   const route = useRoute<Rt>();
   const ventaId = route.params?.ventaId;
@@ -83,6 +97,8 @@ export function VentaFormScreen() {
   const [numeroDte, setNumeroDte] = useState('');
   const [correlativo, setCorrelativo] = useState('');
   const [tropa, setTropa] = useState('');
+  const tropaRef = useRef('');
+  const [generandoTropa, setGenerandoTropa] = useState(false);
   const [importe, setImporte] = useState('');
   const [observaciones, setObservaciones] = useState('');
 
@@ -113,7 +129,7 @@ export function VentaFormScreen() {
         frigorifico: frigorifico.trim(),
         numeroDte: numeroDte.trim(),
         correlativo: correlativo.trim(),
-        tropa: tropa.trim(),
+        tropa: (tropaRef.current || tropa).trim(),
         importeTotal: importeNum != null && Number.isFinite(importeNum) ? importeNum : undefined,
         observaciones: observaciones.trim(),
         syncState: 'pending',
@@ -124,6 +140,7 @@ export function VentaFormScreen() {
       setGrupos([{ ...VACIO }]);
       setConsignado(''); setTitular(''); setPago(''); setFrigorifico('');
       setNumeroDte(''); setCorrelativo(''); setTropa(''); setImporte(''); setObservaciones('');
+      tropaRef.current = '';
     },
   });
 
@@ -170,14 +187,13 @@ export function VentaFormScreen() {
     if (!frigorifico.trim()) out.push('Frigorífico');
     if (!numeroDte.trim()) out.push('Número DTE');
     if (!correlativo.trim()) out.push('Correlativo');
-    if (!tropa.trim()) out.push('Tropa');
     if (!observaciones.trim()) out.push('Observaciones');
     if (importe.trim()) {
       const n = decimal(importe);
       if (!Number.isFinite(n) || n < 0) out.push('Importe');
     }
     return [...new Set(out)];
-  }, [campoId, fecha, grupos, consignado, titular, pago, frigorifico, numeroDte, correlativo, tropa, observaciones, importe]);
+  }, [campoId, fecha, grupos, consignado, titular, pago, frigorifico, numeroDte, correlativo, observaciones, importe]);
 
   const isDirty = useMemo(() => {
     if (!isEdit || !originalRecord) return true;
@@ -215,7 +231,25 @@ export function VentaFormScreen() {
       Alert.alert('Faltan datos', `Completá o corregí: ${errores.join(', ')}.`);
       return;
     }
-    await onGuardar();
+    setGenerandoTropa(true);
+    try {
+      if (!isEdit && !tropa.trim()) {
+        let existentes = (ef.repo.listEventosCached('venta') ?? []) as Venta[];
+        try {
+          existentes = (await ef.repo.listEventos('venta')) as Venta[];
+        } catch {
+          // Sin señal: usar cache. La DB corrige el correlativo al sincronizar.
+        }
+        const generada = siguienteTropa(existentes);
+        tropaRef.current = generada;
+        setTropa(generada);
+      } else {
+        tropaRef.current = tropa.trim();
+      }
+      await onGuardar();
+    } finally {
+      setGenerandoTropa(false);
+    }
   };
 
   if (cargandoExistente) {
@@ -235,7 +269,7 @@ export function VentaFormScreen() {
     );
   }
 
-  const habilitado = errores.length === 0 && !guardando && (!isEdit || isDirty);
+  const habilitado = errores.length === 0 && !guardando && !generandoTropa && (!isEdit || isDirty);
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
@@ -243,7 +277,7 @@ export function VentaFormScreen() {
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           <View style={styles.infoBanner}>
             <Text style={styles.infoTitle}>Cálculo físico automático</Text>
-            <Text style={styles.infoText}>Se descuenta siempre 8% de los kg brutos. Los identificadores, tropa, precio e importe se escriben manualmente.</Text>
+            <Text style={styles.infoText}>Se descuenta siempre 8% de los kg brutos. La tropa se asigna automáticamente con el siguiente correlativo; precio e importe se escriben manualmente.</Text>
           </View>
 
           <View style={styles.headerCard}>
@@ -366,7 +400,13 @@ export function VentaFormScreen() {
             <View style={styles.col}><FormField label="Número DTE *" value={numeroDte} onChangeText={setNumeroDte} placeholder="DTE" /></View>
             <View style={styles.col}><FormField label="Correlativo / operación *" value={correlativo} onChangeText={setCorrelativo} placeholder="Manual" /></View>
           </View>
-          <FormField label="Tropa *" value={tropa} onChangeText={setTropa} placeholder="Ingreso manual" />
+          <FormField
+            label="Tropa (automática)"
+            value={tropa}
+            editable={false}
+            placeholder={generandoTropa ? 'Calculando…' : 'Se asigna al guardar'}
+            style={styles.readonlyField}
+          />
           <FormField label="Importe total" value={importe} onChangeText={setImporte} keyboardType="decimal-pad" placeholder="Manual; no se calcula" />
           <FormField label="Observaciones *" value={observaciones} onChangeText={setObservaciones} placeholder="Observaciones de la operación" multiline style={styles.multiline} />
 
@@ -435,6 +475,11 @@ const styles = StyleSheet.create({
   calcValue: { color: colors.navyDeep, fontSize: 18, fontWeight: fontWeight.bold as '700' },
   addGroup: { borderWidth: 1.5, borderStyle: 'dashed', borderColor: colors.orange, borderRadius: radius.lg, padding: spacing.base, alignItems: 'center', marginBottom: spacing.xl },
   addGroupText: { color: colors.orange, fontWeight: fontWeight.bold as '700' },
+  readonlyField: {
+    backgroundColor: colors.bgLight,
+    color: colors.navyDeep,
+    fontWeight: fontWeight.bold as '700',
+  },
   multiline: { minHeight: 92, textAlignVertical: 'top', paddingTop: spacing.md },
   noChanges: { color: colors.textMuted, textAlign: 'center', marginBottom: spacing.sm, fontStyle: 'italic' },
   errorHint: { color: colors.danger, fontSize: fontSize.sm, textAlign: 'center', marginTop: spacing.sm },
