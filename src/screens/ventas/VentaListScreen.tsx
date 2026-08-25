@@ -1,5 +1,7 @@
 // Listado administrativo de ventas. Vive en el Stack (no agrega un octavo
 // ítem a la barra inferior, que quedaría ilegible en teléfonos angostos).
+// Tocar una card abre el detalle read-only, desde donde se exporta el PDF o
+// se entra explícitamente a editar.
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -125,7 +127,7 @@ export function VentaListScreen() {
         refreshControl={<RefreshControl refreshing={loading} onRefresh={() => load()} tintColor={colors.navy} />}
         ListEmptyComponent={<EmptyState emoji="💰" title="Sin ventas" description={query ? 'No hay resultados para la búsqueda.' : 'Todavía no hay operaciones cargadas.'} />}
         renderItem={({ item }) => (
-          <Pressable onPress={() => nav.navigate('VentaForm', { ventaId: item.id })} style={({ pressed }) => [styles.card, pressed && { opacity: 0.82 }]}>
+          <Pressable onPress={() => nav.navigate('VentaDetail', { ventaId: item.id })} style={({ pressed }) => [styles.card, pressed && { opacity: 0.82 }]}>
             <View style={styles.cardTop}>
               <View style={styles.opBadge}><Text style={styles.opText}>{item.correlativo}</Text></View>
               <Text style={styles.date}>{fechaBonita(item.fecha)}</Text>

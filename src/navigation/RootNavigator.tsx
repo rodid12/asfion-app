@@ -12,6 +12,7 @@ import { PastoreoFormScreen } from '@/screens/pastoreo/PastoreoFormScreen';
 import { CompraFormScreen } from '@/screens/compras/CompraFormScreen';
 import { CompraDetailScreen } from '@/screens/compras/CompraDetailScreen';
 import { VentaListScreen } from '@/screens/ventas/VentaListScreen';
+import { VentaDetailScreen } from '@/screens/ventas/VentaDetailScreen';
 import { VentaFormScreen } from '@/screens/ventas/VentaFormScreen';
 import { useAuth } from '@/auth/context';
 import { ActivityIndicator, View } from 'react-native';
@@ -103,6 +104,7 @@ export function RootNavigator() {
               {hasModulo('ventas') && (
                 <>
                   <Stack.Screen name="VentaList" component={VentaListScreen} options={{ title: 'Ventas' }} />
+                  <Stack.Screen name="VentaDetail" component={VentaDetailScreen} options={{ title: 'Detalle' }} />
                   <Stack.Screen name="VentaForm" component={VentaFormScreen} options={{ title: 'Venta' }} />
                 </>
               )}

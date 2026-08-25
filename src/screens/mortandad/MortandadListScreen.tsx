@@ -13,6 +13,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
+  Image,
   Pressable,
   RefreshControl,
   SectionList,
@@ -274,7 +275,11 @@ export function MortandadListScreen() {
       >
         {/* Columna izq: emoji + categoría */}
         <View style={styles.catBlock}>
-          <Text style={styles.catEmoji}>⚠️</Text>
+          {item.fotos?.[0] ? (
+            <Image source={{ uri: item.fotos[0] }} style={styles.photoThumb} />
+          ) : (
+            <Text style={styles.catEmoji}>⚠️</Text>
+          )}
           <Text style={styles.catTxt} numberOfLines={1}>
             {capFirst(item.categoria)}
           </Text>
@@ -750,6 +755,12 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   catEmoji: { fontSize: 18 },
+  photoThumb: {
+    width: 58,
+    height: 58,
+    borderRadius: radius.sm,
+    backgroundColor: colors.borderSoft,
+  },
   catTxt: {
     fontSize: fontSize.md,
     fontWeight: fontWeight.bold as '700',

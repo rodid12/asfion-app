@@ -23,5 +23,6 @@ export type RootStackParamList = {
   // Ventas queda fuera de la barra inferior para no comprimir ocho tabs.
   // Se abre desde Menú y contiene su propio listado + formulario.
   VentaList: undefined;
+  VentaDetail: { ventaId: string };
   VentaForm: { ventaId?: string } | undefined;
 };

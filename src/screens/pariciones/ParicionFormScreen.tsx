@@ -7,8 +7,8 @@
 //   - Campos OPCIONALES visibles debajo (sin la palabra "(opcional)" en el
 //     label — el asterisco * marca los required, ausencia de asterisco
 //     implica opcional). Los opcionales son: caravana color/número,
-//     asistencia (cuando Nacimiento), causa-tipo y causa-detalle (cuando
-//     Muerte/Aborto), foto, observaciones.
+//     asistencia (cuando Nacimiento), causa-tipo y causa-detalle (solo cuando
+//     el evento es Muerte), foto, observaciones.
 //   - Esta versión vuelve a tener todo lo del AppSheet original sin sumar
 //     fricción visual: queda al ojo del operario decidir qué cargar de los
 //     opcionales.
@@ -96,9 +96,19 @@ export function ParicionFormScreen(_p: Props) {
   // ─── Visibility por tipo de evento (necesarios ANTES del hook ───
   //     porque buildEvento los lee del closure) ───
   const sexoRequerido     = evento === 'Nacimiento' || evento === 'Muerte';
-  const causaVisible      = evento === 'Muerte' || evento === 'Aborto';
+  const causaVisible      = evento === 'Muerte';
   const asistenciaVisible = evento === 'Nacimiento';
   const caravanaVisible   = evento !== 'Retacto';
+
+  // Causa de muerte no corresponde a Aborto/Nacimiento/Retacto. Además de
+  // ocultarla, limpiamos el state para que cambiar de Muerte a otro evento no
+  // deje una causa escondida que luego termine guardada o reaparezca al volver.
+  useEffect(() => {
+    if (evento !== 'Muerte') {
+      setCausaTipo(undefined);
+      setCausaDetalle('');
+    }
+  }, [evento]);
 
   // ─── State común vía useEventoForm ───
   const ef = useEventoForm<Paricion>({

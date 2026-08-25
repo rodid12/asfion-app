@@ -32,14 +32,22 @@ function inferirExtension(uri: string, mime?: string): string {
   return 'jpg';
 }
 
+function mimePorExtension(ext: string): string {
+  if (ext === 'png') return 'image/png';
+  if (ext === 'webp') return 'image/webp';
+  return 'image/jpeg';
+}
+
 /**
  * Sube un array de URIs (local o remote) y devuelve un array con todas
  * convertidas a URLs públicas del bucket. Las URIs que ya son remotas
  * (http/https) pasan tal cual.
  *
- * Si la subida de UNA foto falla, NO falla el batch — la dejamos como
- * estaba (URI local) y el operario puede reintentar más adelante. Esto
- * permite que el evento se guarde aunque sin foto.
+ * Si la subida de una foto local falla, lanzamos error. Repository convierte
+ * entonces TODO el evento en pendiente offline y vuelve a intentar más tarde.
+ * Nunca debemos marcar una mortandad como sincronizada dejando un file:// en
+ * la DB: esa URI solo existe en el celular y la evidencia se perdería para el
+ * dashboard y los demás usuarios.
  */
 export async function uploadFotosSiHaceFalta(
   supabase: SupabaseClient,
@@ -72,35 +80,31 @@ export async function uploadFotosSiHaceFalta(
       out.push(uri);
       continue;
     }
-    try {
-      // En RN, `fetch(file:// uri)` devuelve un Blob con los bytes del
-      // archivo local. Esto es la forma estándar que usa expo + supabase.
-      const res = await fetch(uri);
-      const blob = await res.blob();
-      const ext = inferirExtension(uri, blob.type);
-      const path = `${clienteId}/${tabla}/${eventoId}/foto-${i}.${ext}`;
-      const { error } = await supabase.storage
-        .from(BUCKET)
-        .upload(path, blob, {
-          contentType: blob.type || `image/${ext}`,
-          // upsert: para que si el operario re-edita el evento, sobreescriba
-          // la foto vieja en el mismo path en vez de duplicar.
-          upsert: true,
-        });
-      if (error) {
-        console.warn(`[photoUpload] falló foto ${i} de ${tabla}/${eventoId}:`, error.message);
-        // Mantenemos la URI local — el evento se guarda con la foto vieja
-        // y al próximo edit se puede reintentar.
-        out.push(uri);
-        continue;
-      }
-      // Generar la URL pública (bucket es public en migration 0013).
-      const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
-      out.push(data.publicUrl);
-    } catch (err: any) {
-      console.warn(`[photoUpload] excepción foto ${i}:`, err?.message ?? err);
-      out.push(uri);
+    // Supabase Storage en React Native recibe ArrayBuffer de forma confiable;
+    // Blob/File/FormData pueden generar archivos vacíos según la versión de
+    // Hermes. `fetch(file://)` nos permite leer el archivo local sin sumar
+    // otra dependencia nativa.
+    const res = await fetch(uri);
+    const bytes = await res.arrayBuffer();
+    if (bytes.byteLength <= 0) {
+      throw new Error(`La foto ${i + 1} está vacía o ya no existe en el celular`);
     }
+    const ext = inferirExtension(uri);
+    const path = `${clienteId}/${tabla}/${eventoId}/foto-${i}.${ext}`;
+    const { error } = await supabase.storage
+      .from(BUCKET)
+      .upload(path, bytes, {
+        contentType: mimePorExtension(ext),
+        // upsert: para que si el operario re-edita el evento, sobreescriba
+        // la foto vieja en el mismo path en vez de duplicar.
+        upsert: true,
+      });
+    if (error) {
+      throw new Error(`No se pudo subir la foto ${i + 1}: ${error.message}`);
+    }
+    // Generar la URL pública (bucket es public en migration 0013).
+    const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
+    out.push(data.publicUrl);
   }
   return out;
 }

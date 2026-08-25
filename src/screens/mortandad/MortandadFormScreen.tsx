@@ -4,7 +4,8 @@
 // peón, mejor". Quedan solo los campos estructuralmente necesarios.
 //
 // Antes había: caravana color/número, causa detalle (chips + texto libre),
-// fotos, observaciones — todo opcional. Ro pidió sacarlo todo.
+// fotos y observaciones. Por feedback nuevo, restauramos la evidencia
+// fotográfica porque es el respaldo principal del evento de mortandad.
 //
 // Quedan:
 //
@@ -38,6 +39,7 @@ import { ChipGroup } from '@/components/ChipGroup';
 import { FaltaHint } from '@/components/FaltaHint';
 import { MapPickerModal } from '@/components/MapPickerModal';
 import { NoLotesBanner } from '@/components/NoLotesBanner';
+import { PhotoStrip } from '@/components/PhotoStrip';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { useClientConfig } from '@/config/ClientConfigContext';
 import { useEventoForm } from '@/hooks/useEventoForm';
@@ -67,6 +69,7 @@ export function MortandadFormScreen() {
   const [categoria, setCategoria] = useState<string | undefined>();
   const [actividad, setActividad] = useState<string | undefined>();
   const [causaTipo, setCausaTipo] = useState<CausaMuerteTipo | undefined>();
+  const [fotos, setFotos] = useState<string[]>([]);
   const [gps, setGps] = useState<Mortandad['gps']>(undefined);
   // Estado de la captura de GPS — para que el operario sepa qué está pasando
   // en vez de quedarse mirando "sin señal" sin saber por qué.
@@ -109,6 +112,7 @@ export function MortandadFormScreen() {
         categoria,
         actividad,
         causaTipo,
+        fotos: fotos.length > 0 ? fotos : undefined,
         syncState: 'pending',
       };
     },
@@ -118,6 +122,7 @@ export function MortandadFormScreen() {
       // del mismo campo el mismo día.
       setCategoria(undefined);
       setCausaTipo(undefined);
+      setFotos([]);
     },
   });
   const { user, repo, campoId, setCampoId, fecha, setFecha, campos, campoActual,
@@ -132,6 +137,7 @@ export function MortandadFormScreen() {
       setCategoria(existing.categoria);
       setActividad(existing.actividad);
       setCausaTipo(existing.causaTipo);
+      setFotos(existing.fotos ?? []);
       if (existing.gps) setGps(existing.gps);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -229,9 +235,10 @@ export function MortandadFormScreen() {
       fecha !== originalRecord.fecha ||
       categoria !== originalRecord.categoria ||
       actividad !== originalRecord.actividad ||
-      causaTipo !== originalRecord.causaTipo
+      causaTipo !== originalRecord.causaTipo ||
+      JSON.stringify(fotos) !== JSON.stringify(originalRecord.fotos ?? [])
     );
-  }, [isEdit, originalRecord, campoId, loteId, fecha, categoria, actividad, causaTipo]);
+  }, [isEdit, originalRecord, campoId, loteId, fecha, categoria, actividad, causaTipo, fotos]);
 
   const puedeGuardar = useMemo(() => {
     if (!campoId) return false;
@@ -587,6 +594,13 @@ export function MortandadFormScreen() {
             value={causaTipo}
             options={CAUSAS_TIPO}
             onChange={setCausaTipo}
+          />
+
+          <PhotoStrip
+            fotos={fotos}
+            onChange={setFotos}
+            label="Foto de la mortandad"
+            optionalText="recomendada"
           />
 
           <FaltaHint campos={camposFaltantes} />

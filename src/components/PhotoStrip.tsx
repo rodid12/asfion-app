@@ -18,6 +18,8 @@ interface Props {
   fotos: string[];
   onChange: (fotos: string[]) => void;
   max?: number;
+  label?: string;
+  optionalText?: string;
 }
 
 const MAX_DEFAULT = 3;
@@ -31,7 +33,13 @@ async function loadPicker() {
   }
 }
 
-export function PhotoStrip({ fotos, onChange, max = MAX_DEFAULT }: Props) {
+export function PhotoStrip({
+  fotos,
+  onChange,
+  max = MAX_DEFAULT,
+  label = 'Fotos',
+  optionalText = 'opcional',
+}: Props) {
   const [busy, setBusy] = useState(false);
 
   const onAdd = async () => {
@@ -79,7 +87,7 @@ export function PhotoStrip({ fotos, onChange, max = MAX_DEFAULT }: Props) {
   return (
     <View style={styles.wrap}>
       <Text style={styles.label}>
-        Fotos <Text style={styles.optional}>· opcional</Text>
+        {label}{optionalText ? <Text style={styles.optional}> · {optionalText}</Text> : null}
       </Text>
       <View style={styles.strip}>
         {fotos.map((uri, i) => (
