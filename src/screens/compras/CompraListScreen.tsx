@@ -155,9 +155,8 @@ export function CompraListScreen({ embedded = false }: { embedded?: boolean } = 
         .map(id => camposMap[id])
         .filter((c): c is Campo => Boolean(c));
     }
-    const ids = Array.from(new Set(scopedData.map(c => c.campoId)));
-    return ids.map(id => camposMap[id]).filter((c): c is Campo => Boolean(c));
-  }, [user, camposMap, scopedData]);
+    return Object.values(camposMap).sort((a, b) => a.nombre.localeCompare(b.nombre));
+  }, [user, camposMap]);
 
   // Filtros
   const filtered = useMemo(() => {

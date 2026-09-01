@@ -104,6 +104,7 @@ export function PastoreoListScreen() {
   const { currentTab } = useTabNav();
 
   const esAdmin = user?.rol === 'administrador' || user?.rol === 'moderador';
+  const puedeEditar = user?.rol === 'administrador';
 
   const cachedSeed = (repo.listEventosCached('pastoreo') ?? []) as Pastoreo[];
   const [data, setData] = useState<Pastoreo[]>(cachedSeed);
@@ -176,9 +177,8 @@ export function PastoreoListScreen() {
         .map(id => camposMap[id])
         .filter((c): c is Campo => Boolean(c));
     }
-    const ids = Array.from(new Set(data.map(p => p.campoId)));
-    return ids.map(id => camposMap[id]).filter((c): c is Campo => Boolean(c));
-  }, [user, camposMap, data]);
+    return Object.values(camposMap).sort((a, b) => a.nombre.localeCompare(b.nombre));
+  }, [user, camposMap]);
 
   const scopedData = useMemo(() => {
     if (!esAdmin && user?.email) {
@@ -307,6 +307,10 @@ export function PastoreoListScreen() {
   };
 
   const onItemPress = (p: Pastoreo) => {
+    if (!puedeEditar) {
+      Alert.alert('Solo lectura', 'El registro está visible, pero solamente un administrador puede editarlo.');
+      return;
+    }
     nav.navigate('PastoreoForm', { pastoreoId: p.id });
   };
 
@@ -366,7 +370,7 @@ export function PastoreoListScreen() {
             </View>
           )}
           <SyncBadge state={item.syncState} />
-          <Text style={styles.chev}>›</Text>
+          {puedeEditar && <Text style={styles.chev}>›</Text>}
         </View>
       </Pressable>
     );

@@ -9,10 +9,12 @@
 
 import React, { useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Image,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -28,10 +30,11 @@ import { fontSize, fontWeight } from '@/theme/typography';
 import { radius, spacing } from '@/theme/spacing';
 
 export function LoginScreen() {
-  const { login } = useAuth();
+  const { login, loginWithGoogle } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
 
   const onSubmit = async () => {
     if (!email.trim()) {
@@ -45,6 +48,17 @@ export function LoginScreen() {
       Alert.alert('No pudimos iniciar sesión', err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const onGoogle = async () => {
+    setGoogleLoading(true);
+    try {
+      await loginWithGoogle();
+    } catch (err) {
+      Alert.alert('No pudimos ingresar con Google', err instanceof Error ? err.message : String(err));
+    } finally {
+      setGoogleLoading(false);
     }
   };
 
@@ -87,11 +101,42 @@ export function LoginScreen() {
             placeholder="••••••••"
           />
 
-          <PrimaryButton label="ENTRAR" onPress={onSubmit} loading={loading} />
+          <PrimaryButton
+            label="ENTRAR"
+            onPress={onSubmit}
+            loading={loading}
+            disabled={googleLoading}
+          />
+
+          <View style={styles.dividerRow}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>o</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          <Pressable
+            onPress={onGoogle}
+            disabled={loading || googleLoading}
+            accessibilityRole="button"
+            accessibilityLabel="Continuar con Google"
+            style={({ pressed }) => [
+              styles.googleButton,
+              (loading || googleLoading) && styles.disabled,
+              pressed && styles.googlePressed,
+            ]}
+          >
+            {googleLoading ? (
+              <ActivityIndicator color={colors.navy} />
+            ) : (
+              <>
+                <Text style={styles.googleMark}>G</Text>
+                <Text style={styles.googleLabel}>CONTINUAR CON GOOGLE</Text>
+              </>
+            )}
+          </Pressable>
 
           <Text style={styles.hint}>
-            Demo: cualquier email funciona. "admin" → administrador,
-            "moderador" → moderador, otro → operario.
+            Acceso exclusivo para cuentas autorizadas por Ganaderas.
           </Text>
         </ScrollView>
 
@@ -153,6 +198,47 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     textAlign: 'center',
   },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginVertical: spacing.lg,
+  },
+  dividerLine: {
+    flex: 1,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.textOnDarkMuted,
+    opacity: 0.45,
+  },
+  dividerText: {
+    color: colors.textOnDarkMuted,
+    fontSize: fontSize.sm,
+  },
+  googleButton: {
+    minHeight: 52,
+    borderRadius: radius.lg,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.borderSoft,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+  },
+  googlePressed: { opacity: 0.82 },
+  googleMark: {
+    color: '#4285F4',
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.black as '900',
+  },
+  googleLabel: {
+    color: colors.navy,
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.bold as '700',
+    letterSpacing: 0.2,
+  },
+  disabled: { opacity: 0.55 },
 
   // ASFION footer
   asfionFooter: {

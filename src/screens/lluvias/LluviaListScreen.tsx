@@ -107,6 +107,7 @@ export function LluviaListScreen() {
   const { currentTab } = useTabNav();
 
   const esAdmin = user?.rol === 'administrador' || user?.rol === 'moderador';
+  const puedeEditar = user?.rol === 'administrador';
 
   const cachedSeed = (repo.listEventosCached('lluvia') ?? []) as Lluvia[];
   const [data, setData] = useState<Lluvia[]>(cachedSeed);
@@ -166,9 +167,8 @@ export function LluviaListScreen() {
         .map(id => camposMap[id])
         .filter((c): c is Campo => Boolean(c));
     }
-    const ids = Array.from(new Set(data.map(p => p.campoId)));
-    return ids.map(id => camposMap[id]).filter((c): c is Campo => Boolean(c));
-  }, [user, camposMap, data]);
+    return Object.values(camposMap).sort((a, b) => a.nombre.localeCompare(b.nombre));
+  }, [user, camposMap]);
 
   // Para operarios, auto-scope por email. Para admins, ven todo.
   const scopedData = useMemo(() => {
@@ -266,6 +266,10 @@ export function LluviaListScreen() {
 
   // Tap en card → abre form en edit mode. Cuando hagamos Detail, cambiar a navigate('LluviaDetail').
   const onItemPress = (p: Lluvia) => {
+    if (!puedeEditar) {
+      Alert.alert('Solo lectura', 'La lluvia está visible, pero solamente un administrador puede editarla.');
+      return;
+    }
     nav.navigate('LluviaForm', { lluviaId: p.id });
   };
 
@@ -308,7 +312,7 @@ export function LluviaListScreen() {
 
         <View style={styles.cardEnd}>
           <SyncBadge state={item.syncState} />
-          <Text style={styles.chev}>›</Text>
+          {puedeEditar && <Text style={styles.chev}>›</Text>}
         </View>
       </Pressable>
     );

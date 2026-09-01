@@ -198,6 +198,10 @@ export function ParicionListScreen() {
       });
       setData(ordered);
       setCamposMap(Object.fromEntries(cs.map(c => [c.id, c])));
+    } catch (err) {
+      if (!opts?.silent) {
+        Alert.alert('No se pudo actualizar', err instanceof Error ? err.message : 'Revisá la conexión e intentá nuevamente.');
+      }
     } finally {
       setLoading(false);
     }
@@ -221,10 +225,10 @@ export function ParicionListScreen() {
         .map(id => camposMap[id])
         .filter((c): c is Campo => Boolean(c));
     }
-    // fallback: inferir de la data
-    const ids = Array.from(new Set(data.map(p => p.campoId)));
-    return ids.map(id => camposMap[id]).filter((c): c is Campo => Boolean(c));
-  }, [user, camposMap, data]);
+    // Sin campo fijo = operario itinerante o admin: mostrar el catálogo
+    // completo, incluso campos donde todavía no cargó eventos propios.
+    return Object.values(camposMap).sort((a, b) => a.nombre.localeCompare(b.nombre));
+  }, [user, camposMap]);
 
   // Usuarios presentes en la data (solo para admin/mod).
   const usuariosVisibles = useMemo(() => {

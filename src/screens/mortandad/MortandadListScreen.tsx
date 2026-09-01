@@ -108,6 +108,7 @@ export function MortandadListScreen() {
   const { currentTab } = useTabNav();
 
   const esAdmin = user?.rol === 'administrador' || user?.rol === 'moderador';
+  const puedeEditar = user?.rol === 'administrador';
 
   const cachedSeed = (repo.listEventosCached('mortandad') ?? []) as Mortandad[];
   const [data, setData] = useState<Mortandad[]>(cachedSeed);
@@ -167,9 +168,8 @@ export function MortandadListScreen() {
         .map(id => camposMap[id])
         .filter((c): c is Campo => Boolean(c));
     }
-    const ids = Array.from(new Set(data.map(p => p.campoId)));
-    return ids.map(id => camposMap[id]).filter((c): c is Campo => Boolean(c));
-  }, [user, camposMap, data]);
+    return Object.values(camposMap).sort((a, b) => a.nombre.localeCompare(b.nombre));
+  }, [user, camposMap]);
 
   // Para operarios, auto-scope por email. Para admins, ven todo.
   const scopedData = useMemo(() => {
@@ -259,6 +259,10 @@ export function MortandadListScreen() {
 
   // Tap en card → abre form en edit mode. Cuando hagamos Detail, cambiar.
   const onItemPress = (p: Mortandad) => {
+    if (!puedeEditar) {
+      Alert.alert('Solo lectura', 'La mortandad está visible, pero solamente un administrador puede editarla.');
+      return;
+    }
     nav.navigate('MortandadForm', { mortandadId: p.id });
   };
 
@@ -322,7 +326,7 @@ export function MortandadListScreen() {
 
         <View style={styles.cardEnd}>
           <SyncBadge state={item.syncState} />
-          <Text style={styles.chev}>›</Text>
+          {puedeEditar && <Text style={styles.chev}>›</Text>}
         </View>
       </Pressable>
     );

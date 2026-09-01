@@ -14,6 +14,9 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { makeRedirectUri } from 'expo-auth-session';
+import * as QueryParams from 'expo-auth-session/build/QueryParams';
+import * as WebBrowser from 'expo-web-browser';
 import type {
   Campo,
   CampaniaReproductiva,
@@ -81,6 +84,10 @@ export interface SupabaseBackendConfig {
 
 const LEGACY_PENDING_KEY = 'asfion.supabase.pending.v1';
 const PENDING_PREFIX = 'asfion.supabase.pending.v2:';
+
+// Cierra correctamente una sesión OAuth si la app también se ejecuta en web.
+// En Android/iOS es inocuo y mantiene el mismo flujo oficial de Expo.
+WebBrowser.maybeCompleteAuthSession();
 
 function esRefreshTokenInvalido(error: unknown): boolean {
   const msg = error instanceof Error
@@ -175,14 +182,17 @@ function rowToCircuito(r: any): Circuito  { return mapRow<Circuito>(r, CIRCUITO_
 function rowToParcela(r: any): Parcela    { return mapRow<Parcela>(r, PARCELA_SCHEMA); }
 
 function rowToUsuario(r: any): Usuario {
+  const campoAsignadoId = r.campo_asignado_id ?? undefined;
   return {
     email: r.email,
     nombre: r.nombre ?? undefined,
     apellido: r.apellido ?? undefined,
     rol: r.rol,
     clienteId: r.cliente_id,
-    campos: [], // no se popula desde server por ahora
-    campoAsignadoId: r.campo_asignado_id ?? undefined,
+    // Campo fijo limita al operario a ese establecimiento. Sin campo fijo,
+    // [] representa alcance en todos los campos, sin convertirlo en admin.
+    campos: r.rol === 'operario' && campoAsignadoId ? [campoAsignadoId] : [],
+    campoAsignadoId,
   };
 }
 
@@ -474,6 +484,63 @@ export class SupabaseBackend implements IDataBackend {
     return profile;
   }
 
+  /**
+   * Inicia sesión con la cuenta Google del teléfono.
+   *
+   * Google autentica la identidad, pero NO decide quién puede usar ASFION:
+   * después del OAuth exigimos que el email exista en `usuarios`. Así, una
+   * cuenta Gmail ajena puede completar el consentimiento de Google pero nunca
+   * obtiene un perfil/tenant ni acceso a datos por RLS.
+   */
+  async loginWithGoogle(): Promise<Usuario | null> {
+    const redirectTo = makeRedirectUri({ scheme: 'asfion', path: 'auth/callback' });
+    const { data, error } = await this.supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo,
+        skipBrowserRedirect: true,
+      },
+    });
+    if (error) throw new Error(error.message);
+    if (!data.url) throw new Error('Google no devolvió una URL de acceso.');
+
+    const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+    if (result.type !== 'success') return null;
+
+    const { params, errorCode } = QueryParams.getQueryParams(result.url);
+    if (errorCode) throw new Error(`Google rechazó el acceso: ${errorCode}`);
+
+    const accessToken = typeof params.access_token === 'string' ? params.access_token : '';
+    const refreshToken = typeof params.refresh_token === 'string' ? params.refresh_token : '';
+    if (!accessToken || !refreshToken) {
+      throw new Error('No pudimos completar la sesión de Google. Intentá nuevamente.');
+    }
+
+    const { data: sessionData, error: sessionError } = await this.supabase.auth.setSession({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    });
+    if (sessionError) throw new Error(sessionError.message);
+
+    const email = sessionData.user?.email?.trim().toLowerCase();
+    if (!email) {
+      await this.clearLocalAuthSession();
+      throw new Error('Google no informó el email de la cuenta.');
+    }
+
+    try {
+      const profile = await this.fetchUserProfile(email);
+      this.currentUserCache = profile;
+      return profile;
+    } catch {
+      await this.clearLocalAuthSession();
+      throw new Error(
+        `La cuenta ${email} no está autorizada para usar ASFION. ` +
+        'Ingresá con uno de los correos habilitados por el administrador.',
+      );
+    }
+  }
+
   async getCurrentUser(): Promise<Usuario | null> {
     if (this.currentUserCache) return this.currentUserCache;
     let result: Awaited<ReturnType<typeof this.supabase.auth.getUser>>;
@@ -632,10 +699,14 @@ export class SupabaseBackend implements IDataBackend {
   // ---------- Catálogos ----------
 
   async listCampos(): Promise<Campo[]> {
-    const { data, error } = await this.supabase
-      .from('campos')
-      .select('*')
-      .order('nombre');
+    const user = await this.getCurrentUser();
+    let query = this.supabase.from('campos').select('*');
+    // Operario con campo fijo: solo ese campo. Operario sin asignación:
+    // todos los campos del tenant (RLS sigue aislando a Ganaderas).
+    if (user?.rol === 'operario' && user.campoAsignadoId) {
+      query = query.eq('id', user.campoAsignadoId);
+    }
+    const { data, error } = await query.order('nombre');
     if (error) throw new Error(error.message);
     return (data ?? []).map(rowToCampo);
   }
@@ -814,6 +885,8 @@ export class SupabaseBackend implements IDataBackend {
 
   async listEventos(tipo: TipoEvento, filters: EventoFilters = {}): Promise<Evento[]> {
     const table = tablaDeEvento(tipo);
+    const user = await this.getCurrentUser();
+    const campoFijo = user?.rol === 'operario' ? user.campoAsignadoId : undefined;
     // Pastoreo usa fecha_entrada en lugar de fecha
     const fechaCol = tipo === 'pastoreo' ? 'fecha_entrada' : 'fecha';
 
@@ -821,6 +894,7 @@ export class SupabaseBackend implements IDataBackend {
     // llamamos por cada página para mantener los predicados.
     const buildQuery = () => {
       let q = this.supabase.from(table).select('*');
+      if (campoFijo) q = q.eq('campo_id', campoFijo);
       if (filters.campoId) q = q.eq('campo_id', filters.campoId);
       if (filters.loteId) q = q.eq('lote_id', filters.loteId);
       if (filters.usuarioEmail) q = q.eq('usuario_email', filters.usuarioEmail);

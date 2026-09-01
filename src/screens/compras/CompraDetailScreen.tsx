@@ -22,6 +22,7 @@ import { PrimaryButton } from '@/components/PrimaryButton';
 import { SectionHeading } from '@/components/SectionHeading';
 import { SyncBadge } from '@/components/SyncBadge';
 import { useRepository } from '@/data';
+import { useAuth } from '@/auth/context';
 import { colors } from '@/theme/colors';
 import { fontSize, fontWeight } from '@/theme/typography';
 import { radius, spacing } from '@/theme/spacing';
@@ -45,6 +46,8 @@ export function CompraDetailScreen() {
   const nav = useNavigation<Nav>();
   const route = useRoute<Rt>();
   const repo = useRepository();
+  const { user } = useAuth();
+  const puedeEditar = user?.rol === 'administrador';
   const compraId = route.params.compraId;
 
   const [compra, setCompra] = useState<Compra | null>(null);
@@ -287,12 +290,14 @@ export function CompraDetailScreen() {
               onPress={onExportarPDF}
             />
           </View>
-          <View style={styles.actionHalf}>
-            <PrimaryButton
-              label="Editar"
-              onPress={() => nav.replace('CompraForm', { compraId: compra.id })}
-            />
-          </View>
+          {puedeEditar && (
+            <View style={styles.actionHalf}>
+              <PrimaryButton
+                label="Editar"
+                onPress={() => nav.replace('CompraForm', { compraId: compra.id })}
+              />
+            </View>
+          )}
         </View>
       </View>
     </SafeAreaView>

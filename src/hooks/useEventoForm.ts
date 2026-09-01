@@ -117,6 +117,18 @@ export function useEventoForm<T extends Evento>(opts: UseEventoFormOpts<T>) {
 
   const isEdit = Boolean(opts.eventoId);
 
+  // Crear eventos es tarea operativa. Modificar una carga ya consolidada es
+  // una acción administrativa. El guard vive en el hook común para cubrir
+  // todos los módulos, incluso si alguien intenta abrir la ruta directamente.
+  useEffect(() => {
+    if (!isEdit || !user || user.rol === 'administrador') return;
+    Alert.alert(
+      'Solo lectura',
+      'Los operarios pueden consultar y crear cargas, pero solamente un administrador puede editar información existente.',
+      [{ text: 'Volver', onPress: () => nav.goBack() }],
+    );
+  }, [isEdit, user, nav]);
+
   // ─────────────────────────────────────────────────────────────────────────
   // State común (campoId, fecha, campos[], edit flow)
   // ─────────────────────────────────────────────────────────────────────────
@@ -195,6 +207,7 @@ export function useEventoForm<T extends Evento>(opts: UseEventoFormOpts<T>) {
 
   useEffect(() => {
     if (!isEdit || !opts.eventoId) return;
+    if (user?.rol !== 'administrador') return;
     let cancelado = false;
     (async () => {
       const list = await repo.listEventos(opts.tipo);
@@ -217,7 +230,7 @@ export function useEventoForm<T extends Evento>(opts: UseEventoFormOpts<T>) {
     })();
     return () => { cancelado = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isEdit, opts.eventoId, opts.tipo]);
+  }, [isEdit, opts.eventoId, opts.tipo, user?.rol]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Guardar — orquesta build + save + alerts. Devuelve true si guardó OK.
@@ -229,6 +242,10 @@ export function useEventoForm<T extends Evento>(opts: UseEventoFormOpts<T>) {
     }
     if (!campoId) {
       Alert.alert('Falta campo', 'Elegí un campo antes de guardar.');
+      return null;
+    }
+    if (isEdit && user.rol !== 'administrador') {
+      Alert.alert('Acceso restringido', 'Solo un administrador puede guardar cambios sobre una carga existente.');
       return null;
     }
     const idDelEvento = opts.eventoId ?? cryptoRandomId();

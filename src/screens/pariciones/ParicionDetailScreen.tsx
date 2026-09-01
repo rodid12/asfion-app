@@ -32,6 +32,7 @@ import { PrimaryButton } from '@/components/PrimaryButton';
 import { SectionHeading } from '@/components/SectionHeading';
 import { SyncBadge } from '@/components/SyncBadge';
 import { useRepository } from '@/data';
+import { useAuth } from '@/auth/context';
 import { colors } from '@/theme/colors';
 import { fontSize, fontWeight } from '@/theme/typography';
 import { radius, spacing } from '@/theme/spacing';
@@ -69,6 +70,8 @@ export function ParicionDetailScreen() {
   const nav = useNavigation<Nav>();
   const route = useRoute<Rt>();
   const repo = useRepository();
+  const { user } = useAuth();
+  const puedeEditar = user?.rol === 'administrador';
   const paricionId = route.params.paricionId;
 
   const [paricion, setParicion] = useState<Paricion | null>(null);
@@ -275,12 +278,14 @@ export function ParicionDetailScreen() {
               }}
             />
           </View>
-          <View style={styles.actionHalf}>
-            <PrimaryButton
-              label="Editar"
-              onPress={() => nav.replace('ParicionForm', { paricionId: paricion.id })}
-            />
-          </View>
+          {puedeEditar && (
+            <View style={styles.actionHalf}>
+              <PrimaryButton
+                label="Editar"
+                onPress={() => nav.replace('ParicionForm', { paricionId: paricion.id })}
+              />
+            </View>
+          )}
         </View>
       </View>
     </SafeAreaView>

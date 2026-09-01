@@ -30,6 +30,8 @@ export interface IDataBackend {
 
   // Auth / usuarios
   login(email: string, password: string): Promise<Usuario>;
+  /** OAuth Google. Devuelve null si la persona cierra el navegador sin entrar. */
+  loginWithGoogle?(): Promise<Usuario | null>;
   getCurrentUser(): Promise<Usuario | null>;
   logout(): Promise<void>;
   /**
@@ -142,6 +144,14 @@ export class Repository {
   async login(email: string, password: string): Promise<Usuario> {
     const user = await this.backend.login(email, password);
     this.setCurrentUser(user);
+    return user;
+  }
+  async loginWithGoogle(): Promise<Usuario | null> {
+    if (!this.backend.loginWithGoogle) {
+      throw new Error('El acceso con Google no está disponible en este entorno.');
+    }
+    const user = await this.backend.loginWithGoogle();
+    if (user) this.setCurrentUser(user);
     return user;
   }
   getCurrentUser = () => this.backend.getCurrentUser();

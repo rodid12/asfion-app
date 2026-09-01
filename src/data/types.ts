@@ -36,8 +36,11 @@ export interface Usuario {
    *  el SupabaseBackend para incluirlo en cada INSERT, porque las RLS policies
    *  exigen que cliente_id matchee con el del usuario logueado. */
   clienteId?: string;
-  campos: string[]; // ids de campos a los que tiene acceso ([] = todos, para admins)
-  campoAsignadoId?: string; // el que se preselecciona en los forms
+  /** IDs de campos habilitados en la app. Un operario con campo asignado
+   *  recibe [campoId]; [] significa todos los campos (admins y operarios
+   *  itinerantes sin campo fijo). Esto NO modifica el rol ni habilita edición. */
+  campos: string[];
+  campoAsignadoId?: string; // campo fijo; undefined = puede operar en todos
 }
 
 // Catálogos compartidos — vienen del canonical (sincronizado con dashboard).

@@ -20,6 +20,7 @@ interface AuthState {
   user: Usuario | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  loginWithGoogle: () => Promise<boolean>;
   logout: () => Promise<void>;
 }
 
@@ -149,6 +150,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(u);
   }, [repo]);
 
+  const loginWithGoogle = useCallback(async (): Promise<boolean> => {
+    const u = await repo.loginWithGoogle();
+    if (!u) return false; // la persona cerró/canceló el navegador
+    await storageSet(USER_KEY, JSON.stringify(u));
+    repo.setCurrentUser(u);
+    setUser(u);
+    return true;
+  }, [repo]);
+
   const logout = useCallback(async () => {
     await repo.logout();
     await storageRemove(USER_KEY);
@@ -156,7 +166,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   }, [repo]);
 
-  const value = useMemo(() => ({ user, loading, login, logout }), [user, loading, login, logout]);
+  const value = useMemo(
+    () => ({ user, loading, login, loginWithGoogle, logout }),
+    [user, loading, login, loginWithGoogle, logout],
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
