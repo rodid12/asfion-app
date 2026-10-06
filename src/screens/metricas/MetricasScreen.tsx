@@ -42,6 +42,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/auth/context';
 import { LineChart } from '@/components/LineChart';
+import { useClientConfig } from '@/config/ClientConfigContext';
 import { useRepository } from '@/data';
 import { colors } from '@/theme/colors';
 import { fontSize, fontWeight } from '@/theme/typography';
@@ -163,8 +164,21 @@ export function MetricasScreen() {
   const repo = useRepository();
   const { user } = useAuth();
   const { currentTab } = useTabNav();
+  const clientConfig = useClientConfig();
 
   const esAdmin = user?.rol === 'administrador' || user?.rol === 'moderador';
+  const metricasHabilitadas = useMemo(() => ({
+    pariciones: clientConfig.modulosHabilitados.includes('pariciones'),
+    lluvias: clientConfig.modulosHabilitados.includes('lluvias'),
+    mortandad: clientConfig.modulosHabilitados.includes('mortandad'),
+    pastoreo: clientConfig.modulosHabilitados.includes('pastoreo'),
+    compras: clientConfig.modulosHabilitados.includes('compras'),
+    ventas: clientConfig.modulosHabilitados.includes('ventas') && user?.rol === 'administrador',
+  }), [clientConfig.modulosHabilitados, user?.rol]);
+  const metricaTabsVisibles = useMemo(
+    () => METRICA_TABS.filter(tab => tab === 'resumen' || metricasHabilitadas[tab]),
+    [metricasHabilitadas],
+  );
 
   const [data, setData] = useState<Paricion[]>([]);
   const [lluvias, setLluvias] = useState<Lluvia[]>([]);
@@ -184,6 +198,12 @@ export function MetricasScreen() {
   const [rango, setRango] = useState<Rango>('year');
   const [metricaTab, setMetricaTab] = useState<MetricaTab>('resumen');
 
+  // Si el administrador deshabilita un módulo mientras esta pantalla está
+  // abierta, evitamos dejar seleccionado un detalle que ya no corresponde.
+  useEffect(() => {
+    if (!metricaTabsVisibles.includes(metricaTab)) setMetricaTab('resumen');
+  }, [metricaTab, metricaTabsVisibles]);
+
   // Patrón `cancelado` (audit 27-jun-2026): si el usuario navega fuera del
   // tab antes de que terminen los fetches en paralelo, abortamos los
   // setState. Sin esto el spinner se queda colgado y se mezclan datos
@@ -193,14 +213,14 @@ export function MetricasScreen() {
     setLoadError(null);
     try {
       const [evs, lls, ms, ps, cps, vts, cs, camps] = await Promise.all([
-        repo.listEventos('paricion'),
-        repo.listEventos('lluvia'),
-        repo.listEventos('mortandad'),
-        repo.listEventos('pastoreo'),
-        repo.listEventos('compra'),
-        repo.listEventos('venta'),
+        metricasHabilitadas.pariciones ? repo.listEventos('paricion') : Promise.resolve([]),
+        metricasHabilitadas.lluvias ? repo.listEventos('lluvia') : Promise.resolve([]),
+        metricasHabilitadas.mortandad ? repo.listEventos('mortandad') : Promise.resolve([]),
+        metricasHabilitadas.pastoreo ? repo.listEventos('pastoreo') : Promise.resolve([]),
+        metricasHabilitadas.compras ? repo.listEventos('compra') : Promise.resolve([]),
+        metricasHabilitadas.ventas ? repo.listEventos('venta') : Promise.resolve([]),
         repo.listCampos(),
-        repo.listCampaniasReproductivas(),
+        metricasHabilitadas.pariciones ? repo.listCampaniasReproductivas() : Promise.resolve([]),
       ]);
       if (cancelado()) return;
       setData(evs as Paricion[]);
@@ -213,7 +233,9 @@ export function MetricasScreen() {
       setCampaniasReproductivas(camps);
       // Cargar todos los circuitos (un fetch por campo) — necesario para
       // mappear circuitoId → nombre en el chart "Movimientos por circuito".
-      const allCircs = await Promise.all(cs.map(c => repo.listCircuitos(c.id)));
+      const allCircs = metricasHabilitadas.pastoreo
+        ? await Promise.all(cs.map(c => repo.listCircuitos(c.id)))
+        : [];
       if (cancelado()) return;
       const map: Record<string, { nombre: string; campoId: string; hectareas: number }> = {};
       allCircs.flat().forEach(c => {
@@ -227,7 +249,7 @@ export function MetricasScreen() {
     } finally {
       if (!cancelado()) setLoading(false);
     }
-  }, [repo]);
+  }, [metricasHabilitadas, repo]);
 
   // Cargar al entrar al tab y al montarse.
   useEffect(() => {
@@ -922,18 +944,18 @@ export function MetricasScreen() {
             minimumFontScale={0.45}
           >
             {headerStatValue(metricaTab, {
-              totalEventos,
-              totalMM,
-              totalMortandad,
-              totalMortandadRegistros: filteredMortandad.length,
-              totalMovimientos,
-              totalCompras,
-              totalComprasRegistros: filteredCompras.length,
-              totalVentas: ventasKpis.ventas,
-              totalVentasRegistros: filteredVentas.length,
+              totalEventos: metricasHabilitadas.pariciones ? totalEventos : 0,
+              totalMM: metricasHabilitadas.lluvias ? totalMM : 0,
+              totalMortandad: metricasHabilitadas.mortandad ? totalMortandad : 0,
+              totalMortandadRegistros: metricasHabilitadas.mortandad ? filteredMortandad.length : 0,
+              totalMovimientos: metricasHabilitadas.pastoreo ? totalMovimientos : 0,
+              totalCompras: metricasHabilitadas.compras ? totalCompras : 0,
+              totalComprasRegistros: metricasHabilitadas.compras ? filteredCompras.length : 0,
+              totalVentas: metricasHabilitadas.ventas ? ventasKpis.ventas : 0,
+              totalVentasRegistros: metricasHabilitadas.ventas ? filteredVentas.length : 0,
               // En Resumen sumamos los conteos crudos de cada módulo (no los
               // KPIs de "mm" o equivalentes que son magnitudes distintas).
-              totalLluvias: filteredLluvias.length,
+              totalLluvias: metricasHabilitadas.lluvias ? filteredLluvias.length : 0,
             }).toLocaleString('es-AR')}
           </Text>
           <Text style={styles.headerStatLbl}>
@@ -972,9 +994,8 @@ export function MetricasScreen() {
           </Text>
         </Pressable>
         <View style={styles.subTabModuleRow}>
-          {METRICA_TABS
+          {metricaTabsVisibles
             .filter(t => t !== 'resumen')
-            .filter(t => t !== 'ventas' || user?.rol === 'administrador')
             .map(t => (
             <Pressable
               key={t}
@@ -1036,111 +1057,133 @@ export function MetricasScreen() {
           <>
             {/* KPI tiles — resumen de los módulos. 2 filas de 2 para que entren
                 cómodas en iPhone sin que las cifras grandes se corten. */}
-            <View style={styles.kpiRow}>
-              <Kpi value={totalNacimientos} label="NACIMIENTOS" color={colors.orange} />
-              <Kpi value={totalMM} label="MM LLUVIA" color={LLUVIAS_ACCENT} />
-            </View>
-            <View style={styles.kpiRow}>
-              <Kpi value={totalMortandad} label="MUERTES" color={MORTANDAD_ACCENT} />
+            {(metricasHabilitadas.pariciones || metricasHabilitadas.lluvias) && (
+              <View style={styles.kpiRow}>
+                {metricasHabilitadas.pariciones && (
+                  <Kpi value={totalNacimientos} label="NACIMIENTOS" color={colors.orange} />
+                )}
+                {metricasHabilitadas.lluvias && (
+                  <Kpi value={totalMM} label="MM LLUVIA" color={LLUVIAS_ACCENT} />
+                )}
+              </View>
+            )}
+            {(metricasHabilitadas.mortandad || metricasHabilitadas.pastoreo) && (
+              <View style={styles.kpiRow}>
+                {metricasHabilitadas.mortandad && (
+                  <Kpi value={totalMortandad} label="MUERTES" color={MORTANDAD_ACCENT} />
+                )}
               {/* En el nuevo modelo "stay log" no existe cabezas movidas;
                   el conteo natural es animales con pastoreo abierto AHORA
                   (todavía en un lote). Es lo más operativamente útil. */}
-              <Kpi
-                value={totalAbiertos}
-                label="EN LOTE AHORA"
-                color={PASTOREO_ACCENT}
-                empty={abiertosAhora.sinCantidad}
-              />
-            </View>
+                {metricasHabilitadas.pastoreo && (
+                  <Kpi
+                    value={totalAbiertos}
+                    label="EN LOTE AHORA"
+                    color={PASTOREO_ACCENT}
+                    empty={abiertosAhora.sinCantidad}
+                  />
+                )}
+              </View>
+            )}
 
             {/* Card Pariciones — preview con top 3 campos + CTA */}
-            <SummaryCard
-              title="Pariciones"
-              stat={totalEventos}
-              statLabel={totalEventos === 1 ? 'evento' : 'eventos'}
-              accent={colors.navy}
-              rows={eventosPorCampo.slice(0, 3).map(r => ({
-                label: r.campo.nombre,
-                value: r.count,
-                max: maxEventosCampo,
-                valueLabel: String(r.count),
-              }))}
-              empty={eventosPorCampo.length === 0 ? 'Sin eventos en el rango' : undefined}
-              ctaLabel="Ver detalle de pariciones →"
-              onCta={() => setMetricaTab('pariciones')}
-            />
+            {metricasHabilitadas.pariciones && (
+              <SummaryCard
+                title="Pariciones"
+                stat={totalEventos}
+                statLabel={totalEventos === 1 ? 'evento' : 'eventos'}
+                accent={colors.navy}
+                rows={eventosPorCampo.slice(0, 3).map(r => ({
+                  label: r.campo.nombre,
+                  value: r.count,
+                  max: maxEventosCampo,
+                  valueLabel: String(r.count),
+                }))}
+                empty={eventosPorCampo.length === 0 ? 'Sin eventos en el rango' : undefined}
+                ctaLabel="Ver detalle de pariciones →"
+                onCta={() => setMetricaTab('pariciones')}
+              />
+            )}
 
             {/* Card Lluvias — preview con top 3 campos + CTA */}
-            <SummaryCard
-              title="Lluvias"
-              stat={totalMM}
-              statLabel="mm"
-              accent={LLUVIAS_ACCENT}
-              rows={lluviasPorCampo.slice(0, 3).map(r => ({
-                label: r.campo.nombre,
-                value: r.mm,
-                max: maxMMCampo,
-                valueLabel: `${r.mm} mm`,
-              }))}
-              empty={lluviasPorCampo.length === 0 ? 'Sin registros en el rango' : undefined}
-              ctaLabel="Ver detalle de lluvias →"
-              onCta={() => setMetricaTab('lluvias')}
-            />
+            {metricasHabilitadas.lluvias && (
+              <SummaryCard
+                title="Lluvias"
+                stat={totalMM}
+                statLabel="mm"
+                accent={LLUVIAS_ACCENT}
+                rows={lluviasPorCampo.slice(0, 3).map(r => ({
+                  label: r.campo.nombre,
+                  value: r.mm,
+                  max: maxMMCampo,
+                  valueLabel: `${r.mm} mm`,
+                }))}
+                empty={lluviasPorCampo.length === 0 ? 'Sin registros en el rango' : undefined}
+                ctaLabel="Ver detalle de lluvias →"
+                onCta={() => setMetricaTab('lluvias')}
+              />
+            )}
 
             {/* Card Mortandad — top 3 campos con más muertes */}
-            <SummaryCard
-              title="Mortandad"
-              stat={totalMortandad}
-              statLabel={totalMortandad === 1 ? 'muerte' : 'muertes'}
-              accent={MORTANDAD_ACCENT}
-              rows={mortandadPorCampo.slice(0, 3).map(r => ({
-                label: r.campo.nombre,
-                value: r.count,
-                max: maxMortandadCampo,
-                valueLabel: String(r.count),
-              }))}
-              empty={mortandadPorCampo.length === 0 ? 'Sin registros en el rango' : undefined}
-              ctaLabel="Ver detalle de mortandad →"
-              onCta={() => setMetricaTab('mortandad')}
-            />
+            {metricasHabilitadas.mortandad && (
+              <SummaryCard
+                title="Mortandad"
+                stat={totalMortandad}
+                statLabel={totalMortandad === 1 ? 'muerte' : 'muertes'}
+                accent={MORTANDAD_ACCENT}
+                rows={mortandadPorCampo.slice(0, 3).map(r => ({
+                  label: r.campo.nombre,
+                  value: r.count,
+                  max: maxMortandadCampo,
+                  valueLabel: String(r.count),
+                }))}
+                empty={mortandadPorCampo.length === 0 ? 'Sin registros en el rango' : undefined}
+                ctaLabel="Ver detalle de mortandad →"
+                onCta={() => setMetricaTab('mortandad')}
+              />
+            )}
 
             {/* Card Pastoreo — top 3 campos por cantidad de movimientos.
                 En el nuevo modelo cada registro = un animal entrando a un lote,
                 así que el conteo natural es "movimientos" (registros). */}
-            <SummaryCard
-              title="Pastoreo"
-              stat={totalMovimientos}
-              statLabel={totalMovimientos === 1 ? 'movimiento' : 'movimientos'}
-              accent={PASTOREO_ACCENT}
-              rows={movimientosPorCampo.slice(0, 3).map(r => ({
-                label: r.campo.nombre,
-                value: r.count,
-                max: maxMovimientosCampo,
-                valueLabel: String(r.count),
-              }))}
-              empty={movimientosPorCampo.length === 0 ? 'Sin movimientos en el rango' : undefined}
-              ctaLabel="Ver detalle de pastoreo →"
-              onCta={() => setMetricaTab('pastoreo')}
-            />
+            {metricasHabilitadas.pastoreo && (
+              <SummaryCard
+                title="Pastoreo"
+                stat={totalMovimientos}
+                statLabel={totalMovimientos === 1 ? 'movimiento' : 'movimientos'}
+                accent={PASTOREO_ACCENT}
+                rows={movimientosPorCampo.slice(0, 3).map(r => ({
+                  label: r.campo.nombre,
+                  value: r.count,
+                  max: maxMovimientosCampo,
+                  valueLabel: String(r.count),
+                }))}
+                empty={movimientosPorCampo.length === 0 ? 'Sin movimientos en el rango' : undefined}
+                ctaLabel="Ver detalle de pastoreo →"
+                onCta={() => setMetricaTab('pastoreo')}
+              />
+            )}
 
             {/* Card Compras — top 3 campos por cantidad de compras registradas. */}
-            <SummaryCard
-              title="Compras"
-              stat={totalCompras}
-              statLabel={totalCompras === 1 ? 'compra' : 'compras'}
-              accent={COMPRAS_ACCENT}
-              rows={comprasPorCampo.slice(0, 3).map(r => ({
-                label: r.campo.nombre,
-                value: r.count,
-                max: maxComprasCount,
-                valueLabel: String(r.count),
-              }))}
-              empty={comprasPorCampo.length === 0 ? 'Sin compras en el rango' : undefined}
-              ctaLabel="Ver detalle de compras →"
-              onCta={() => setMetricaTab('compras')}
-            />
+            {metricasHabilitadas.compras && (
+              <SummaryCard
+                title="Compras"
+                stat={totalCompras}
+                statLabel={totalCompras === 1 ? 'compra' : 'compras'}
+                accent={COMPRAS_ACCENT}
+                rows={comprasPorCampo.slice(0, 3).map(r => ({
+                  label: r.campo.nombre,
+                  value: r.count,
+                  max: maxComprasCount,
+                  valueLabel: String(r.count),
+                }))}
+                empty={comprasPorCampo.length === 0 ? 'Sin compras en el rango' : undefined}
+                ctaLabel="Ver detalle de compras →"
+                onCta={() => setMetricaTab('compras')}
+              />
+            )}
 
-            {user?.rol === 'administrador' && (
+            {metricasHabilitadas.ventas && (
               <SummaryCard
                 title="Ventas"
                 stat={ventasKpis.ventas}
@@ -1162,7 +1205,7 @@ export function MetricasScreen() {
         )}
 
         {/* ============ PARICIONES ============ */}
-        {metricaTab === 'pariciones' && (
+        {metricaTab === 'pariciones' && metricasHabilitadas.pariciones && (
           <>
             <View style={styles.kpiRow}>
               <Kpi value={totalNacimientos} label="NACIMIENTOS" color={colors.orange} />
@@ -1268,7 +1311,7 @@ export function MetricasScreen() {
         )}
 
         {/* ============ LLUVIAS ============ */}
-        {metricaTab === 'lluvias' && (
+        {metricaTab === 'lluvias' && metricasHabilitadas.lluvias && (
           <>
             {/* Filtros de Lluvias (feedback Ro):
                   - Chips por campo (wrap, sin scroll). Filtra todos los charts.
@@ -1411,7 +1454,7 @@ export function MetricasScreen() {
         )}
 
         {/* ============ MORTANDAD ============ */}
-        {metricaTab === 'mortandad' && (
+        {metricaTab === 'mortandad' && metricasHabilitadas.mortandad && (
           <>
             <View style={styles.kpiRow}>
               <Kpi value={totalMortandad} label="MUERTES" color={MORTANDAD_ACCENT} />
@@ -1501,7 +1544,7 @@ export function MetricasScreen() {
         )}
 
         {/* ============ PASTOREO ============ */}
-        {metricaTab === 'pastoreo' && (
+        {metricaTab === 'pastoreo' && metricasHabilitadas.pastoreo && (
           <>
             {/* Filtros específicos de Pastoreo (feedback Ro):
                   - Chips abiertos/cerrados/todos
@@ -1646,7 +1689,7 @@ export function MetricasScreen() {
         )}
 
         {/* ============ COMPRAS ============ */}
-        {metricaTab === 'compras' && (
+        {metricaTab === 'compras' && metricasHabilitadas.compras && (
           <>
             <View style={styles.kpiRow}>
               <Kpi value={totalCompras} label="COMPRAS" color={COMPRAS_ACCENT} />
@@ -1726,7 +1769,7 @@ export function MetricasScreen() {
         )}
 
         {/* ============ VENTAS (solo administrador) ============ */}
-        {metricaTab === 'ventas' && user?.rol === 'administrador' && (
+        {metricaTab === 'ventas' && metricasHabilitadas.ventas && (
           <>
             <View style={styles.kpiRow}>
               <Kpi value={ventasKpis.ventas} label="VENTAS" color={VENTAS_ACCENT} />
