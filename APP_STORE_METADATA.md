@@ -38,9 +38,8 @@ Gestión ganadera, sin fricción
 > resubmit a Apple. Bueno para anunciar features nuevos o promociones.
 
 ```
-Nuevo: módulo de Compras con cálculo automático de merma y dashboard
-web con métricas por campo y categoría. Carga eventos del campo sin
-conexión.
+Nuevos módulos de Compras y Ventas, métricas por campo y categoría,
+y carga de eventos sin conexión para seguir trabajando aun sin señal.
 ```
 *(170 chars exactos)*
 
@@ -50,7 +49,7 @@ conexión.
 
 ```
 ASFION es la herramienta digital pensada para ganaderos extensivos
-argentinos: cargá pariciones, lluvias, mortandad, pastoreo y compras
+argentinos: cargá pariciones, lluvias, mortandad, pastoreo, compras y ventas
 de hacienda directo desde el campo, incluso sin señal, y revisá los
 indicadores de tu operación desde el panel web.
 
@@ -78,6 +77,9 @@ centralizar la operación sin complicaciones técnicas.
   automático de merma % entre kg origen y destino, precio, titular,
   DTE, plazo y consignado.
 
+• Ventas de hacienda: registrá categorías, cabezas, kg brutos y netos,
+  precio, titular, frigorífico, DTE y tropa dentro de cada operación.
+
 — OFFLINE FIRST —
 
 Cargá eventos en el campo aunque no haya señal. Cuando vuelve la
@@ -86,9 +88,9 @@ información.
 
 — MÉTRICAS Y REPORTES —
 
-Pantalla de Métricas con KPIs por módulo: total cabezas, % señalado,
-inversión total, kg destino, merma promedio, top campos, top causas,
-evolución mensual.
+Pantalla de Métricas con KPIs por módulo: total de cabezas, % señalado,
+kg de origen y destino, merma promedio, categorías, top campos, top
+causas y evolución mensual.
 
 — DASHBOARD WEB INCLUIDO —
 
@@ -158,10 +160,11 @@ ganaderia,vacas,cattle,campo,estancia,rodeo,hacienda,pariciones,pastoreo,agro,va
 
 ## Age Rating
 
-Cuando Apple te pregunte por edad mínima, responder **No** a TODO el
-cuestionario (no hay contenido violento, sexual, gambling, alcohol, etc.).
-
-→ Resultado automático: **Apple 4+** (apto para todas las edades).
+Responder **No** a contenido sexual, apuestas, drogas, lenguaje adulto y
+demás categorías que ASFION no contiene. En la pregunta sobre imágenes
+realistas sensibles, responder según el uso efectivo: un administrador puede
+adjuntar voluntariamente fotos operativas de mortandad animal. No usar ese tipo
+de imágenes en las capturas públicas del App Store.
 
 ---
 
@@ -185,20 +188,19 @@ Cuando llenes la sección de "App Privacy" en ASC, marcar:
 
 ### Data Collected and Linked to User
 - **Email Address** — para autenticación. *No usado para tracking.*
-- **User Content** (datos productivos del campo) — para funcionalidad de la app.
-
-### Data Collected but NOT Linked to User
-- **Performance Data** (crash logs anónimos) — para diagnóstico técnico.
+- **User ID** — para asociar permisos, cliente y cargas al usuario.
+- **Precise Location** — solo al cargar eventos que requieren ubicación; no se usa en segundo plano.
+- **Photos or Videos** — únicamente las fotos que el usuario decide adjuntar a eventos.
+- **Other User Content** — datos productivos y comerciales del campo, para funcionalidad de la app.
 
 ### Data NOT Collected
-- Ubicación precisa
 - Información financiera
 - Historial de navegación
 - Contactos
-- Fotos personales (excepto las que el usuario sube voluntariamente)
-- Audio / video
+- Audio
 - Health & Fitness
 - Identificadores de tracking
+- Performance Data / crash analytics (la versión actual no integra un servicio de analítica de fallos)
 
 ### Tracking
 **¿Trackea al usuario entre apps y sitios web?** → **NO**
@@ -220,7 +222,7 @@ Password: ASFION-AppleReview-2026!
 Y cargarle:
 - 1 cliente_id ficticio "Demo Ranch"
 - 2 campos: "Campo Norte", "Campo Sur"
-- 5-10 eventos de cada módulo (pariciones, lluvias, mortandad, pastoreo, compras)
+- 5-10 eventos de cada módulo (pariciones, lluvias, mortandad, pastoreo, compras y ventas)
 - Permisos de administrador para que vea todo
 
 En el campo "App Review Information" de ASC:
@@ -228,7 +230,7 @@ En el campo "App Review Information" de ASC:
 ```
 First Name:     Apple
 Last Name:      Reviewer
-Phone:          +54 9 11 [TU TELÉFONO]
+Phone:          +54 387 534 9914
 Email:          rosariodidziulis8@gmail.com
 
 Sign-in info:
@@ -237,13 +239,22 @@ Sign-in info:
 
 Notes:
   ASFION is a B2B platform for Argentine cattle ranching operations.
-  Use the demo account above to log in and explore all 5 modules:
+  ASFION is an enterprise app. Accounts are provisioned by contracted
+  cattle-ranching organizations; there is no public account registration.
+  Google Sign-In is only an authentication option for pre-authorized
+  enterprise email addresses.
+
+  Use the demo account above to log in and explore all 6 modules:
   Pariciones (births), Lluvias (rain), Mortandad (deaths), Pastoreo
-  (grazing), Compras (purchases). The app works offline — events
+  (grazing), Compras (purchases), and Ventas (sales). The app works
+  offline — events
   load locally and sync when connection is available. The web
   dashboard (asfion-web-2026.vercel.app) shows the same data with
   advanced charts and CSV export. All UI text is in Spanish; we
-  serve Argentine and South American cattle producers.
+  serve Argentine and South American cattle producers. The app contains
+  no in-app purchase flow; enterprise service agreements are contracted
+  directly with organizations outside the app. Users can request account
+  or personal-data deletion from the in-app Support link.
 ```
 
 ---
@@ -252,9 +263,8 @@ Notes:
 
 Ver `SCREENSHOTS_GUIDE.md` (siguiente archivo). En resumen:
 
-- **iPhone 6.7"** (1290 × 2796) — OBLIGATORIO, mínimo 3, máximo 10
-- **iPhone 6.5"** (1242 × 2688) — opcional pero recomendado
-- **iPad 12.9"** (2048 × 2732) — solo si declaramos iPad support (sí lo declaramos)
+- **iPhone:** cargar entre 1 y 10 capturas en el tamaño principal que solicite App Store Connect.
+- **iPad:** también obligatorio porque mantenemos `supportsTablet: true`; cargar entre 1 y 10 capturas del iPad en el tamaño que solicite App Store Connect.
 
 Yo te genero capturas con marco de iPhone + caption arriba en cuanto me
 mandes 5-6 screenshots crudos de la app desde tu celular.
@@ -266,8 +276,8 @@ mandes 5-6 screenshots crudos de la app desde tu celular.
 | Campo | Valor inicial |
 |---|---|
 | **Version** | `1.0.0` |
-| **Build number** | `1` (autoIncrement en eas.json se encarga) |
-| **Copyright** | `© 2026 [RAZÓN SOCIAL DE LA SAS/SRL]` |
+| **Build number** | `3` para el próximo envío (autoIncrement en eas.json se encarga) |
+| **Copyright** | `© 2026 María del Rosario Didziulis` |
 | **What's New in This Version** | `Versión inicial de ASFION.` |
 
 ---
@@ -277,10 +287,10 @@ mandes 5-6 screenshots crudos de la app desde tu celular.
 - [ ] Apple Developer Account activa (Fase A)
 - [ ] Bundle ID `com.asfion.app` creado en developer.apple.com
 - [ ] App creada en App Store Connect con el bundle ID
-- [ ] Razón social + CUIT completados en privacy.html y terms.html
+- [x] Titular identificado en privacy.html y terms.html (el CUIT no se publica)
 - [ ] Privacy/Terms/Support URLs deployadas en Vercel y accesibles
 - [ ] Usuario `apple-review@asfion.com` creado en Supabase con datos demo
-- [ ] Screenshots cargados (mínimo 3 para iPhone 6.7")
+- [ ] Screenshots cargados para iPhone y iPad
 - [ ] Description, subtitle, keywords completados
 - [ ] App Privacy section completada
 - [ ] Categories seleccionadas

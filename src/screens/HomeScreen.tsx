@@ -31,6 +31,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import { StatCard } from '@/components/StatCard';
+import { LegalLinks } from '@/components/LegalLinks';
 import { useAuth } from '@/auth/context';
 import { useRepository } from '@/data';
 import { useClientConfig } from '@/config/ClientConfigContext';
@@ -309,6 +310,8 @@ export function HomeScreen() {
             );
           })}
         </View>
+
+        <LegalLinks />
 
         {/* Footer ASFION */}
         <View style={styles.asfionFooter}>

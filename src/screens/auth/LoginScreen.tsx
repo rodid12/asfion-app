@@ -22,6 +22,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FormField } from '@/components/FormField';
+import { LegalLinks } from '@/components/LegalLinks';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { useAuth } from '@/auth/context';
 import { clientBranding } from '@/config/client';
@@ -136,8 +137,10 @@ export function LoginScreen() {
           </Pressable>
 
           <Text style={styles.hint}>
-            Acceso exclusivo para cuentas autorizadas por Ganaderas.
+            Acceso exclusivo para cuentas autorizadas.
           </Text>
+
+          <LegalLinks theme="dark" />
         </ScrollView>
 
         {/* Footer ASFION discreto */}
