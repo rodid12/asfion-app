@@ -54,7 +54,12 @@ interface ProviderProps {
 
 export function ClientConfigProvider({ config: override, children }: ProviderProps) {
   const repo = useRepository();
-  const { user, loading: authLoading } = useAuth();
+  const {
+    user,
+    loading: authLoading,
+    isSuperAdmin,
+    clientesDisponibles,
+  } = useAuth();
   const [config, setConfig] = useState<ClientConfig>(override ?? ACTIVE_CONFIG);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -71,6 +76,22 @@ export function ClientConfigProvider({ config: override, children }: ProviderPro
       setLoading(false);
       setError(null);
       return;
+    }
+    // Al cambiar de tenant, pintar inmediatamente el nombre y los módulos del
+    // resumen autorizado. Si estamos offline y nunca se cacheó la config
+    // completa, esto evita mostrar accidentalmente el branding del cliente
+    // anterior (los catálogos usan el fallback hasta recuperar conexión).
+    if (isSuperAdmin) {
+      const resumen = clientesDisponibles.find(c => c.id === clienteId);
+      if (resumen) {
+        setConfig(mapRowToClientConfig({
+          id: resumen.id,
+          nombre: resumen.nombre,
+          tagline: resumen.tagline,
+          modulosHabilitados: resumen.modulosHabilitados,
+          catalogos: {},
+        }));
+      }
     }
     setLoading(true);
     setError(null);
@@ -109,7 +130,7 @@ export function ClientConfigProvider({ config: override, children }: ProviderPro
     } finally {
       setLoading(false);
     }
-  }, [repo, override, authLoading, user?.clienteId]);
+  }, [repo, override, authLoading, user?.clienteId, isSuperAdmin, clientesDisponibles]);
 
   // Boot: trigger del fetch una vez al montar.
   useEffect(() => {

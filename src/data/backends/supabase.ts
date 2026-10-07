@@ -23,6 +23,7 @@ import type {
   CaravanaColor,
   Circuito,
   ClienteConfigRow,
+  ClienteDisponible,
   Evento,
   Lote,
   Parcela,
@@ -424,6 +425,9 @@ export class SupabaseBackend implements IDataBackend {
   readonly name = 'supabase';
   private supabase: SupabaseClient;
   private currentUserCache: Usuario | null = null;
+  /** Scope explícito requerido por RLS para que un superadmin vea/opere un
+   *  solo cliente por vez. Nunca se deriva de un input de formulario. */
+  private adminClienteRequestScope: string | null = null;
 
   /** Cola offline aislada por cliente+usuario para dispositivos compartidos. */
   private async pendingKey(): Promise<string | null> {
@@ -459,7 +463,27 @@ export class SupabaseBackend implements IDataBackend {
   }
 
   constructor(config: SupabaseBackendConfig) {
+    const nativeFetch = globalThis.fetch.bind(globalThis);
+    const scopedFetch: typeof fetch = async (input, init) => {
+      const inheritedHeaders = typeof Request !== 'undefined' && input instanceof Request
+        ? input.headers
+        : undefined;
+      const headers = new Headers(init?.headers ?? inheritedHeaders);
+      const current = headers.get('x-client-info') ?? 'asfion-app';
+      const clean = current
+        .replace(/;?asfion-tenant=[a-z0-9-]+/g, '')
+        .replace(/;+$/g, '');
+      headers.set(
+        'x-client-info',
+        this.adminClienteRequestScope
+          ? `${clean};asfion-tenant=${this.adminClienteRequestScope}`
+          : clean,
+      );
+      return nativeFetch(input, { ...init, headers });
+    };
+
     this.supabase = createClient(config.url, config.anonKey, {
+      global: { fetch: scopedFetch },
       auth: {
         // Usamos AsyncStorage como el storage de sesión (Supabase Auth lo
         // necesita para persistir el JWT entre cierres de app).
@@ -586,6 +610,50 @@ export class SupabaseBackend implements IDataBackend {
     this.currentUserCache = user;
   }
 
+  setAdminClienteScope(clienteId: string | null): void {
+    const normalized = clienteId?.trim().toLowerCase() || null;
+    if (normalized && !/^[a-z0-9-]+$/.test(normalized)) {
+      throw new Error('Identificador de cliente inválido.');
+    }
+    if (normalized !== this.adminClienteRequestScope) {
+      this.adminClienteRequestScope = normalized;
+      // Evita que getCurrentUser conserve un perfil sintetizado del tenant
+      // anterior durante el cambio.
+      this.currentUserCache = null;
+    }
+  }
+
+  async isSuperAdmin(): Promise<boolean> {
+    let email = this.currentUserCache?.email?.trim().toLowerCase();
+    if (!email) {
+      const { data: authData, error: authError } = await this.supabase.auth.getUser();
+      if (authError) throw new Error(`No se pudo validar la sesión: ${authError.message}`);
+      email = authData.user?.email?.trim().toLowerCase();
+    }
+    if (!email) return false;
+    const { data, error } = await this.supabase
+      .from('super_admins')
+      .select('email')
+      .eq('email', email)
+      .maybeSingle();
+    if (error) throw new Error(`No se pudo validar el acceso global: ${error.message}`);
+    return Boolean(data?.email);
+  }
+
+  async listClientesDisponibles(): Promise<ClienteDisponible[]> {
+    const { data, error } = await this.supabase
+      .from('clientes')
+      .select('id, nombre, tagline, modulos_habilitados')
+      .order('nombre');
+    if (error) throw new Error(`No se pudieron cargar los clientes: ${error.message}`);
+    return (data ?? []).map((row: any) => ({
+      id: row.id,
+      nombre: row.nombre,
+      tagline: row.tagline ?? undefined,
+      modulosHabilitados: Array.isArray(row.modulos_habilitados) ? row.modulos_habilitados : [],
+    }));
+  }
+
   async logout(): Promise<void> {
     try {
       await this.supabase.auth.signOut();
@@ -593,6 +661,7 @@ export class SupabaseBackend implements IDataBackend {
       // Aunque el servidor rechace un refresh token viejo, la salida local
       // siempre debe completarse para no restaurar una sesión fantasma.
       await this.clearLocalAuthSession();
+      this.adminClienteRequestScope = null;
     }
   }
 

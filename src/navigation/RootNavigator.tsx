@@ -3,6 +3,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import type { RootStackParamList } from './types';
 import { LoginScreen } from '@/screens/auth/LoginScreen';
+import { ClienteSelectorScreen } from '@/screens/auth/ClienteSelectorScreen';
 import { MainTabsScreen } from '@/screens/MainTabsScreen';
 import { ParicionFormScreen } from '@/screens/pariciones/ParicionFormScreen';
 import { ParicionDetailScreen } from '@/screens/pariciones/ParicionDetailScreen';
@@ -39,7 +40,7 @@ const headerStyle = {
 };
 
 export function RootNavigator() {
-  const { user, loading } = useAuth();
+  const { user, loading, isSuperAdmin, clienteSeleccionadoId } = useAuth();
   const clientConfig = useClientConfig();
   // Helper: solo registramos las rutas de Form de módulos habilitados.
   // Si un cliente tiene solo Pariciones+Lluvias, MortandadForm y PastoreoForm
@@ -54,6 +55,13 @@ export function RootNavigator() {
         <ActivityIndicator color={colors.navy} size="large" />
       </View>
     );
+  }
+
+  // Un superadministrador nunca entra al dashboard sin tenant explícito.
+  // Esto evita que una consulta accidental pueda mezclar clientes y permite
+  // que la misma cuenta revise Ganaderas, La Hoyada u otros futuros tenants.
+  if (user && isSuperAdmin && !clienteSeleccionadoId) {
+    return <ClienteSelectorScreen />;
   }
 
   // TabProvider vive arriba del Stack para que pantallas pusheadas

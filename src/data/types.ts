@@ -26,6 +26,15 @@ export interface ClienteConfigRow {
   catalogos: Record<string, any>;
 }
 
+/** Cliente que un superadministrador puede seleccionar desde la app.
+ *  Es deliberadamente un resumen: no expone datos operativos ni de cobro. */
+export interface ClienteDisponible {
+  id: string;
+  nombre: string;
+  tagline?: string;
+  modulosHabilitados: string[];
+}
+
 /** Identidad del usuario que carga (email es la clave natural, como en AppSheet). */
 export interface Usuario {
   email: string;
@@ -41,6 +50,9 @@ export interface Usuario {
    *  itinerantes sin campo fijo). Esto NO modifica el rol ni habilita edición. */
   campos: string[];
   campoAsignadoId?: string; // campo fijo; undefined = puede operar en todos
+  /** Se obtiene exclusivamente de `super_admins` bajo RLS; nunca del rol
+   *  editable de la tabla usuarios. */
+  isSuperAdmin?: boolean;
 }
 
 // Catálogos compartidos — vienen del canonical (sincronizado con dashboard).

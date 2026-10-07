@@ -1,7 +1,7 @@
 // Repository pattern. Los screens NUNCA hablan con Sheets ni con Supabase directo.
 // Siempre pasan por acá. Eso nos permite cambiar el backend sin tocar la UI.
 
-import type { CampaniaReproductiva, CaravanaColor, Campo, Circuito, ClienteConfigRow, Evento, Lote, Parcela, Pastoreo, Pluviometro, Subscription, TipoEvento, Usuario } from './types';
+import type { CampaniaReproductiva, CaravanaColor, Campo, Circuito, ClienteConfigRow, ClienteDisponible, Evento, Lote, Parcela, Pastoreo, Pluviometro, Subscription, TipoEvento, Usuario } from './types';
 import { isSessionExpiredError, looksLikeRlsBlock, SubscriptionBlockedError } from './backends/supabase';
 
 /** Última caravana cargada en un campo — alimenta el autocomplete del form. */
@@ -42,6 +42,11 @@ export interface IDataBackend {
    * tira "usuario sin clienteId". AuthProvider llama esto al bootstrap.
    */
   setCurrentUser?(user: Usuario | null): void;
+  /** Declara el tenant elegido por un superadministrador. El backend lo envía
+   *  como scope firmado por la sesión en cada request; RLS valida el valor. */
+  setAdminClienteScope?(clienteId: string | null): void;
+  isSuperAdmin?(): Promise<boolean>;
+  listClientesDisponibles?(): Promise<ClienteDisponible[]>;
 
   // Subscription / billing — estado del cliente para enforcement de cobranza.
   getSubscription(): Promise<Subscription>;
@@ -170,6 +175,14 @@ export class Repository {
     }
     this.backend.setCurrentUser?.(user);
   };
+  setAdminClienteScope = (clienteId: string | null) => {
+    this.listCache.clear();
+    this.backend.setAdminClienteScope?.(clienteId);
+  };
+  isSuperAdmin = (): Promise<boolean> =>
+    this.backend.isSuperAdmin ? this.backend.isSuperAdmin() : Promise.resolve(false);
+  listClientesDisponibles = (): Promise<ClienteDisponible[]> =>
+    this.backend.listClientesDisponibles ? this.backend.listClientesDisponibles() : Promise.resolve([]);
 
   // Subscription / billing
   getSubscription = () => this.backend.getSubscription();

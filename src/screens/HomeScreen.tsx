@@ -94,7 +94,7 @@ function primerNombre(email?: string, nombre?: string): string {
 
 export function HomeScreen() {
   const nav = useNavigation<Nav>();
-  const { user, logout } = useAuth();
+  const { user, logout, isSuperAdmin, mostrarSelectorClientes } = useAuth();
   const repo = useRepository();
   const { switchTab, currentTab } = useTabNav();
   const clientConfig = useClientConfig();
@@ -190,9 +190,24 @@ export function HomeScreen() {
             </Text>
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.clientTop} numberOfLines={1}>
-              {clientConfig.branding.nombre}
-            </Text>
+            {isSuperAdmin ? (
+              <Pressable
+                onPress={() => { void mostrarSelectorClientes(); }}
+                style={({ pressed }) => [styles.clientSwitchRow, pressed && styles.clientSwitchPressed]}
+                accessibilityRole="button"
+                accessibilityLabel={`Cambiar cliente. Cliente actual: ${clientConfig.branding.nombre}`}
+                hitSlop={6}
+              >
+                <Text style={styles.clientTop} numberOfLines={1}>
+                  {clientConfig.branding.nombre}
+                </Text>
+                <Text style={styles.clientSwitchHint}>CAMBIAR ▾</Text>
+              </Pressable>
+            ) : (
+              <Text style={styles.clientTop} numberOfLines={1}>
+                {clientConfig.branding.nombre}
+              </Text>
+            )}
             <Text style={styles.hello} numberOfLines={1}>
               Hola{nombreUsuario ? `, ${nombreUsuario}` : ''}
             </Text>
@@ -390,11 +405,26 @@ const styles = StyleSheet.create({
     color: colors.navyDeep,
   },
   clientTop: {
+    flexShrink: 1,
     fontSize: 10,
     color: colors.orange,
     textTransform: 'uppercase',
     letterSpacing: 1.6,
     fontWeight: fontWeight.bold as '700',
+    marginBottom: 2,
+  },
+  clientSwitchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    alignSelf: 'flex-start',
+  },
+  clientSwitchPressed: { opacity: 0.7 },
+  clientSwitchHint: {
+    color: colors.textOnDarkMuted,
+    fontSize: 8,
+    fontWeight: fontWeight.bold as '700',
+    letterSpacing: 0.5,
     marginBottom: 2,
   },
   hello: {
