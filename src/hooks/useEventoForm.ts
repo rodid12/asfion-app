@@ -168,8 +168,13 @@ export function useEventoForm<T extends Evento>(opts: UseEventoFormOpts<T>) {
         return cs.length === 1 && cs[0] ? cs[0].id : '';
       });
     } catch (err) {
-      setCampos([]);
-      setCamposError(err instanceof Error ? err.message : 'No se pudieron cargar los campos.');
+      setCampos(actuales => {
+        if (actuales.length > 0) return actuales;
+        setCamposError(
+          'No hay campos guardados en este dispositivo. Conectate una vez para descargar la información del establecimiento.',
+        );
+        return [];
+      });
     } finally {
       setCamposLoading(false);
     }

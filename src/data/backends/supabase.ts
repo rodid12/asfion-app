@@ -85,6 +85,7 @@ export interface SupabaseBackendConfig {
 
 const LEGACY_PENDING_KEY = 'asfion.supabase.pending.v1';
 const PENDING_PREFIX = 'asfion.supabase.pending.v2:';
+const CATALOG_PREFIX = 'asfion.supabase.catalog.v1:';
 
 // Cierra correctamente una sesión OAuth si la app también se ejecuta en web.
 // En Android/iOS es inocuo y mantiene el mismo flujo oficial de Expo.
@@ -429,6 +430,73 @@ export class SupabaseBackend implements IDataBackend {
    *  solo cliente por vez. Nunca se deriva de un input de formulario. */
   private adminClienteRequestScope: string | null = null;
 
+  /**
+   * Los catálogos se aíslan por cliente + usuario. Esto permite abrir los
+   * formularios sin señal sin mezclar campos entre tenants o personas que
+   * compartan el mismo dispositivo.
+   */
+  private catalogKey(resource: string): string | null {
+    const user = this.currentUserCache;
+    if (!user?.email || !user.clienteId) return null;
+    return `${CATALOG_PREFIX}${user.clienteId}:${user.email.trim().toLowerCase()}:${resource}`;
+  }
+
+  private async readCatalogCache<T>(resource: string): Promise<T[] | null> {
+    const key = this.catalogKey(resource);
+    if (!key) return null;
+    try {
+      const raw = await AsyncStorage.getItem(key);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as { rows?: unknown };
+      return Array.isArray(parsed.rows) ? parsed.rows as T[] : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private async writeCatalogCache<T>(resource: string, rows: T[]): Promise<void> {
+    const key = this.catalogKey(resource);
+    if (!key) return;
+    try {
+      await AsyncStorage.setItem(key, JSON.stringify({
+        savedAt: new Date().toISOString(),
+        rows,
+      }));
+    } catch {
+      // El cache mejora el modo offline, pero nunca debe bloquear la carga online.
+    }
+  }
+
+  /**
+   * Cache-first: si existe una copia local se devuelve inmediatamente y se
+   * refresca en segundo plano. En el primer uso (sin cache) espera a la red.
+   */
+  private async cachedCatalog<T>(resource: string, fetchOnline: () => Promise<T[]>): Promise<T[]> {
+    const cached = await this.readCatalogCache<T>(resource);
+    if (cached !== null) {
+      void fetchOnline()
+        .then(rows => this.writeCatalogCache(resource, rows))
+        .catch(() => undefined);
+      return cached;
+    }
+    const rows = await fetchOnline();
+    await this.writeCatalogCache(resource, rows);
+    return rows;
+  }
+
+  /** Fuerza actualización online; si no hay señal conserva/devuelve el cache. */
+  private async refreshCatalog<T>(resource: string, fetchOnline: () => Promise<T[]>): Promise<T[]> {
+    try {
+      const rows = await fetchOnline();
+      await this.writeCatalogCache(resource, rows);
+      return rows;
+    } catch (error) {
+      const cached = await this.readCatalogCache<T>(resource);
+      if (cached !== null) return cached;
+      throw error;
+    }
+  }
+
   /** Cola offline aislada por cliente+usuario para dispositivos compartidos. */
   private async pendingKey(): Promise<string | null> {
     const user = await this.getCurrentUser();
@@ -768,73 +836,140 @@ export class SupabaseBackend implements IDataBackend {
   // ---------- Catálogos ----------
 
   async listCampos(): Promise<Campo[]> {
-    const user = await this.getCurrentUser();
-    let query = this.supabase.from('campos').select('*');
-    // Operario con campo fijo: solo ese campo. Operario sin asignación:
-    // todos los campos del tenant (RLS sigue aislando a Ganaderas).
-    if (user?.rol === 'operario' && user.campoAsignadoId) {
-      query = query.eq('id', user.campoAsignadoId);
-    }
-    const { data, error } = await query.order('nombre');
-    if (error) throw new Error(error.message);
-    return (data ?? []).map(rowToCampo);
+    return this.cachedCatalog('campos', async () => {
+      const user = await this.getCurrentUser();
+      let query = this.supabase.from('campos').select('*');
+      // Operario con campo fijo: solo ese campo. Operario sin asignación:
+      // todos los campos del tenant (RLS sigue aislando a Ganaderas).
+      if (user?.rol === 'operario' && user.campoAsignadoId) {
+        query = query.eq('id', user.campoAsignadoId);
+      }
+      const { data, error } = await query.order('nombre');
+      if (error) throw new Error(error.message);
+      return (data ?? []).map(rowToCampo);
+    });
   }
 
   async listCampaniasReproductivas(): Promise<CampaniaReproductiva[]> {
-    const { data, error } = await this.supabase
-      .from('campanias_reproductivas')
-      .select('id, nombre, servicio_anio, fecha_inicio, fecha_fin, activa')
-      .order('activa', { ascending: false })
-      .order('fecha_inicio', { ascending: false });
-    if (error) {
-      const msg = error.message.toLowerCase();
-      // Compatibilidad temporal si la app se publica antes de migration 0030.
-      if (msg.includes('does not exist') || msg.includes('relation')) return [];
-      throw new Error(`listCampaniasReproductivas: ${error.message}`);
-    }
-    return (data ?? []).map(rowToCampaniaReproductiva);
+    return this.cachedCatalog('campanias-reproductivas', async () => {
+      const { data, error } = await this.supabase
+        .from('campanias_reproductivas')
+        .select('id, nombre, servicio_anio, fecha_inicio, fecha_fin, activa')
+        .order('activa', { ascending: false })
+        .order('fecha_inicio', { ascending: false });
+      if (error) {
+        const msg = error.message.toLowerCase();
+        // Compatibilidad temporal si la app se publica antes de migration 0030.
+        if (msg.includes('does not exist') || msg.includes('relation')) return [];
+        throw new Error(`listCampaniasReproductivas: ${error.message}`);
+      }
+      return (data ?? []).map(rowToCampaniaReproductiva);
+    });
   }
 
   // Q2 audit: cambio de select('*') a columnas explícitas. Ahorra bytes
   // en transit en cada login mobile y deja el query plan más predecible.
   async listLotes(campoId: string): Promise<Lote[]> {
-    const { data, error } = await this.supabase
-      .from('lotes')
-      .select('id, campo_id, nombre')
-      .eq('campo_id', campoId)
-      .order('nombre');
-    if (error) throw new Error(error.message);
-    return (data ?? []).map(rowToLote);
+    return this.cachedCatalog(`lotes:${campoId}`, async () => {
+      const { data, error } = await this.supabase
+        .from('lotes')
+        .select('id, campo_id, nombre')
+        .eq('campo_id', campoId)
+        .order('nombre');
+      if (error) throw new Error(error.message);
+      return (data ?? []).map(rowToLote);
+    });
   }
 
   async listPluviometros(campoId: string): Promise<Pluviometro[]> {
-    const { data, error } = await this.supabase
-      .from('pluviometros')
-      .select('id, campo_id, nombre')
-      .eq('campo_id', campoId)
-      .order('nombre');
-    if (error) throw new Error(error.message);
-    return (data ?? []).map(rowToPluviometro);
+    return this.cachedCatalog(`pluviometros:${campoId}`, async () => {
+      const { data, error } = await this.supabase
+        .from('pluviometros')
+        .select('id, campo_id, nombre')
+        .eq('campo_id', campoId)
+        .order('nombre');
+      if (error) throw new Error(error.message);
+      return (data ?? []).map(rowToPluviometro);
+    });
   }
 
   async listCircuitos(campoId: string): Promise<Circuito[]> {
-    const { data, error } = await this.supabase
-      .from('circuitos')
-      .select('id, campo_id, nombre, hectareas')
-      .eq('campo_id', campoId)
-      .order('nombre');
-    if (error) throw new Error(error.message);
-    return (data ?? []).map(rowToCircuito);
+    return this.cachedCatalog(`circuitos:${campoId}`, async () => {
+      const { data, error } = await this.supabase
+        .from('circuitos')
+        .select('id, campo_id, nombre, hectareas')
+        .eq('campo_id', campoId)
+        .order('nombre');
+      if (error) throw new Error(error.message);
+      return (data ?? []).map(rowToCircuito);
+    });
   }
 
   async listParcelas(circuitoId: string): Promise<Parcela[]> {
-    const { data, error } = await this.supabase
-      .from('parcelas')
-      .select('id, circuito_id, numero, hectareas')
-      .eq('circuito_id', circuitoId)
-      .order('numero');
-    if (error) throw new Error(error.message);
-    return (data ?? []).map(rowToParcela);
+    return this.cachedCatalog(`parcelas:${circuitoId}`, async () => {
+      const { data, error } = await this.supabase
+        .from('parcelas')
+        .select('id, circuito_id, numero, hectareas')
+        .eq('circuito_id', circuitoId)
+        .order('numero');
+      if (error) throw new Error(error.message);
+      return (data ?? []).map(rowToParcela);
+    });
+  }
+
+  /**
+   * Se ejecuta al iniciar una sesión con señal. Guarda campos y todos sus
+   * catálogos dependientes para que luego cualquier formulario pueda abrirse
+   * y guardar en la cola aunque el dispositivo esté completamente offline.
+   */
+  async warmOfflineCache(): Promise<void> {
+    const campos = await this.refreshCatalog<Campo>('campos', async () => {
+      const user = await this.getCurrentUser();
+      let query = this.supabase.from('campos').select('*');
+      if (user?.rol === 'operario' && user.campoAsignadoId) {
+        query = query.eq('id', user.campoAsignadoId);
+      }
+      const { data, error } = await query.order('nombre');
+      if (error) throw new Error(error.message);
+      return (data ?? []).map(rowToCampo);
+    });
+
+    await Promise.allSettled(campos.map(async campo => {
+      const [, , circuitos] = await Promise.allSettled([
+        this.refreshCatalog<Lote>(`lotes:${campo.id}`, async () => {
+          const { data, error } = await this.supabase.from('lotes')
+            .select('id, campo_id, nombre').eq('campo_id', campo.id).order('nombre');
+          if (error) throw new Error(error.message);
+          return (data ?? []).map(rowToLote);
+        }),
+        this.refreshCatalog<Pluviometro>(`pluviometros:${campo.id}`, async () => {
+          const { data, error } = await this.supabase.from('pluviometros')
+            .select('id, campo_id, nombre').eq('campo_id', campo.id).order('nombre');
+          if (error) throw new Error(error.message);
+          return (data ?? []).map(rowToPluviometro);
+        }),
+        this.refreshCatalog<Circuito>(`circuitos:${campo.id}`, async () => {
+          const { data, error } = await this.supabase.from('circuitos')
+            .select('id, campo_id, nombre, hectareas').eq('campo_id', campo.id).order('nombre');
+          if (error) throw new Error(error.message);
+          return (data ?? []).map(rowToCircuito);
+        }),
+      ]);
+
+      if (circuitos.status === 'fulfilled') {
+        await Promise.allSettled(circuitos.value.map(circuito =>
+          this.refreshCatalog<Parcela>(`parcelas:${circuito.id}`, async () => {
+            const { data, error } = await this.supabase.from('parcelas')
+              .select('id, circuito_id, numero, hectareas')
+              .eq('circuito_id', circuito.id).order('numero');
+            if (error) throw new Error(error.message);
+            return (data ?? []).map(rowToParcela);
+          }),
+        ));
+      }
+    }));
+
+    await Promise.allSettled([this.listCampaniasReproductivas()]);
   }
 
   // ---------- Helpers para el form ----------

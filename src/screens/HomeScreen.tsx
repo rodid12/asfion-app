@@ -116,14 +116,14 @@ export function HomeScreen() {
   const [paricionesSemana, setParicionesSemana] = useState(0);
 
   const refresh = useCallback(async () => {
-    const [pendings, hoy, semana] = await Promise.all([
+    const [pendings, hoy, semana] = await Promise.allSettled([
       repo.listPending(),
       repo.contarPariciones({ desde: isoToday() }),
       repo.contarPariciones({ desde: isoDaysAgo(6) }),
     ]);
-    setPendientes(pendings.length);
-    setParicionesHoy(hoy);
-    setParicionesSemana(semana);
+    if (pendings.status === 'fulfilled') setPendientes(pendings.value.length);
+    if (hoy.status === 'fulfilled') setParicionesHoy(hoy.value);
+    if (semana.status === 'fulfilled') setParicionesSemana(semana.value);
   }, [repo]);
 
   useEffect(() => {

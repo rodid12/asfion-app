@@ -63,6 +63,11 @@ export interface IDataBackend {
   listPluviometros(campoId: string): Promise<Pluviometro[]>;
   listCircuitos(campoId: string): Promise<Circuito[]>;
   listParcelas(circuitoId: string): Promise<Parcela[]>;
+  /**
+   * Descarga y persiste los catálogos necesarios para crear eventos sin red.
+   * Es opcional para no romper los backends de memoria/legacy.
+   */
+  warmOfflineCache?(): Promise<void>;
 
   // Helpers para el form
   ultimaCaravana(campoId: string): Promise<UltimaCaravana | null>;
@@ -203,6 +208,8 @@ export class Repository {
   listPluviometros = (campoId: string) => this.backend.listPluviometros(campoId);
   listCircuitos = (campoId: string) => this.backend.listCircuitos(campoId);
   listParcelas = (circuitoId: string) => this.backend.listParcelas(circuitoId);
+  warmOfflineCache = (): Promise<void> =>
+    this.backend.warmOfflineCache ? this.backend.warmOfflineCache() : Promise.resolve();
 
   // Helpers para el form
   ultimaCaravana = (campoId: string) => this.backend.ultimaCaravana(campoId);

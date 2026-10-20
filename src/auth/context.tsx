@@ -141,6 +141,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [clienteSeleccionadoId, setClienteSeleccionadoId] = useState<string | null>(null);
   const [seleccionandoCliente, setSeleccionandoCliente] = useState(false);
 
+  // Una vez resuelto el usuario/tenant, descargamos los catálogos que usan
+  // los formularios. La tarea corre en background: no demora el ingreso y,
+  // tras una apertura con señal, permite seleccionar campos/lotes/circuitos
+  // en futuros arranques sin internet.
+  useEffect(() => {
+    if (!user?.clienteId || !user.email) return;
+    void repo.warmOfflineCache().catch(() => undefined);
+  }, [repo, user?.clienteId, user?.email]);
+
   useEffect(() => {
     let cancelado = false;
     (async () => {
