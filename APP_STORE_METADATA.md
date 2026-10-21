@@ -212,11 +212,12 @@ Cuando llenes la sección de "App Privacy" en ASC, marcar:
 Apple revisa la app abriendo con un usuario REAL. Si no le damos
 credenciales, **rechazan la submission**.
 
-Crear en Supabase un usuario específico para review:
+Crear en Supabase un usuario específico para review. Usar una contraseña
+aleatoria exclusiva y no guardarla en Git:
 
 ```
-Email:    apple-review@asfion.com
-Password: ASFION-AppleReview-2026!
+Email:    rosariodidziulis8+apple-review@gmail.com
+Password: [GENERAR Y GUARDAR FUERA DEL REPOSITORIO]
 ```
 
 Y cargarle:
@@ -234,8 +235,8 @@ Phone:          +54 387 534 9914
 Email:          rosariodidziulis8@gmail.com
 
 Sign-in info:
-  Username:     apple-review@asfion.com
-  Password:     ASFION-AppleReview-2026!
+  Username:     rosariodidziulis8+apple-review@gmail.com
+  Password:     [COMPLETAR EN APP STORE CONNECT]
 
 Notes:
   ASFION is a B2B platform for Argentine cattle ranching operations.
@@ -276,7 +277,7 @@ mandes 5-6 screenshots crudos de la app desde tu celular.
 | Campo | Valor inicial |
 |---|---|
 | **Version** | `1.0.0` |
-| **Build number** | `3` para el próximo envío (autoIncrement en eas.json se encarga) |
+| **Build number** | `4` — subido a App Store Connect el 21/10/2026 |
 | **Copyright** | `© 2026 María del Rosario Didziulis` |
 | **What's New in This Version** | `Versión inicial de ASFION.` |
 
@@ -284,18 +285,18 @@ mandes 5-6 screenshots crudos de la app desde tu celular.
 
 ## Checklist pre-submit
 
-- [ ] Apple Developer Account activa (Fase A)
-- [ ] Bundle ID `com.asfion.app` creado en developer.apple.com
-- [ ] App creada en App Store Connect con el bundle ID
+- [x] Apple Developer Account activa (Fase A)
+- [x] Bundle ID `com.asfion.app` creado en developer.apple.com
+- [x] App creada en App Store Connect con el bundle ID
 - [x] Titular identificado en privacy.html y terms.html (el CUIT no se publica)
-- [ ] Privacy/Terms/Support URLs deployadas en Vercel y accesibles
-- [ ] Usuario `apple-review@asfion.com` creado en Supabase con datos demo
+- [x] Privacy/Terms/Support URLs deployadas en Vercel y accesibles
+- [ ] Usuario de revisión creado en Supabase con datos demo
 - [ ] Screenshots cargados para iPhone y iPad
 - [ ] Description, subtitle, keywords completados
 - [ ] App Privacy section completada
 - [ ] Categories seleccionadas
 - [ ] Pricing = Free
-- [ ] Build subido vía `eas submit --platform ios`
+- [x] Build 4 subido vía EAS Submit el 21/10/2026
 - [ ] Build linkeado a la versión 1.0.0 en ASC
 - [ ] "Submit for Review" clickeado
 

@@ -10,20 +10,21 @@ features descritas, te pueden rechazar por "Misleading Marketing".
 
 ## Specs técnicos exigidos por Apple
 
-### iPhone 6.7" — **OBLIGATORIO**
-- Tamaño: **1290 × 2796** píxeles
-- Devices que matchean: iPhone 14/15/16 Pro Max, iPhone 15/16 Plus
-- Mínimo: **3 screenshots**, máximo 10
+### iPhone con Dynamic Island — **OBLIGATORIO**
+- Apple exige al menos una captura del grupo Dynamic Island de pantalla mediana.
+- Tamaños aceptados en vertical: **1179 × 2556** o **1206 × 2622** píxeles.
+- También acepta el grupo grande, por ejemplo **1290 × 2796** píxeles.
+- Mínimo oficial: **1 captura**; recomendado para ASFION: 5 o 6. Máximo: 10.
 
 ### iPhone 6.5" — **opcional pero recomendado**
 - Tamaño: **1242 × 2688** píxeles
 - Devices: iPhone 11 Pro Max, XS Max, XR
 - Si lo cargás, mejora cobertura visual en App Store
 
-### iPad 12.9" — **OBLIGATORIO si declaramos iPad support**
-- Tamaño: **2048 × 2732** píxeles
+### iPad 13" — **OBLIGATORIO si declaramos iPad support**
+- Tamaños aceptados en vertical: **2064 × 2752** o **2048 × 2732** píxeles.
 - En `app.json` tenemos `supportsTablet: true`, así que Apple lo va a pedir
-- Mínimo: 3 screenshots de iPad
+- Mínimo oficial: 1 captura; recomendado para ASFION: 3 o más.
 
 **Nota:** si NO querés subir screenshots de iPad ahora, hay que cambiar
 `supportsTablet` a `false` en `app.json`. Recomiendo dejarlo en `true`
