@@ -10,6 +10,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
+    "client:upload-logo": "node --env-file=.env.local scripts/upload-client-logo.mjs",
     "postinstall": "patch-package",
     "eas:login": "eas login",
     "eas:register-ios": "eas device:create",
