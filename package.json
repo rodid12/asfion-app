@@ -11,6 +11,7 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "client:upload-logo": "node --env-file=.env.local scripts/upload-client-logo.mjs",
+    "app-store:setup-review-demo": "node --env-file=.env.local scripts/setup-app-review-demo.mjs",
     "postinstall": "patch-package",
     "eas:login": "eas login",
     "eas:register-ios": "eas device:create",

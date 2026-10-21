@@ -212,19 +212,22 @@ Cuando llenes la sección de "App Privacy" en ASC, marcar:
 Apple revisa la app abriendo con un usuario REAL. Si no le damos
 credenciales, **rechazan la submission**.
 
-Crear en Supabase un usuario específico para review. Usar una contraseña
-aleatoria exclusiva y no guardarla en Git:
+La cuenta específica de revisión ya fue creada en Supabase con una contraseña
+aleatoria exclusiva, guardada fuera de Git:
 
 ```
 Email:    rosariodidziulis8+apple-review@gmail.com
-Password: [GENERAR Y GUARDAR FUERA DEL REPOSITORIO]
+Password: [COPIAR DEL ARCHIVO LOCAL DE CREDENCIALES]
 ```
 
-Y cargarle:
-- 1 cliente_id ficticio "Demo Ranch"
+Datos cargados:
+- 1 cliente ficticio `app-review-demo`
 - 2 campos: "Campo Norte", "Campo Sur"
-- 5-10 eventos de cada módulo (pariciones, lluvias, mortandad, pastoreo, compras y ventas)
+- datos representativos en los 6 módulos (pariciones, lluvias, mortandad, pastoreo, compras y ventas)
 - Permisos de administrador para que vea todo
+
+Archivo local confidencial (no versionado):
+`work/app-store-review-credentials.txt`
 
 En el campo "App Review Information" de ASC:
 
@@ -290,7 +293,7 @@ mandes 5-6 screenshots crudos de la app desde tu celular.
 - [x] App creada en App Store Connect con el bundle ID
 - [x] Titular identificado en privacy.html y terms.html (el CUIT no se publica)
 - [x] Privacy/Terms/Support URLs deployadas en Vercel y accesibles
-- [ ] Usuario de revisión creado en Supabase con datos demo
+- [x] Usuario de revisión creado en Supabase con datos demo y login verificado
 - [ ] Screenshots cargados para iPhone y iPad
 - [ ] Description, subtitle, keywords completados
 - [ ] App Privacy section completada
