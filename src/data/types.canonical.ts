@@ -247,6 +247,9 @@ export interface MortandadCanonical {
   causaDetalle?: string;                  // nivel 2 (texto libre)
   caravanaColor?: CaravanaColor;
   caravanaNumero?: string;
+  numeroCorral?: string;
+  numeroTropa?: string;
+  vacaParida?: boolean;
   observaciones?: string;
 
   createdAt: string;

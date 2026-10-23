@@ -16,7 +16,7 @@
 // Si más adelante queremos volver a habilitar caravana / fotos / observaciones,
 // los tipos siguen aceptándolos — solo hay que volver a pintarlos en el form.
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -37,6 +37,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 
 import { ChipGroup } from '@/components/ChipGroup';
 import { FaltaHint } from '@/components/FaltaHint';
+import { FormField } from '@/components/FormField';
 import { MapPickerModal } from '@/components/MapPickerModal';
 import { NoLotesBanner } from '@/components/NoLotesBanner';
 import { PhotoStrip } from '@/components/PhotoStrip';
@@ -69,6 +70,9 @@ export function MortandadFormScreen() {
   const [categoria, setCategoria] = useState<string | undefined>();
   const [actividad, setActividad] = useState<string | undefined>();
   const [causaTipo, setCausaTipo] = useState<CausaMuerteTipo | undefined>();
+  const [numeroCorral, setNumeroCorral] = useState('');
+  const [numeroTropa, setNumeroTropa] = useState('');
+  const [vacaParida, setVacaParida] = useState<boolean | undefined>();
   const [fotos, setFotos] = useState<string[]>([]);
   const [gps, setGps] = useState<Mortandad['gps']>(undefined);
   // Estado de la captura de GPS — para que el operario sepa qué está pasando
@@ -94,6 +98,7 @@ export function MortandadFormScreen() {
   const [lotes, setLotes] = useState<Lote[]>([]);
   const [pickerCampoOpen, setPickerCampoOpen] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const esCorralesRef = useRef(false);
 
   // ─── State común vía useEventoForm ───
   const ef = useEventoForm<Mortandad>({
@@ -103,15 +108,19 @@ export function MortandadFormScreen() {
     titleEdit: 'Editar mortandad',
     tabName: 'mortandad',
     buildEvento: ({ campoId, fecha, usuarioEmail, id, createdAt }) => {
-      if (!campoId || !loteId || !categoria) return null;
+      const esCampoCorrales = esCorralesRef.current;
+      if (!campoId || (!esCampoCorrales && !loteId) || !categoria || !actividad) return null;
       return {
         id, campoId, fecha, usuarioEmail, createdAt,
         tipo: 'mortandad',
-        loteId,
+        loteId: loteId || undefined,
         gps,
         categoria,
         actividad,
         causaTipo,
+        numeroCorral: esCampoCorrales ? numeroCorral.trim() || undefined : undefined,
+        numeroTropa: esCampoCorrales ? numeroTropa.trim() || undefined : undefined,
+        vacaParida,
         fotos: fotos.length > 0 ? fotos : undefined,
         syncState: 'pending',
       };
@@ -122,11 +131,50 @@ export function MortandadFormScreen() {
       // del mismo campo el mismo día.
       setCategoria(undefined);
       setCausaTipo(undefined);
+      setVacaParida(undefined);
       setFotos([]);
     },
   });
   const { user, repo, campoId, setCampoId, fecha, setFecha, campos, campoActual,
           isEdit, cargandoExistente, originalRecord, guardando, onGuardar, nav } = ef;
+
+  const esCorrales = useMemo(
+    () => campoActual?.nombre.trim().toLocaleLowerCase('es') === 'corrales',
+    [campoActual?.nombre],
+  );
+  esCorralesRef.current = esCorrales;
+
+  const actividadesDisponibles = useMemo(() => {
+    const porCampo = catMort.actividadesPorCampo;
+    const base = porCampo
+      ? (porCampo[campoActual?.nombre ?? ''] ?? porCampo.__otros__ ?? ACTIVIDADES)
+      : ACTIVIDADES;
+    const legacy = originalRecord?.actividad;
+    return legacy && !base.includes(legacy) ? [legacy, ...base] : base;
+  }, [catMort.actividadesPorCampo, campoActual?.nombre, ACTIVIDADES, originalRecord?.actividad]);
+
+  const categoriasDisponibles = useMemo(() => {
+    if (!actividad) return [] as readonly string[];
+    const base = catMort.categoriasPorActividad?.[actividad] ?? CATEGORIAS;
+    const legacy = originalRecord?.categoria;
+    return legacy && !base.includes(legacy) ? [legacy, ...base] : base;
+  }, [actividad, catMort.categoriasPorActividad, CATEGORIAS, originalRecord?.categoria]);
+
+  const etiqueta = useCallback(
+    (value: string) => catMort.etiquetas?.[value] ?? value,
+    [catMort.etiquetas],
+  );
+
+  useEffect(() => {
+    if (actividad && !actividadesDisponibles.includes(actividad)) {
+      setActividad(undefined);
+      setCategoria(undefined);
+      return;
+    }
+    if (categoria && !categoriasDisponibles.includes(categoria)) {
+      setCategoria(undefined);
+    }
+  }, [actividad, categoria, actividadesDisponibles, categoriasDisponibles]);
 
   // ─── Hidratación específica en edit mode ───
   useEffect(() => {
@@ -137,6 +185,9 @@ export function MortandadFormScreen() {
       setCategoria(existing.categoria);
       setActividad(existing.actividad);
       setCausaTipo(existing.causaTipo);
+      setNumeroCorral(existing.numeroCorral ?? '');
+      setNumeroTropa(existing.numeroTropa ?? '');
+      setVacaParida(existing.vacaParida);
       setFotos(existing.fotos ?? []);
       if (existing.gps) setGps(existing.gps);
     });
@@ -236,27 +287,32 @@ export function MortandadFormScreen() {
       categoria !== originalRecord.categoria ||
       actividad !== originalRecord.actividad ||
       causaTipo !== originalRecord.causaTipo ||
+      numeroCorral !== (originalRecord.numeroCorral ?? '') ||
+      numeroTropa !== (originalRecord.numeroTropa ?? '') ||
+      vacaParida !== originalRecord.vacaParida ||
       JSON.stringify(fotos) !== JSON.stringify(originalRecord.fotos ?? [])
     );
-  }, [isEdit, originalRecord, campoId, loteId, fecha, categoria, actividad, causaTipo, fotos]);
+  }, [isEdit, originalRecord, campoId, loteId, fecha, categoria, actividad, causaTipo, numeroCorral, numeroTropa, vacaParida, fotos]);
 
   const puedeGuardar = useMemo(() => {
     if (!campoId) return false;
-    if (!loteId) return false; // ahora REQUIRED
+    if (!esCorrales && !loteId) return false;
+    if (!actividad) return false;
     if (!categoria) return false;
     if (!isDirty) return false; // edit mode sin cambios
     return true;
-  }, [campoId, loteId, categoria, isDirty]);
+  }, [campoId, loteId, actividad, categoria, esCorrales, isDirty]);
 
   // Lista de obligatorios pendientes para el FaltaHint.
   const camposFaltantes = useMemo(() => {
     const f: string[] = [];
     if (!campoId) f.push('campo');
-    if (!loteId) f.push('lote');
+    if (!esCorrales && !loteId) f.push('lote');
+    if (!actividad) f.push('actividad');
     if (!categoria) f.push('categoría');
     if (f.length === 0 && isEdit && !isDirty) f.push('cambios');
     return f;
-  }, [campoId, loteId, categoria, isEdit, isDirty]);
+  }, [campoId, loteId, actividad, categoria, esCorrales, isEdit, isDirty]);
 
   const loteActual = useMemo(() => lotes.find(l => l.id === loteId), [lotes, loteId]);
 
@@ -270,8 +326,8 @@ export function MortandadFormScreen() {
 
   // ─── Guardar — validación específica + delegate al hook ───
   const handleGuardar = async () => {
-    if (!campoId || !loteId || !categoria) {
-      Alert.alert('Faltan datos', 'Completá campo, lote y categoría.');
+    if (!campoId || (!esCorrales && !loteId) || !actividad || !categoria) {
+      Alert.alert('Faltan datos', `Completá campo, ${esCorrales ? '' : 'lote, '}actividad y categoría.`);
       return;
     }
     await onGuardar();
@@ -340,35 +396,41 @@ export function MortandadFormScreen() {
 
             <View style={styles.infoDivider} />
 
-            {/* Lote required */}
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Lote *</Text>
-              <Text
-                style={[
-                  styles.infoValue,
-                  !loteId && { color: colors.textMuted, fontStyle: 'italic' },
-                ]}
-                numberOfLines={1}
-              >
-                {loteActual?.nombre ?? 'sin elegir'}
-              </Text>
-            </View>
-            {lotes.length === 0 ? (
-              <NoLotesBanner faltaCampo={!campoId} />
-            ) : (
-              <View style={styles.pickerRow}>
-                {lotes.map(l => (
-                  <Pressable
-                    key={l.id}
-                    onPress={() => setLoteId(prev => (prev === l.id ? '' : l.id))}
-                    style={[styles.pickerChip, loteId === l.id && styles.pickerChipSelLote]}
+            {/* En Corrales el dato territorial útil es el número de corral,
+                no un lote ganadero. En los demás campos el lote sigue siendo
+                obligatorio. */}
+            {!esCorrales && (
+              <>
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Lote *</Text>
+                  <Text
+                    style={[
+                      styles.infoValue,
+                      !loteId && { color: colors.textMuted, fontStyle: 'italic' },
+                    ]}
+                    numberOfLines={1}
                   >
-                    <Text style={[styles.pickerChipTxt, loteId === l.id && styles.pickerChipTxtSel]}>
-                      {l.nombre}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
+                    {loteActual?.nombre ?? 'sin elegir'}
+                  </Text>
+                </View>
+                {lotes.length === 0 ? (
+                  <NoLotesBanner faltaCampo={!campoId} />
+                ) : (
+                  <View style={styles.pickerRow}>
+                    {lotes.map(l => (
+                      <Pressable
+                        key={l.id}
+                        onPress={() => setLoteId(prev => (prev === l.id ? '' : l.id))}
+                        style={[styles.pickerChip, loteId === l.id && styles.pickerChipSelLote]}
+                      >
+                        <Text style={[styles.pickerChipTxt, loteId === l.id && styles.pickerChipTxtSel]}>
+                          {l.nombre}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                )}
+              </>
             )}
 
             <View style={styles.infoDivider} />
@@ -552,12 +614,27 @@ export function MortandadFormScreen() {
             )}
           </View>
 
-          {/* Body — Categoría (required), Actividad y Causa-tipo opcionales.
-              "Opcional" en la UI = sin asterisco. La palabra explícita
-              fue removida por feedback del cliente. */}
+          {/* Primero elegimos actividad: esa selección determina las
+              categorías válidas y evita combinaciones incorrectas. */}
+          <Text style={styles.label}>Actividad *</Text>
+          <View style={styles.catRow}>
+            {actividadesDisponibles.map(a => {
+              const sel = a === actividad;
+              return (
+                <Pressable
+                  key={a}
+                  onPress={() => setActividad(a)}
+                  style={[styles.catChip, sel && styles.catChipSel]}
+                >
+                  <Text style={[styles.catChipTxt, sel && styles.catChipTxtSel]}>{etiqueta(a)}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
           <Text style={styles.label}>Categoría *</Text>
           <View style={styles.catRow}>
-            {CATEGORIAS.map(c => {
+            {categoriasDisponibles.map(c => {
               const sel = c === categoria;
               return (
                 <Pressable
@@ -565,25 +642,48 @@ export function MortandadFormScreen() {
                   onPress={() => setCategoria(c)}
                   style={[styles.catChip, sel && styles.catChipSel]}
                 >
-                  <Text style={[styles.catChipTxt, sel && styles.catChipTxtSel]}>
-                    {c}
-                  </Text>
+                  <Text style={[styles.catChipTxt, sel && styles.catChipTxtSel]}>{etiqueta(c)}</Text>
                 </Pressable>
               );
             })}
           </View>
 
-          <Text style={styles.label}>Actividad</Text>
+          {!actividad && (
+            <Text style={styles.helperText}>Elegí una actividad para ver sus categorías.</Text>
+          )}
+
+          {esCorrales && (
+            <View style={styles.corralesFields}>
+              <FormField
+                label="N° de corral"
+                value={numeroCorral}
+                onChangeText={setNumeroCorral}
+                placeholder="Ej. C1, D8, Enf1"
+                autoCapitalize="characters"
+              />
+              <FormField
+                label="N° de tropa"
+                value={numeroTropa}
+                onChangeText={setNumeroTropa}
+                placeholder="Ej. Trm1, Trh2.2"
+                autoCapitalize="sentences"
+              />
+            </View>
+          )}
+
+          <Text style={styles.label}>Vaca parida</Text>
           <View style={styles.catRow}>
-            {ACTIVIDADES.map(a => {
-              const sel = a === actividad;
+            {([true, false] as const).map(value => {
+              const sel = vacaParida === value;
               return (
                 <Pressable
-                  key={a}
-                  onPress={() => setActividad(prev => (prev === a ? undefined : a))}
+                  key={String(value)}
+                  onPress={() => setVacaParida(value)}
                   style={[styles.catChip, sel && styles.catChipSel]}
                 >
-                  <Text style={[styles.catChipTxt, sel && styles.catChipTxtSel]}>{a}</Text>
+                  <Text style={[styles.catChipTxt, sel && styles.catChipTxtSel]}>
+                    {value ? 'Sí' : 'No'}
+                  </Text>
                 </Pressable>
               );
             })}
@@ -833,6 +933,16 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: spacing.xs,
     marginBottom: spacing.lg,
+  },
+  helperText: {
+    color: colors.textMuted,
+    fontSize: fontSize.sm,
+    fontStyle: 'italic',
+    marginTop: -spacing.md,
+    marginBottom: spacing.lg,
+  },
+  corralesFields: {
+    marginTop: -spacing.sm,
   },
   catChip: {
     paddingHorizontal: spacing.md,

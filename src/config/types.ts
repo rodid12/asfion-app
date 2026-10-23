@@ -58,6 +58,13 @@ export interface MortandadCatalogos {
   categorias: readonly string[];       // ["Vc Preñ", "TernM", "TernH", "Vaq 1° Servicio", ...]
   actividades: readonly string[];      // ["Cria", "engorde", "Recria P", "Invernada", "Destete Precoz"]
   causaTipos: readonly string[];       // ["Muerte Señalado", "Nacido Muerto", "Desconocido"]
+  /** Actividades disponibles según el campo. La clave especial
+   *  `__otros__` aplica a todos los campos que no tengan una entrada propia. */
+  actividadesPorCampo?: Readonly<Record<string, readonly string[]>>;
+  /** Categorías válidas para cada actividad. Evita combinaciones imposibles. */
+  categoriasPorActividad?: Readonly<Record<string, readonly string[]>>;
+  /** Etiquetas amigables sin cambiar el valor canónico que se guarda en DB. */
+  etiquetas?: Readonly<Record<string, string>>;
 }
 
 export interface PastoreoCatalogos {

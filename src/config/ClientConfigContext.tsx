@@ -224,6 +224,9 @@ function pickMortandadCatalogo(raw: any, fallback: MortandadCatalogos): Mortanda
     categorias:  arrOr(raw?.categorias,  fallback.categorias),
     actividades: arrOr(raw?.actividades, fallback.actividades),
     causaTipos:  arrOr(raw?.causaTipos,  fallback.causaTipos),
+    actividadesPorCampo: stringArrayRecordOrUndefined(raw?.actividadesPorCampo),
+    categoriasPorActividad: stringArrayRecordOrUndefined(raw?.categoriasPorActividad),
+    etiquetas: stringRecordOrUndefined(raw?.etiquetas),
   };
 }
 function pickPastoreoCatalogo(raw: any, fallback: PastoreoCatalogos): PastoreoCatalogos {
@@ -246,4 +249,23 @@ function arrOr(raw: any, fallback: readonly string[]): readonly string[] {
   return Array.isArray(raw) && raw.length > 0 && raw.every(x => typeof x === 'string')
     ? raw
     : fallback;
+}
+
+function stringArrayRecordOrUndefined(raw: any): Readonly<Record<string, readonly string[]>> | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const entries = Object.entries(raw);
+  if (entries.length === 0) return undefined;
+  if (!entries.every(([, value]) => Array.isArray(value) && value.every(x => typeof x === 'string'))) {
+    return undefined;
+  }
+  return raw as Record<string, string[]>;
+}
+
+function stringRecordOrUndefined(raw: any): Readonly<Record<string, string>> | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const entries = Object.entries(raw);
+  if (entries.length === 0 || !entries.every(([, value]) => typeof value === 'string')) {
+    return undefined;
+  }
+  return raw as Record<string, string>;
 }

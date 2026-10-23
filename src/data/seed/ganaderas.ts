@@ -1420,7 +1420,7 @@ export const GANADERAS_ASISTENCIA = ["Si", "No"] as const;
 export const GANADERAS_CAUSAS_PARICION = ["Muerte Señalado", "Nacido Muerto"] as const;
 
 export const GANADERAS_MORT_ACTIVIDADES = ["Cria", "Destete Precoz", "Invernada", "Recria P", "engorde"] as const;
-export const GANADERAS_MORT_CATEGORIAS = ["Novillito", "Novillo", "TernH", "TernM", "Todos Venta", "Toros", "Vac Descarte", "Vac Repos", "Vaq 1", "Vaq 1° Servicio", "Vaq 2", "Vaq 2° Servicio", "Vc Preñ", "Vc Venta"] as const;
+export const GANADERAS_MORT_CATEGORIAS = ["Novillito", "Novillo", "TernH", "TernM", "Toro Venta", "Toros", "Vac Descarte", "Vac Repos", "Vaq 1", "Vaq 1° Servicio", "Vaq 2", "Vaq 2° Servicio", "Vc Preñ", "Vc Venta"] as const;
 
 export const GANADERAS_PAST_CATEGORIAS = ["Novillito Grande", "Novillito Mediano", "Novillito Chico", "Vaquilla Grande", "Vaquilla Mediana", "Vaquilla Chica", "Vaquilla Meses", "Vaquilla Reposicion"] as const;
 export const GANADERAS_PAST_EVENTOS = ["Muerte", "Rotacion", "Salida", "Entrada"] as const;

@@ -241,6 +241,9 @@ export const MORTANDAD_SCHEMA: Schema<MortandadCanonical> = {
   causaDetalle:   { from: 'causa_detalle',   type: 'string?' },
   caravanaColor:  { from: 'caravana_color',  type: 'as-is'   },
   caravanaNumero: { from: 'caravana_numero', type: 'string?' },
+  numeroCorral:    { from: 'numero_corral',    type: 'string?' },
+  numeroTropa:     { from: 'numero_tropa',     type: 'string?' },
+  vacaParida:      { from: 'vaca_parida',      type: 'as-is'   },
   observaciones:  { from: 'observaciones',   type: 'string?' },
   createdAt:      { from: 'created_at',      type: 'string'  },
 };

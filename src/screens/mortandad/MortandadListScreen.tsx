@@ -194,6 +194,8 @@ export function MortandadListScreen() {
           p.causaDetalle ?? '',
           p.observaciones ?? '',
           p.caravanaNumero ?? '',
+          p.numeroCorral ?? '',
+          p.numeroTropa ?? '',
         ].join(' ').toLowerCase();
         if (!haystack.includes(q)) return false;
       }
@@ -306,6 +308,22 @@ export function MortandadListScreen() {
             <View style={styles.metaRow}>
               <Text style={styles.metaIcon}>🏷️</Text>
               <Text style={styles.metaTxt} numberOfLines={1}>{caravanaTxt}</Text>
+            </View>
+          )}
+          {(item.numeroCorral || item.numeroTropa) && (
+            <View style={styles.metaRow}>
+              <Text style={styles.metaIcon}>🐂</Text>
+              <Text style={styles.metaTxt} numberOfLines={1}>
+                {[item.numeroCorral && `Corral ${item.numeroCorral}`, item.numeroTropa && `Tropa ${item.numeroTropa}`]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </Text>
+            </View>
+          )}
+          {item.vacaParida != null && (
+            <View style={styles.metaRow}>
+              <Text style={styles.metaIcon}>🐄</Text>
+              <Text style={styles.metaTxt}>Vaca parida: {item.vacaParida ? 'Sí' : 'No'}</Text>
             </View>
           )}
           {esAdmin && (
