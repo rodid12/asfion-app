@@ -98,7 +98,10 @@ export function ParicionFormScreen(_p: Props) {
   const sexoRequerido     = evento === 'Nacimiento' || evento === 'Muerte';
   const causaVisible      = evento === 'Muerte';
   const asistenciaVisible = evento === 'Nacimiento';
-  const caravanaVisible   = evento !== 'Retacto';
+  // Un orejano todavía no fue señalado ni identificado con caravana.
+  // Ocultamos ambos datos (color y número) y evitamos persistir valores que
+  // hayan quedado seleccionados antes de cambiar el sexo a Orejano.
+  const caravanaVisible   = evento !== 'Retacto' && sexo !== 'Orejano';
 
   // Causa de muerte no corresponde a Aborto/Nacimiento/Retacto. Además de
   // ocultarla, limpiamos el state para que cambiar de Muerte a otro evento no
@@ -109,6 +112,13 @@ export function ParicionFormScreen(_p: Props) {
       setCausaDetalle('');
     }
   }, [evento]);
+
+  useEffect(() => {
+    if (sexo === 'Orejano') {
+      setCaravanaColor(undefined);
+      setCaravanaNumero('');
+    }
+  }, [sexo]);
 
   // ─── State común vía useEventoForm ───
   const ef = useEventoForm<Paricion>({

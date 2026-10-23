@@ -132,6 +132,18 @@ export interface CampaniaReproductivaCanonical {
   activa: boolean;
 }
 
+/**
+ * Campaña operativa general. A diferencia de la reproductiva (Sep–Mar),
+ * delimita todos los módulos del establecimiento, normalmente Sep–Ago.
+ */
+export interface CampaniaOperativaCanonical {
+  id: string;
+  nombre: string;
+  fechaInicio: string;
+  fechaFin: string;
+  activa: boolean;
+}
+
 // ═════════════════════════════════════════════════════════════════════════════
 // CATÁLOGOS (mig 0001) — entidades base del modelo de datos
 // ═════════════════════════════════════════════════════════════════════════════

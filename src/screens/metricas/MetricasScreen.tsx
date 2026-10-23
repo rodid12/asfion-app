@@ -25,9 +25,9 @@
 //  - Administrador/moderador: todos los eventos del cliente.
 //  - Operario: solo lo que él cargó (consistente con la Lista).
 //
-// Filtro disponible: rango de fecha (hoy / 7d / 30d / este año / todo).
-// La vista inicial es "Este año" para que cada campaña anual empiece en cero
-// sin eliminar el histórico de la base.
+// Filtros disponibles: campaña operativa + rango de fecha. La vista inicial
+// muestra la campaña actual completa; el histórico sigue accesible sin mezclar
+// datos de campañas distintas.
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -49,6 +49,7 @@ import { fontSize, fontWeight } from '@/theme/typography';
 import { radius, spacing } from '@/theme/spacing';
 import type {
   Campo,
+  CampaniaOperativa,
   CampaniaReproductiva,
   CategoriaHacienda,
   CausaMuerteTipo,
@@ -137,6 +138,31 @@ function rangoDesde(r: Rango): string | null {
   return null;
 }
 
+function dentroDeCampaniaYRango(
+  fecha: string,
+  campania: CampaniaOperativa | undefined,
+  rango: Rango,
+): boolean {
+  if (campania && (fecha < campania.fechaInicio || fecha > campania.fechaFin)) return false;
+  const desde = rangoDesde(rango);
+  return !desde || fecha >= desde;
+}
+
+const normalizarTexto = (value?: string | null) => (value ?? '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .trim()
+  .toUpperCase();
+
+const CATEGORIAS_VIENTRE_MORTANDAD = new Set([
+  'VAQ 1° SERVICIO',
+  'VAQ 1 SERVICIO',
+  'VAQ 2° SERVICIO',
+  'VAQ 2 SERVICIO',
+  'VC PREÑ',
+  'VC PREN',
+]);
+
 function ventaCategoria(texto: string): string {
   return texto.replace(/^\s*\d+(?:[.,]\d+)?\s*/, '').trim() || texto.trim();
 }
@@ -188,14 +214,17 @@ export function MetricasScreen() {
   const [ventas, setVentas] = useState<Venta[]>([]);
   const [campos, setCampos] = useState<Campo[]>([]);
   const [campaniasReproductivas, setCampaniasReproductivas] = useState<CampaniaReproductiva[]>([]);
+  const [campaniasOperativas, setCampaniasOperativas] = useState<CampaniaOperativa[]>([]);
+  const [campaniaOperativaId, setCampaniaOperativaId] = useState<string | null>(null);
   // Map circuitoId → {nombre, campoId} para los charts de pastoreo.
   // Cargamos circuitos de TODOS los campos visibles al entrar al tab.
   const [circuitosMap, setCircuitosMap] = useState<Record<string, { nombre: string; campoId: string; hectareas: number }>>({});
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
-  // Lluvias, mortandad y pastoreo arrancan en cero para cada año sin borrar
-  // historia. "Todo" queda disponible para auditoría de campañas anteriores.
-  const [rango, setRango] = useState<Rango>('year');
+  // Todos los módulos arrancan en la campaña activa sin borrar historia.
+  // Con un selector explícito de campaña, “Todo” significa toda la campaña
+  // elegida y evita abrir una campaña Sep–Ago recortada al año calendario.
+  const [rango, setRango] = useState<Rango>('todo');
   const [metricaTab, setMetricaTab] = useState<MetricaTab>('resumen');
 
   // Si el administrador deshabilita un módulo mientras esta pantalla está
@@ -212,7 +241,7 @@ export function MetricasScreen() {
     setLoading(true);
     setLoadError(null);
     try {
-      const [evs, lls, ms, ps, cps, vts, cs, camps] = await Promise.all([
+      const [evs, lls, ms, ps, cps, vts, cs, camps, campsOperativas] = await Promise.all([
         metricasHabilitadas.pariciones ? repo.listEventos('paricion') : Promise.resolve([]),
         metricasHabilitadas.lluvias ? repo.listEventos('lluvia') : Promise.resolve([]),
         metricasHabilitadas.mortandad ? repo.listEventos('mortandad') : Promise.resolve([]),
@@ -221,6 +250,7 @@ export function MetricasScreen() {
         metricasHabilitadas.ventas ? repo.listEventos('venta') : Promise.resolve([]),
         repo.listCampos(),
         metricasHabilitadas.pariciones ? repo.listCampaniasReproductivas() : Promise.resolve([]),
+        repo.listCampaniasOperativas(),
       ]);
       if (cancelado()) return;
       setData(evs as Paricion[]);
@@ -231,6 +261,7 @@ export function MetricasScreen() {
       setVentas(vts as Venta[]);
       setCampos(cs);
       setCampaniasReproductivas(camps);
+      setCampaniasOperativas(campsOperativas);
       // Cargar todos los circuitos (un fetch por campo) — necesario para
       // mappear circuitoId → nombre en el chart "Movimientos por circuito".
       const allCircs = metricasHabilitadas.pastoreo
@@ -251,6 +282,20 @@ export function MetricasScreen() {
     }
   }, [metricasHabilitadas, repo]);
 
+  useEffect(() => {
+    if (campaniasOperativas.length === 0) {
+      setCampaniaOperativaId(null);
+      return;
+    }
+    setCampaniaOperativaId(actual => {
+      if (actual && campaniasOperativas.some(c => c.id === actual)) return actual;
+      return (
+        campaniasOperativas.find(c => c.activa)
+        ?? [...campaniasOperativas].sort((a, b) => b.fechaInicio.localeCompare(a.fechaInicio))[0]
+      )?.id ?? null;
+    });
+  }, [campaniasOperativas]);
+
   // Cargar al entrar al tab y al montarse.
   useEffect(() => {
     if (currentTab !== 'metricas') return;
@@ -265,22 +310,45 @@ export function MetricasScreen() {
     return data;
   }, [data, esAdmin, user]);
 
-  // Los KPIs reproductivos acumulativos usan únicamente la campaña activa.
-  // El fallback por fecha incluye eventos recién creados offline, antes de que
-  // el trigger de Supabase les complete `campania_id` al sincronizar.
-  const campaniaActiva = useMemo(
-    () => campaniasReproductivas.find(c => c.activa)
-      ?? [...campaniasReproductivas].sort((a, b) => b.fechaInicio.localeCompare(a.fechaInicio))[0],
-    [campaniasReproductivas],
+  // Los KPIs reproductivos acumulativos usan la campaña elegida. La fecha es
+  // la fuente de verdad: también cubre históricos cuyo campania_id quedó vacío
+  // o desactualizado y eventos offline todavía no procesados por el trigger.
+  const campaniaOperativaSeleccionada = useMemo(
+    () => campaniasOperativas.find(c => c.id === campaniaOperativaId)
+      ?? campaniasOperativas.find(c => c.activa)
+      ?? [...campaniasOperativas].sort((a, b) => b.fechaInicio.localeCompare(a.fechaInicio))[0],
+    [campaniasOperativas, campaniaOperativaId],
+  );
+
+  // Pariciones conserva su ventana reproductiva Sep–Mar dentro de la campaña
+  // operativa Sep–Ago. La vinculamos por solapamiento de fechas (no por
+  // servicioAnio: el cierre histórico 2025/26 conserva “Servicio 2024”).
+  const campaniaReproductivaSeleccionada = useMemo(
+    () => {
+      return campaniasReproductivas.find(c =>
+        !campaniaOperativaSeleccionada
+        || (c.fechaInicio >= campaniaOperativaSeleccionada.fechaInicio
+          && c.fechaInicio <= campaniaOperativaSeleccionada.fechaFin),
+      )
+        ?? campaniasReproductivas.find(c => c.activa)
+        ?? [...campaniasReproductivas].sort((a, b) => b.fechaInicio.localeCompare(a.fechaInicio))[0];
+    },
+    [campaniasReproductivas, campaniaOperativaSeleccionada],
   );
 
   const scopedCampania = useMemo(() => {
-    if (!campaniaActiva) return scoped;
+    if (!campaniaReproductivaSeleccionada) {
+      if (!campaniaOperativaSeleccionada) return scoped;
+      return scoped.filter(p =>
+        p.fecha >= campaniaOperativaSeleccionada.fechaInicio
+        && p.fecha <= campaniaOperativaSeleccionada.fechaFin,
+      );
+    }
     return scoped.filter(p =>
-      p.campaniaId === campaniaActiva.id ||
-      (!p.campaniaId && p.fecha >= campaniaActiva.fechaInicio && p.fecha <= campaniaActiva.fechaFin),
+      p.fecha >= campaniaReproductivaSeleccionada.fechaInicio
+      && p.fecha <= campaniaReproductivaSeleccionada.fechaFin,
     );
-  }, [scoped, campaniaActiva]);
+  }, [scoped, campaniaOperativaSeleccionada, campaniaReproductivaSeleccionada]);
 
   // Aplicar rango.
   const filtered = useMemo(() => {
@@ -296,10 +364,10 @@ export function MetricasScreen() {
   }, [lluvias, esAdmin, user]);
 
   const filteredLluviasRango = useMemo(() => {
-    const desde = rangoDesde(rango);
-    if (!desde) return scopedLluvias;
-    return scopedLluvias.filter(l => l.fecha >= desde);
-  }, [scopedLluvias, rango]);
+    return scopedLluvias.filter(l =>
+      dentroDeCampaniaYRango(l.fecha, campaniaOperativaSeleccionada, rango),
+    );
+  }, [scopedLluvias, campaniaOperativaSeleccionada, rango]);
 
   // Filtro adicional del sub-tab Lluvias: por campo (chips wrap).
   // Decisión: por simplicidad mantenemos UI común (chips) con pastoreoCircuito,
@@ -367,10 +435,10 @@ export function MetricasScreen() {
   }, [mortandad, esAdmin, user]);
 
   const filteredMortandad = useMemo(() => {
-    const desde = rangoDesde(rango);
-    if (!desde) return scopedMortandad;
-    return scopedMortandad.filter(m => m.fecha >= desde);
-  }, [scopedMortandad, rango]);
+    return scopedMortandad.filter(m =>
+      dentroDeCampaniaYRango(m.fecha, campaniaOperativaSeleccionada, rango),
+    );
+  }, [scopedMortandad, campaniaOperativaSeleccionada, rango]);
 
   // Scope + rango para pastoreo.
   const scopedPastoreo = useMemo(() => {
@@ -379,10 +447,10 @@ export function MetricasScreen() {
   }, [pastoreo, esAdmin, user]);
 
   const filteredPastoreoRango = useMemo(() => {
-    const desde = rangoDesde(rango);
-    if (!desde) return scopedPastoreo;
-    return scopedPastoreo.filter(p => p.fecha >= desde);
-  }, [scopedPastoreo, rango]);
+    return scopedPastoreo.filter(p =>
+      dentroDeCampaniaYRango(p.fecha, campaniaOperativaSeleccionada, rango),
+    );
+  }, [scopedPastoreo, campaniaOperativaSeleccionada, rango]);
 
   // Filtros específicos del sub-tab Pastoreo (feedback Ro):
   //  - Estado abiertos/cerrados/todos: idéntico al de PastoreoListScreen.
@@ -454,31 +522,57 @@ export function MetricasScreen() {
   );
 
   // ---------- 3. Vacas por parir ----------
-  // Por campo = Preñez inicial - partos - abortos.
+  // Fórmula AppSheet validada por Ganaderas:
+  // Stock inicial − nacimientos − muertes de terneros − mortandad de vientres
+  // − abortos. Todos los conteos son DISTINCT por ID y nunca bajan de cero.
   // Usamos scope sin filtro de fecha porque la temporada es acumulativa,
   // no depende del "Hoy/7d/30d" que es para la actividad reciente.
   const vacasPorParir = useMemo(() => {
-    const partosPorCampo = new Map<string, number>();
-    const abortosPorCampo = new Map<string, number>();
+    const vacasParidas = new Map<string, Set<string>>();
+    const ternerosMuertos = new Map<string, Set<string>>();
+    const abortosPorCampo = new Map<string, Set<string>>();
     scopedCampania.forEach(p => {
-      if (p.evento === 'Aborto') {
-        abortosPorCampo.set(p.campoId, (abortosPorCampo.get(p.campoId) ?? 0) + 1);
-        return;
-      }
-      if (p.evento !== 'Nacimiento' && p.causaTipo !== 'Nacido Muerto') return;
-      partosPorCampo.set(p.campoId, (partosPorCampo.get(p.campoId) ?? 0) + 1);
+      const target = p.evento === 'Nacimiento'
+        ? vacasParidas
+        : p.evento === 'Muerte'
+          ? ternerosMuertos
+          : p.evento === 'Aborto'
+            ? abortosPorCampo
+            : null;
+      if (!target) return;
+      const ids = target.get(p.campoId) ?? new Set<string>();
+      ids.add(p.id);
+      target.set(p.campoId, ids);
     });
+
+    const vacasMuertas = new Map<string, Set<string>>();
+    scopedMortandad.forEach(m => {
+      if (m.fecha < '2026-05-19') return;
+      if (campaniaReproductivaSeleccionada && m.fecha > campaniaReproductivaSeleccionada.fechaFin) return;
+      if (!CATEGORIAS_VIENTRE_MORTANDAD.has(normalizarTexto(m.categoria))) return;
+      const ids = vacasMuertas.get(m.campoId) ?? new Set<string>();
+      ids.add(m.id);
+      vacasMuertas.set(m.campoId, ids);
+    });
+
     return campos
       .map(c => {
-        const stock = c.stockInicialVacas ?? 0;
-        const paridas = partosPorCampo.get(c.id) ?? 0;
-        const abortos = abortosPorCampo.get(c.id) ?? 0;
-        const restan = Math.max(0, stock - paridas - abortos);
-        return { campo: c, stock, paridas, abortos, restan };
+        // campos.stockInicialVacas es un cache de la campaña reproductiva
+        // activa. No lo reutilizamos en una campaña cerrada porque produciría
+        // un saldo histórico falso.
+        const stock = campaniaReproductivaSeleccionada?.activa === false
+          ? 0
+          : (c.stockInicialVacas ?? 0);
+        const paridas = vacasParidas.get(c.id)?.size ?? 0;
+        const muertesTerneros = ternerosMuertos.get(c.id)?.size ?? 0;
+        const muertesVientres = vacasMuertas.get(c.id)?.size ?? 0;
+        const abortos = abortosPorCampo.get(c.id)?.size ?? 0;
+        const restan = Math.max(0, stock - paridas - muertesTerneros - muertesVientres - abortos);
+        return { campo: c, stock, paridas, muertesTerneros, muertesVientres, abortos, restan };
       })
       .filter(r => r.stock > 0)
       .sort((a, b) => b.restan - a.restan);
-  }, [scopedCampania, campos]);
+  }, [scopedCampania, scopedMortandad, campaniaReproductivaSeleccionada, campos]);
 
   const maxRestan = useMemo(
     () => vacasPorParir.reduce((m, r) => Math.max(m, r.restan), 0),
@@ -495,20 +589,22 @@ export function MetricasScreen() {
       if (p.evento === 'Nacimiento' && p.sexo !== 'Orejano') {
         paridasPorCampo.set(p.campoId, (paridasPorCampo.get(p.campoId) ?? 0) + 1);
       }
-      if (p.causaTipo === 'Muerte Señalado') {
+      if (p.evento === 'Muerte' && normalizarTexto(p.causaTipo) === 'MUERTE SENALADO') {
         muertesPorCampo.set(p.campoId, (muertesPorCampo.get(p.campoId) ?? 0) + 1);
       }
     });
     return campos
       .map(c => {
-        const stock = c.stockInicialVacas ?? 0;
+        const stock = campaniaReproductivaSeleccionada?.activa === false
+          ? 0
+          : (c.stockInicialVacas ?? 0);
         const paridas = paridasPorCampo.get(c.id) ?? 0;
         const muertes = muertesPorCampo.get(c.id) ?? 0;
         const enPie = Math.max(0, paridas - muertes);
         return { campo: c, stock, paridas, muertes, enPie };
       })
       .filter(r => r.stock > 0 || r.paridas > 0);
-  }, [scopedCampania, campos]);
+  }, [scopedCampania, campaniaReproductivaSeleccionada, campos]);
 
   // ---------- 5. Lluvias por campo ----------
   // mm acumulados por establecimiento dentro del rango filtrado.
@@ -752,10 +848,10 @@ export function MetricasScreen() {
   }, [compras, esAdmin, user]);
 
   const filteredCompras = useMemo(() => {
-    const desde = rangoDesde(rango);
-    if (!desde) return scopedCompras;
-    return scopedCompras.filter(c => c.fecha >= desde);
-  }, [scopedCompras, rango]);
+    return scopedCompras.filter(c =>
+      dentroDeCampaniaYRango(c.fecha, campaniaOperativaSeleccionada, rango),
+    );
+  }, [scopedCompras, campaniaOperativaSeleccionada, rango]);
 
   // Aggregations: por campo (count + kg destino total).
   // El campo "inversión" (precio × kg) se removió a pedido del cliente —
@@ -856,9 +952,10 @@ export function MetricasScreen() {
     [ventas, user?.rol],
   );
   const filteredVentas = useMemo(() => {
-    const desde = rangoDesde(rango);
-    return desde ? scopedVentas.filter(v => v.fecha >= desde) : scopedVentas;
-  }, [scopedVentas, rango]);
+    return scopedVentas.filter(v =>
+      dentroDeCampaniaYRango(v.fecha, campaniaOperativaSeleccionada, rango),
+    );
+  }, [scopedVentas, campaniaOperativaSeleccionada, rango]);
   const gruposVenta = useMemo(() => filteredVentas.flatMap(v => v.grupos), [filteredVentas]);
   const ventasKpis = useMemo(() => {
     let cabezas = 0, kgNetos = 0, precioPond = 0;
@@ -1015,6 +1112,38 @@ export function MetricasScreen() {
           ))}
         </View>
       </View>
+
+      {/* Campaña operativa: afecta todos los módulos. Pariciones usa dentro
+          de ella su campaña reproductiva Sep–Mar correspondiente. */}
+      {campaniasOperativas.length > 0 && (
+        <View style={styles.campaniaBar}>
+          <Text style={styles.campaniaLabel}>CAMPAÑA</Text>
+          <View style={styles.campaniaChips}>
+            {campaniasOperativas.map(c => {
+              const selected = c.id === campaniaOperativaSeleccionada?.id;
+              return (
+                <Pressable
+                  key={c.id}
+                  onPress={() => setCampaniaOperativaId(c.id)}
+                  style={[styles.campaniaChip, selected && styles.campaniaChipSel]}
+                  hitSlop={4}
+                >
+                  <Text style={[styles.campaniaChipTxt, selected && styles.campaniaChipTxtSel]}>
+                    {c.nombre}{c.activa ? ' · Actual' : ''}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          {campaniaOperativaSeleccionada && (
+            <Text style={styles.campaniaDates}>
+              {campaniaOperativaSeleccionada.fechaInicio.split('-').reverse().join('/')}
+              {' — '}
+              {campaniaOperativaSeleccionada.fechaFin.split('-').reverse().join('/')}
+            </Text>
+          )}
+        </View>
+      )}
 
       {/* Filtro rango — cinco chips compactos en una fila.
           Evitamos horizontal ScrollView que cortaba visualmente los chips
@@ -1256,11 +1385,13 @@ export function MetricasScreen() {
             {/* 3. Vacas por parir */}
             <Section
               title="Vacas por parir"
-              subtitle="Stock inicial menos nacimientos"
-              footer="Estimación. Editable desde admin cuando el panel esté habilitado."
+              subtitle="Saldo por campo desde el stock inicial de Preñez"
+              footer="Stock − nacimientos − muertes de terneros − mortandad de vientres − abortos."
             >
               {vacasPorParir.length === 0 ? (
-                <Empty msg="Sin stock inicial configurado" />
+                <Empty msg={campaniaReproductivaSeleccionada?.activa === false
+                  ? 'El stock histórico no está disponible en la app móvil'
+                  : 'Sin stock inicial configurado'} />
               ) : (
                 <View style={styles.chartBody}>
                   {vacasPorParir.map(r => (
@@ -1281,7 +1412,7 @@ export function MetricasScreen() {
             <Section
               title="Terneros en pie"
               subtitle="Por campo"
-              footer="Fórmula Power BI: nacimientos (sin Orejano) − Muerte Señalado."
+              footer="Nacimientos (sin Orejano) − muertes con causa Muerte Señalado."
             >
               {ternerosEnPie.length === 0 ? (
                 <Empty msg="Sin datos" />
@@ -2207,6 +2338,54 @@ const styles = StyleSheet.create({
   subTabTxtSel: {
     color: colors.navy,
     fontWeight: fontWeight.bold as '700',
+  },
+
+  campaniaBar: {
+    marginHorizontal: spacing.base,
+    marginTop: spacing.sm,
+    padding: spacing.sm,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.borderSoft,
+    backgroundColor: colors.white,
+    gap: 6,
+  },
+  campaniaLabel: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
+    fontWeight: fontWeight.bold as '700',
+    letterSpacing: 0.8,
+  },
+  campaniaChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
+  campaniaChip: {
+    flexGrow: 1,
+    minWidth: '45%',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 9,
+    borderRadius: radius.round,
+    borderWidth: 1,
+    borderColor: colors.borderSoft,
+    backgroundColor: colors.bgLight,
+    alignItems: 'center',
+  },
+  campaniaChipSel: {
+    backgroundColor: colors.navy,
+    borderColor: colors.navy,
+  },
+  campaniaChipTxt: {
+    fontSize: fontSize.sm,
+    color: colors.textDark,
+    fontWeight: fontWeight.semibold as '600',
+  },
+  campaniaChipTxtSel: { color: colors.white },
+  campaniaDates: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
+    textAlign: 'center',
   },
 
   // Filter bar — row horizontal simple (NO ScrollView).

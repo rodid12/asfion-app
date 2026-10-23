@@ -19,6 +19,7 @@ import * as QueryParams from 'expo-auth-session/build/QueryParams';
 import * as WebBrowser from 'expo-web-browser';
 import type {
   Campo,
+  CampaniaOperativa,
   CampaniaReproductiva,
   CaravanaColor,
   Circuito,
@@ -58,6 +59,7 @@ import {
   COMPRA_SCHEMA,
   VENTA_SCHEMA,
   CAMPANIA_REPRODUCTIVA_SCHEMA,
+  CAMPANIA_OPERATIVA_SCHEMA,
 } from '../mapRow.canonical';
 import type {
   CampoCanonical,
@@ -72,6 +74,7 @@ import type {
   CompraCanonical,
   VentaCanonical,
   CampaniaReproductivaCanonical,
+  CampaniaOperativaCanonical,
 } from '../types.canonical';
 
 // =============================================================================
@@ -177,6 +180,9 @@ function tablaOpcionalNoExiste(tipo: TipoEvento, error: { message?: string; code
 function rowToCampo(r: any): Campo        { return mapRow<Campo>(r, CAMPO_SCHEMA); }
 function rowToCampaniaReproductiva(r: any): CampaniaReproductiva {
   return mapRow<CampaniaReproductivaCanonical>(r, CAMPANIA_REPRODUCTIVA_SCHEMA);
+}
+function rowToCampaniaOperativa(r: any): CampaniaOperativa {
+  return mapRow<CampaniaOperativaCanonical>(r, CAMPANIA_OPERATIVA_SCHEMA);
 }
 function rowToLote(r: any): Lote          { return mapRow<Lote>(r, LOTE_SCHEMA); }
 function rowToPluviometro(r: any): Pluviometro { return mapRow<Pluviometro>(r, PLUVIOMETRO_SCHEMA); }
@@ -867,6 +873,21 @@ export class SupabaseBackend implements IDataBackend {
     });
   }
 
+  async listCampaniasOperativas(): Promise<CampaniaOperativa[]> {
+    return this.cachedCatalog('campanias-operativas', async () => {
+      const { data, error } = await this.supabase
+        .from('campanias_operativas')
+        .select('id, nombre, fecha_inicio, fecha_fin, activa')
+        .order('fecha_inicio', { ascending: false });
+      if (error) {
+        const msg = error.message.toLowerCase();
+        if (msg.includes('does not exist') || msg.includes('relation')) return [];
+        throw new Error(`listCampaniasOperativas: ${error.message}`);
+      }
+      return (data ?? []).map(rowToCampaniaOperativa);
+    });
+  }
+
   // Q2 audit: cambio de select('*') a columnas explícitas. Ahorra bytes
   // en transit en cada login mobile y deja el query plan más predecible.
   async listLotes(campoId: string): Promise<Lote[]> {
@@ -969,7 +990,10 @@ export class SupabaseBackend implements IDataBackend {
       }
     }));
 
-    await Promise.allSettled([this.listCampaniasReproductivas()]);
+    await Promise.allSettled([
+      this.listCampaniasReproductivas(),
+      this.listCampaniasOperativas(),
+    ]);
   }
 
   // ---------- Helpers para el form ----------

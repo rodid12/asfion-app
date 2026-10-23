@@ -63,7 +63,8 @@ export type { CampoCanonical as Campo,
               PluviometroCanonical as Pluviometro,
               CircuitoCanonical as Circuito,
               ParcelaCanonical as Parcela,
-              CampaniaReproductivaCanonical as CampaniaReproductiva } from './types.canonical';
+              CampaniaReproductivaCanonical as CampaniaReproductiva,
+              CampaniaOperativaCanonical as CampaniaOperativa } from './types.canonical';
 
 /** Estado de sincronización de cada evento cargado. */
 export type SyncState = 'pending' | 'syncing' | 'synced' | 'failed';
