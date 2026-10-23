@@ -4,7 +4,7 @@
     "slug": "asfion-app",
     "scheme": "asfion",
     "version": "1.0.0",
-    "orientation": "default",
+    "orientation": "portrait",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "icon": "./assets/icon.png",
