@@ -134,6 +134,7 @@ export function CompraDetailScreen() {
         title: 'Logística',
         rows: [
           { label: 'Km recorrido', value: compra.kmRecorrido != null ? `${compra.kmRecorrido.toLocaleString('es-AR')} km` : '' },
+          { label: 'Flete',        value: compra.flete },
           { label: 'N° DTE',       value: compra.numeroDte },
         ],
       },
@@ -223,7 +224,7 @@ export function CompraDetailScreen() {
         </Section>
 
         {/* SECCIÓN: Logística (orden AppSheet: Km → DTE, antes de Comercial) */}
-        {(compra.numeroDte || compra.kmRecorrido != null) && (
+        {(compra.numeroDte || compra.kmRecorrido != null || compra.flete) && (
           <Section title="Logística">
             {compra.kmRecorrido != null && (
               <Row
@@ -231,6 +232,7 @@ export function CompraDetailScreen() {
                 value={`${compra.kmRecorrido.toLocaleString('es-AR')} km`}
               />
             )}
+            {compra.flete && <Row label="Flete" value={compra.flete} />}
             {compra.numeroDte && <Row label="N° DTE" value={compra.numeroDte} />}
           </Section>
         )}

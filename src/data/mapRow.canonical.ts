@@ -289,6 +289,7 @@ export const COMPRA_SCHEMA: Schema<CompraCanonical> = {
   numeroDte:       { from: 'numero_dte',        type: 'string?'     },
   numeroOperacion: { from: 'numero_operacion',  type: 'string?'     },
   kmRecorrido:     { from: 'km_recorrido',      type: 'number?'     },
+  flete:           { from: 'flete',             type: 'string?'     },
   observaciones:   { from: 'observaciones',     type: 'string?'     },
   createdAt:       { from: 'created_at',        type: 'string'      },
 };

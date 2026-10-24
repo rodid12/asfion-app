@@ -392,6 +392,7 @@ function compraToRow(c: any, clienteId: string) {
     numero_dte:       c.numeroDte ?? null,
     numero_operacion: c.numeroOperacion ?? null,
     km_recorrido:     c.kmRecorrido ?? null,
+    flete:            c.flete ?? null,
     observaciones:    c.observaciones ?? null,
   };
 }

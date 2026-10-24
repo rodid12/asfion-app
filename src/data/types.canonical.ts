@@ -133,14 +133,17 @@ export interface CampaniaReproductivaCanonical {
 }
 
 /**
- * Campaña operativa general. A diferencia de la reproductiva (Sep–Mar),
- * delimita todos los módulos del establecimiento, normalmente Sep–Ago.
+ * Campaña operativa general del establecimiento. Define qué información se
+ * muestra por defecto en todos los módulos sin eliminar el historial.
+ *
+ * Es deliberadamente distinta de CampaniaReproductivaCanonical: la operativa
+ * va de septiembre a agosto; Pariciones conserva septiembre a marzo.
  */
 export interface CampaniaOperativaCanonical {
   id: string;
   nombre: string;
-  fechaInicio: string;
-  fechaFin: string;
+  fechaInicio: string;                    // 'YYYY-MM-DD'
+  fechaFin: string;                       // 'YYYY-MM-DD'
   activa: boolean;
 }
 
@@ -333,6 +336,7 @@ export interface CompraCanonical {
   numeroDte?: string;
   numeroOperacion?: string;
   kmRecorrido?: number;
+  flete?: string;
   observaciones?: string;
 
   createdAt: string;
@@ -396,4 +400,6 @@ export interface VentaCanonical {
 //               del hotfix de la mañana.
 // 2026-08-17  — VentaCanonical: venta con 1..4 grupos, desbaste fijo 8% y
 //               denominaciones exactas del Excel del cliente.
+// 2026-09-02  — CampaniaOperativaCanonical: período general Sep–Ago,
+//               independiente de la campaña reproductiva Sep–Mar.
 // =============================================================================

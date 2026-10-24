@@ -132,6 +132,7 @@ export function CompraFormScreen() {
   const [numeroDte, setNumeroDte] = useState('');
   const [numeroOperacion, setNumeroOperacion] = useState('');  // auto-gen al guardar si vacío
   const [kmRecorridoStr, setKmRecorridoStr] = useState('');
+  const [flete, setFlete] = useState('');
   const [observaciones, setObservaciones] = useState('');
 
   // Ref para que `buildEvento` vea el numero_operacion auto-generado sin
@@ -185,6 +186,7 @@ export function CompraFormScreen() {
         // Prioridad: ref (auto-generado en handleGuardar) > state (lo que tipeó el operario)
         numeroOperacion: (numeroOpRef.current || numeroOperacion.trim()) || undefined,
         kmRecorrido: kmNum != null && Number.isFinite(kmNum) ? Math.round(kmNum) : undefined,
+        flete: flete.trim() || undefined,
         observaciones: observaciones.trim() || undefined,
         syncState: 'pending',
       };
@@ -195,7 +197,7 @@ export function CompraFormScreen() {
       setActividad(undefined); setCantCabYCat(''); setKgOrigenStr(''); setKgDestinoStr('');
       setMermaManualStr(''); setKgCorregidosStr(''); setPrecio(''); setConsignado('');
       setTitular(''); setPlazo(undefined); setNumeroDte(''); setNumeroOperacion('');
-      setKmRecorridoStr(''); setObservaciones('');
+      setKmRecorridoStr(''); setFlete(''); setObservaciones('');
     },
   });
   const { campoId, setCampoId, fecha, setFecha, campos, campoActual,
@@ -219,6 +221,7 @@ export function CompraFormScreen() {
       setNumeroDte(existing.numeroDte ?? '');
       setNumeroOperacion(existing.numeroOperacion ?? '');
       setKmRecorridoStr(existing.kmRecorrido != null ? String(existing.kmRecorrido) : '');
+      setFlete(existing.flete ?? '');
       setObservaciones(existing.observaciones ?? '');
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -263,9 +266,10 @@ export function CompraFormScreen() {
       numeroDte !== (originalRecord.numeroDte ?? '') ||
       numeroOperacion !== (originalRecord.numeroOperacion ?? '') ||
       kmRecorridoStr !== (originalRecord.kmRecorrido != null ? String(originalRecord.kmRecorrido) : '') ||
+      flete !== (originalRecord.flete ?? '') ||
       observaciones !== (originalRecord.observaciones ?? '')
     );
-  }, [isEdit, originalRecord, campoId, fecha, actividad, cantCabYCat, kgOrigenStr, kgDestinoStr, mermaManualStr, kgCorregidosStr, precio, consignado, titular, plazo, numeroDte, numeroOperacion, kmRecorridoStr, observaciones]);
+  }, [isEdit, originalRecord, campoId, fecha, actividad, cantCabYCat, kgOrigenStr, kgDestinoStr, mermaManualStr, kgCorregidosStr, precio, consignado, titular, plazo, numeroDte, numeroOperacion, kmRecorridoStr, flete, observaciones]);
 
   // ─── Guardar — validación específica primero, después delega al hook ───
   // El hook arma el evento con buildEvento (que está arriba) y maneja el flow
@@ -535,6 +539,13 @@ export function CompraFormScreen() {
               />
             </View>
           </View>
+
+          <FormField
+            label="Flete"
+            value={flete}
+            onChangeText={setFlete}
+            placeholder="Empresa, transportista o referencia"
+          />
 
           <FormField
             label="N° Operación"

@@ -47,6 +47,28 @@ type Nav = NativeStackNavigationProp<RootStackParamList, 'MainTabs'>;
 
 // ---------- helpers ----------
 
+function compararPariciones(a: Paricion, b: Paricion): number {
+  const porFecha = b.fecha.localeCompare(a.fecha);
+  if (porFecha !== 0) return porFecha;
+
+  const caravanaA = a.caravanaNumero?.trim() ?? '';
+  const caravanaB = b.caravanaNumero?.trim() ?? '';
+  if (!caravanaA && !caravanaB) return a.createdAt.localeCompare(b.createdAt);
+  if (!caravanaA) return 1;
+  if (!caravanaB) return -1;
+
+  const soloDigitosA = /^\d+$/.test(caravanaA);
+  const soloDigitosB = /^\d+$/.test(caravanaB);
+  if (soloDigitosA && soloDigitosB) {
+    const porNumero = Number(caravanaA) - Number(caravanaB);
+    if (porNumero !== 0) return porNumero;
+  } else if (soloDigitosA !== soloDigitosB) {
+    return soloDigitosA ? -1 : 1;
+  }
+
+  return caravanaA.localeCompare(caravanaB);
+}
+
 function dayLabel(fechaISO: string): { label: string; order: string } {
   const today = new Date();
   const y = today.getFullYear();
@@ -295,7 +317,9 @@ export function ParicionListScreen() {
   };
 
   // Agrupar por CAMPO (feedback Ro: "primero por campo, luego por fecha").
-  // Dentro de cada campo, items ordenados por fecha desc.
+  // Dentro de cada campo: fecha descendente y, en el mismo día, caravana
+  // ascendente. Así 001…099 se muestra como una secuencia y no según el
+  // orden en que Supabase devolvió los registros.
   const sections = useMemo(() => {
     const byCampo = new Map<string, { campoNombre: string; items: Paricion[] }>();
     filtered.forEach(p => {
@@ -304,7 +328,7 @@ export function ParicionListScreen() {
       entry.items.push(p);
       byCampo.set(p.campoId, entry);
     });
-    byCampo.forEach(e => e.items.sort((a, b) => b.fecha.localeCompare(a.fecha)));
+    byCampo.forEach(e => e.items.sort(compararPariciones));
     const keys = Array.from(byCampo.keys()).sort((a, b) =>
       byCampo.get(a)!.campoNombre.localeCompare(byCampo.get(b)!.campoNombre),
     );
