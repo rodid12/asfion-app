@@ -58,6 +58,8 @@ export interface MortandadCatalogos {
   categorias: readonly string[];       // ["Vc Preñ", "TernM", "TernH", "Vaq 1° Servicio", ...]
   actividades: readonly string[];      // ["Cria", "engorde", "Recria P", "Invernada", "Destete Precoz"]
   causaTipos: readonly string[];       // ["Muerte Señalado", "Nacido Muerto", "Desconocido"]
+  /** true: la causa se escribe libremente; false/omitido: se elige del catálogo. */
+  causaLibre?: boolean;
   /** Actividades disponibles según el campo. La clave especial
    *  `__otros__` aplica a todos los campos que no tengan una entrada propia. */
   actividadesPorCampo?: Readonly<Record<string, readonly string[]>>;

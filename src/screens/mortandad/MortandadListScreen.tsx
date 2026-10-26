@@ -291,10 +291,10 @@ export function MortandadListScreen() {
           </Text>
         </View>
 
-        {/* Columna centro: causa + meta */}
+        {/* Columna centro: causa libre + meta */}
         <View style={styles.cardRight}>
-          {item.causaTipo ? (
-            <Text style={styles.causa} numberOfLines={1}>{item.causaTipo}</Text>
+          {(item.causaDetalle || item.causaTipo) ? (
+            <Text style={styles.causa} numberOfLines={2}>{item.causaDetalle || item.causaTipo}</Text>
           ) : (
             <Text style={[styles.causa, styles.causaMuted]} numberOfLines={1}>Sin causa</Text>
           )}
@@ -333,9 +333,6 @@ export function MortandadListScreen() {
                 {primerNombre(item.usuarioEmail)}
               </Text>
             </View>
-          )}
-          {item.causaDetalle && (
-            <Text style={styles.obs} numberOfLines={1}>"{item.causaDetalle}"</Text>
           )}
           {item.observaciones && (
             <Text style={styles.obs} numberOfLines={2}>"{item.observaciones}"</Text>

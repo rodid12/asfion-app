@@ -3,18 +3,14 @@
 // Filosofía consistente con Parición y Pastoreo: "mientras menos cargue el
 // peón, mejor". Quedan solo los campos estructuralmente necesarios.
 //
-// Antes había: caravana color/número, causa detalle (chips + texto libre),
-// fotos y observaciones. Por feedback nuevo, restauramos la evidencia
-// fotográfica porque es el respaldo principal del evento de mortandad.
+// La causa se carga como texto libre para reflejar el diagnóstico real del
+// operario. La evidencia fotográfica se conserva como respaldo principal.
 //
 // Quedan:
 //
 //   - Header card: Usuario / Campo / LOTE (NUEVO, required) / Fecha / GPS
-//   - Body: Categoría * (vaca/ternero/...) y Causa — tipo (Muerte Señalado /
-//     Nacido Muerto / Desconocido). Categoría es required, causa-tipo no.
-//
-// Si más adelante queremos volver a habilitar caravana / fotos / observaciones,
-// los tipos siguen aceptándolos — solo hay que volver a pintarlos en el form.
+//   - Body: Actividad *, Categoría *, Causa de muerte (texto), Vaca parida y
+//     foto. En Corrales aparecen además N° de corral y N° de tropa.
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -64,12 +60,14 @@ export function MortandadFormScreen() {
   const CATEGORIAS = catMort.categorias;
   const ACTIVIDADES = catMort.actividades;
   const CAUSAS_TIPO = catMort.causaTipos as readonly CausaMuerteTipo[];
+  const causaLibre = catMort.causaLibre === true;
 
   // ─── State específico de Mortandad ───
   const [loteId, setLoteId] = useState<string>('');
   const [categoria, setCategoria] = useState<string | undefined>();
   const [actividad, setActividad] = useState<string | undefined>();
   const [causaTipo, setCausaTipo] = useState<CausaMuerteTipo | undefined>();
+  const [causaDetalle, setCausaDetalle] = useState('');
   const [numeroCorral, setNumeroCorral] = useState('');
   const [numeroTropa, setNumeroTropa] = useState('');
   const [vacaParida, setVacaParida] = useState<boolean | undefined>();
@@ -117,7 +115,8 @@ export function MortandadFormScreen() {
         gps,
         categoria,
         actividad,
-        causaTipo,
+        causaTipo: causaLibre ? undefined : causaTipo,
+        causaDetalle: causaLibre ? causaDetalle.trim() || undefined : undefined,
         numeroCorral: esCampoCorrales ? numeroCorral.trim() || undefined : undefined,
         numeroTropa: esCampoCorrales ? numeroTropa.trim() || undefined : undefined,
         vacaParida,
@@ -125,12 +124,13 @@ export function MortandadFormScreen() {
         syncState: 'pending',
       };
     },
-    formatSummary: (e) => `${e.categoria}${e.causaTipo ? ' · ' + e.causaTipo : ''}`,
+    formatSummary: (e) => `${e.categoria}${(e.causaDetalle || e.causaTipo) ? ' · ' + (e.causaDetalle || e.causaTipo) : ''}`,
     resetEspecifico: () => {
       // Conservamos campo, lote y fecha — uso típico es cargar varias muertes
       // del mismo campo el mismo día.
       setCategoria(undefined);
       setCausaTipo(undefined);
+      setCausaDetalle('');
       setVacaParida(undefined);
       setFotos([]);
     },
@@ -185,6 +185,7 @@ export function MortandadFormScreen() {
       setCategoria(existing.categoria);
       setActividad(existing.actividad);
       setCausaTipo(existing.causaTipo);
+      setCausaDetalle(existing.causaDetalle ?? (causaLibre ? existing.causaTipo ?? '' : ''));
       setNumeroCorral(existing.numeroCorral ?? '');
       setNumeroTropa(existing.numeroTropa ?? '');
       setVacaParida(existing.vacaParida);
@@ -286,13 +287,15 @@ export function MortandadFormScreen() {
       fecha !== originalRecord.fecha ||
       categoria !== originalRecord.categoria ||
       actividad !== originalRecord.actividad ||
-      causaTipo !== originalRecord.causaTipo ||
+      (causaLibre
+        ? causaDetalle !== (originalRecord.causaDetalle ?? originalRecord.causaTipo ?? '')
+        : causaTipo !== originalRecord.causaTipo) ||
       numeroCorral !== (originalRecord.numeroCorral ?? '') ||
       numeroTropa !== (originalRecord.numeroTropa ?? '') ||
       vacaParida !== originalRecord.vacaParida ||
       JSON.stringify(fotos) !== JSON.stringify(originalRecord.fotos ?? [])
     );
-  }, [isEdit, originalRecord, campoId, loteId, fecha, categoria, actividad, causaTipo, numeroCorral, numeroTropa, vacaParida, fotos]);
+  }, [isEdit, originalRecord, campoId, loteId, fecha, categoria, actividad, causaLibre, causaTipo, causaDetalle, numeroCorral, numeroTropa, vacaParida, fotos]);
 
   const puedeGuardar = useMemo(() => {
     if (!campoId) return false;
@@ -689,12 +692,25 @@ export function MortandadFormScreen() {
             })}
           </View>
 
-          <ChipGroup<CausaMuerteTipo>
-            label="Causa — tipo"
-            value={causaTipo}
-            options={CAUSAS_TIPO}
-            onChange={setCausaTipo}
-          />
+          {causaLibre ? (
+            <FormField
+              label="Causa de muerte"
+              value={causaDetalle}
+              onChangeText={setCausaDetalle}
+              placeholder="Escribí la causa"
+              multiline
+              numberOfLines={3}
+              textAlignVertical="top"
+              style={styles.causaInput}
+            />
+          ) : (
+            <ChipGroup<CausaMuerteTipo>
+              label="Causa — tipo"
+              value={causaTipo}
+              options={CAUSAS_TIPO}
+              onChange={setCausaTipo}
+            />
+          )}
 
           <PhotoStrip
             fotos={fotos}
@@ -723,6 +739,7 @@ export function MortandadFormScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bgLight },
+  causaInput: { minHeight: 88, paddingTop: spacing.md },
   placeholder: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   placeholderTxt: { color: colors.textMuted, fontSize: fontSize.md },
 

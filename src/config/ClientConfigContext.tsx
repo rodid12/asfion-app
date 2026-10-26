@@ -224,6 +224,7 @@ function pickMortandadCatalogo(raw: any, fallback: MortandadCatalogos): Mortanda
     categorias:  arrOr(raw?.categorias,  fallback.categorias),
     actividades: arrOr(raw?.actividades, fallback.actividades),
     causaTipos:  arrOr(raw?.causaTipos,  fallback.causaTipos),
+    causaLibre: typeof raw?.causaLibre === 'boolean' ? raw.causaLibre : fallback.causaLibre,
     actividadesPorCampo: stringArrayRecordOrUndefined(raw?.actividadesPorCampo),
     categoriasPorActividad: stringArrayRecordOrUndefined(raw?.categoriasPorActividad),
     etiquetas: stringRecordOrUndefined(raw?.etiquetas),

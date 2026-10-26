@@ -52,7 +52,6 @@ import type {
   CampaniaOperativa,
   CampaniaReproductiva,
   CategoriaHacienda,
-  CausaMuerteTipo,
   Compra,
   EventoParicion,
   Lluvia,
@@ -115,14 +114,6 @@ const CATEGORIA_LABEL: Record<CategoriaHacienda, string> = {
   novillo: 'Novillos',
   vaquillona: 'Vaquillonas',
 };
-
-// Causas de muerte en orden estable + bucket "Sin especificar" para registros viejos.
-const CAUSA_ORDEN: (CausaMuerteTipo | 'Sin especificar')[] = [
-  'Muerte Señalado',
-  'Nacido Muerto',
-  'Desconocido',
-  'Sin especificar',
-];
 
 function isoDaysAgo(n: number): string {
   const d = new Date();
@@ -712,7 +703,7 @@ export function MetricasScreen() {
     const counts = new Map<string, Set<string>>();
     filteredMortandad.forEach(m => {
       const set = counts.get(m.campoId) ?? new Set<string>();
-      set.add(m.caravanaNumero?.trim() || '__SIN_CARAVANA__');
+      set.add(m.id);
       counts.set(m.campoId, set);
     });
     return campos
@@ -735,7 +726,7 @@ export function MetricasScreen() {
     filteredMortandad.forEach(m => {
       const cat = m.categoria || 'Sin categoría';
       const set = counts.get(cat) ?? new Set<string>();
-      set.add(m.caravanaNumero?.trim() || '__SIN_CARAVANA__');
+      set.add(m.id);
       counts.set(cat, set);
     });
     return Array.from(counts.entries())
@@ -750,14 +741,16 @@ export function MetricasScreen() {
 
   // ---------- 9. Mortandad por causa ----------
   const mortandadPorCausa = useMemo(() => {
-    const counts = new Map<CausaMuerteTipo | 'Sin especificar', Set<string>>();
+    const counts = new Map<string, Set<string>>();
     filteredMortandad.forEach(m => {
-      const key = m.causaTipo ?? 'Sin especificar';
+      const key = m.causaDetalle?.trim() || m.causaTipo || 'Sin especificar';
       const set = counts.get(key) ?? new Set<string>();
-      set.add(m.caravanaNumero?.trim() || '__SIN_CARAVANA__');
+      set.add(m.id);
       counts.set(key, set);
     });
-    return CAUSA_ORDEN.map(c => ({ causa: c, count: counts.get(c)?.size ?? 0 })).filter(r => r.count > 0);
+    return Array.from(counts.entries())
+      .map(([causa, ids]) => ({ causa, count: ids.size }))
+      .sort((a, b) => b.count - a.count || a.causa.localeCompare(b.causa));
   }, [filteredMortandad]);
 
   const maxMortandadCausa = useMemo(
@@ -1652,8 +1645,7 @@ export function MetricasScreen() {
             {/* 9. Mortandad por causa */}
             <Section
               title="Mortandad por causa"
-              subtitle="Causa primaria registrada"
-              footer="El detalle textual (síntomas, contexto) queda en el listado de mortandad."
+              subtitle="Causa informada por el operario"
             >
               {mortandadPorCausa.length === 0 ? (
                 <Empty msg="Sin registros en el rango seleccionado" />

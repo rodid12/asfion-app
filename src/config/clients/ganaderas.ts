@@ -52,8 +52,9 @@ export const GANADERAS_CONFIG: ClientConfig = {
       categorias: GANADERAS_MORT_CATEGORIAS,
       actividades: GANADERAS_MORT_ACTIVIDADES,
       causaTipos: ['Muerte Señalado', 'Nacido Muerto', 'Desconocido'],
+      causaLibre: true,
       actividadesPorCampo: {
-        Corrales: ['engorde', 'Invernada', 'Destete Precoz'],
+        Corrales: ['Recepción', 'engorde', 'Invernada', 'Destete Precoz'],
         __otros__: ['Cria', 'Recria P'],
       },
       categoriasPorActividad: {
