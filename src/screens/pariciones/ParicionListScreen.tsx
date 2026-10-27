@@ -51,30 +51,11 @@ function compararPariciones(a: Paricion, b: Paricion): number {
   const porFecha = b.fecha.localeCompare(a.fecha);
   if (porFecha !== 0) return porFecha;
 
-  // En un mismo día manda el momento real de carga: el último evento cargado
-  // debe quedar arriba. La fecha del evento no contiene hora, por eso usamos
-  // createdAt como segundo criterio.
+  // En un mismo día manda EXCLUSIVAMENTE el momento real de carga. El número
+  // de caravana identifica al animal, pero no define el orden del listado.
   const porCreacion = (b.createdAt ?? '').localeCompare(a.createdAt ?? '');
   if (porCreacion !== 0) return porCreacion;
-
-  const caravanaA = a.caravanaNumero?.trim() ?? '';
-  const caravanaB = b.caravanaNumero?.trim() ?? '';
-  if (!caravanaA && !caravanaB) return b.id.localeCompare(a.id);
-  if (!caravanaA) return 1;
-  if (!caravanaB) return -1;
-
-  const soloDigitosA = /^\d+$/.test(caravanaA);
-  const soloDigitosB = /^\d+$/.test(caravanaB);
-  if (soloDigitosA && soloDigitosB) {
-    // Respaldo para importaciones cuyos registros comparten el mismo
-    // created_at: 0133 se considera posterior a 0132.
-    const porNumero = Number(caravanaB) - Number(caravanaA);
-    if (porNumero !== 0) return porNumero;
-  } else if (soloDigitosA !== soloDigitosB) {
-    return soloDigitosA ? -1 : 1;
-  }
-
-  return caravanaB.localeCompare(caravanaA) || b.id.localeCompare(a.id);
+  return b.id.localeCompare(a.id);
 }
 
 function dayLabel(fechaISO: string): { label: string; order: string } {

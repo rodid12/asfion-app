@@ -296,6 +296,9 @@ function paricionToRow(p: Paricion, clienteId: string) {
     gps_lon: p.gps?.lon ?? null,
     gps_accuracy_m: p.gps?.accuracyM ?? null,
     fotos: p.fotos ?? null,
+    // Hora original del dispositivo. Es indispensable para ordenar bien aun
+    // cuando varios eventos offline se sincronizan juntos y fuera de orden.
+    created_at: p.createdAt,
   };
 }
 
@@ -309,6 +312,7 @@ function lluviaToRow(l: any, clienteId: string) {
     fecha: l.fecha,
     pluviometro_nombre: l.pluviometro ?? null,
     milimetros: l.milimetros,
+    created_at: l.createdAt,
   };
 }
 
@@ -334,6 +338,7 @@ function mortandadToRow(m: any, clienteId: string) {
     gps_lon: m.gps?.lon ?? null,
     gps_accuracy_m: m.gps?.accuracyM ?? null,
     fotos: m.fotos ?? null,
+    created_at: m.createdAt,
   };
 }
 
@@ -356,6 +361,7 @@ function pastoreoToRow(p: any, clienteId: string) {
     // Migration 0003 — datos productivos
     animales:    p.animales    ?? null,
     kg_promedio: p.kgPromedio  ?? null,
+    created_at:  p.createdAt,
   };
 }
 
@@ -396,6 +402,7 @@ function compraToRow(c: any, clienteId: string) {
     km_recorrido:     c.kmRecorrido ?? null,
     flete:            c.flete ?? null,
     observaciones:    c.observaciones ?? null,
+    created_at:       c.createdAt,
   };
 }
 
