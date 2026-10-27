@@ -18,6 +18,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   Linking,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -538,8 +539,14 @@ export function MortandadFormScreen() {
 
             {/* Modal del mapa picker — visual, con tap o drag para mover
                 el pin, botón "Mi ubicación" para centrar con GPS nativo. */}
-            {showMapPicker && (
-              <View style={styles.mapPickerOverlay}>
+            <Modal
+              visible={showMapPicker}
+              animationType="slide"
+              presentationStyle="fullScreen"
+              statusBarTranslucent
+              onRequestClose={() => setShowMapPicker(false)}
+            >
+              {showMapPicker && (
                 <MapPickerModal
                   initialLat={gps?.lat}
                   initialLon={gps?.lon}
@@ -550,8 +557,8 @@ export function MortandadFormScreen() {
                   }}
                   onCancel={() => setShowMapPicker(false)}
                 />
-              </View>
-            )}
+              )}
+            </Modal>
 
             {/* Modal de edición manual de coordenadas */}
             {showGpsManual && (
@@ -898,13 +905,6 @@ const styles = StyleSheet.create({
   gpsManualBtnPrimaryTxt: {
     color: '#fff',
     fontWeight: fontWeight.bold as '700',
-  },
-  // Overlay del map picker — ocupa toda la pantalla.
-  mapPickerOverlay: {
-    position: 'absolute',
-    top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: '#fff',
-    zIndex: 200,
   },
   infoCta: {
     paddingHorizontal: spacing.sm,
