@@ -135,7 +135,9 @@ export class Repository {
   private userScope = '';
 
   private cacheKey(tipo: TipoEvento, filters?: EventoFilters): string {
-    return JSON.stringify([tipo, filters ?? {}]);
+    // Defensa en profundidad: incluso si un cambio de cliente no alcanzara a
+    // limpiar el Map en el mismo tick, nunca reutilizamos filas de otro tenant.
+    return JSON.stringify([this.userScope, tipo, filters ?? {}]);
   }
 
   /** Devuelve la última copia cacheada (sincrónico, sin red). undefined si nunca cargó. */
@@ -145,9 +147,15 @@ export class Repository {
 
   /** Invalida el cache de un tipo de evento (todos los filtros). Útil post-save. */
   invalidateEventoCache(tipo: TipoEvento) {
-    const prefix = `["${tipo}"`;
     for (const k of this.listCache.keys()) {
-      if (k.startsWith(prefix)) this.listCache.delete(k);
+      try {
+        const parsed = JSON.parse(k) as [string, TipoEvento, EventoFilters];
+        if (parsed[1] === tipo) this.listCache.delete(k);
+      } catch {
+        // Una key de una versión anterior no debe sobrevivir a una
+        // invalidación; la descartamos por seguridad.
+        this.listCache.delete(k);
+      }
     }
   }
 

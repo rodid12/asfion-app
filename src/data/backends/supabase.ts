@@ -88,7 +88,9 @@ export interface SupabaseBackendConfig {
 
 const LEGACY_PENDING_KEY = 'asfion.supabase.pending.v1';
 const PENDING_PREFIX = 'asfion.supabase.pending.v2:';
-const CATALOG_PREFIX = 'asfion.supabase.catalog.v1:';
+// v2 invalida copias locales que pudieron haberse generado antes de que las
+// consultas del superadministrador filtraran explícitamente por cliente.
+const CATALOG_PREFIX = 'asfion.supabase.catalog.v2:';
 
 // Cierra correctamente una sesión OAuth si la app también se ejecuta en web.
 // En Android/iOS es inocuo y mantiene el mismo flujo oficial de Expo.
@@ -848,7 +850,8 @@ export class SupabaseBackend implements IDataBackend {
   async listCampos(): Promise<Campo[]> {
     return this.cachedCatalog('campos', async () => {
       const user = await this.getCurrentUser();
-      let query = this.supabase.from('campos').select('*');
+      if (!user?.clienteId) return [];
+      let query = this.supabase.from('campos').select('*').eq('cliente_id', user.clienteId);
       // Operario con campo fijo: solo ese campo. Operario sin asignación:
       // todos los campos del tenant (RLS sigue aislando a Ganaderas).
       if (user?.rol === 'operario' && user.campoAsignadoId) {
@@ -862,9 +865,12 @@ export class SupabaseBackend implements IDataBackend {
 
   async listCampaniasReproductivas(): Promise<CampaniaReproductiva[]> {
     return this.cachedCatalog('campanias-reproductivas', async () => {
+      const user = await this.getCurrentUser();
+      if (!user?.clienteId) return [];
       const { data, error } = await this.supabase
         .from('campanias_reproductivas')
         .select('id, nombre, servicio_anio, fecha_inicio, fecha_fin, activa')
+        .eq('cliente_id', user.clienteId)
         .order('activa', { ascending: false })
         .order('fecha_inicio', { ascending: false });
       if (error) {
@@ -879,9 +885,12 @@ export class SupabaseBackend implements IDataBackend {
 
   async listCampaniasOperativas(): Promise<CampaniaOperativa[]> {
     return this.cachedCatalog('campanias-operativas', async () => {
+      const user = await this.getCurrentUser();
+      if (!user?.clienteId) return [];
       const { data, error } = await this.supabase
         .from('campanias_operativas')
         .select('id, nombre, fecha_inicio, fecha_fin, activa')
+        .eq('cliente_id', user.clienteId)
         .order('fecha_inicio', { ascending: false });
       if (error) {
         const msg = error.message.toLowerCase();
@@ -896,9 +905,12 @@ export class SupabaseBackend implements IDataBackend {
   // en transit en cada login mobile y deja el query plan más predecible.
   async listLotes(campoId: string): Promise<Lote[]> {
     return this.cachedCatalog(`lotes:${campoId}`, async () => {
+      const user = await this.getCurrentUser();
+      if (!user?.clienteId) return [];
       const { data, error } = await this.supabase
         .from('lotes')
         .select('id, campo_id, nombre')
+        .eq('cliente_id', user.clienteId)
         .eq('campo_id', campoId)
         .order('nombre');
       if (error) throw new Error(error.message);
@@ -908,9 +920,12 @@ export class SupabaseBackend implements IDataBackend {
 
   async listPluviometros(campoId: string): Promise<Pluviometro[]> {
     return this.cachedCatalog(`pluviometros:${campoId}`, async () => {
+      const user = await this.getCurrentUser();
+      if (!user?.clienteId) return [];
       const { data, error } = await this.supabase
         .from('pluviometros')
         .select('id, campo_id, nombre')
+        .eq('cliente_id', user.clienteId)
         .eq('campo_id', campoId)
         .order('nombre');
       if (error) throw new Error(error.message);
@@ -920,9 +935,12 @@ export class SupabaseBackend implements IDataBackend {
 
   async listCircuitos(campoId: string): Promise<Circuito[]> {
     return this.cachedCatalog(`circuitos:${campoId}`, async () => {
+      const user = await this.getCurrentUser();
+      if (!user?.clienteId) return [];
       const { data, error } = await this.supabase
         .from('circuitos')
         .select('id, campo_id, nombre, hectareas')
+        .eq('cliente_id', user.clienteId)
         .eq('campo_id', campoId)
         .order('nombre');
       if (error) throw new Error(error.message);
@@ -932,9 +950,12 @@ export class SupabaseBackend implements IDataBackend {
 
   async listParcelas(circuitoId: string): Promise<Parcela[]> {
     return this.cachedCatalog(`parcelas:${circuitoId}`, async () => {
+      const user = await this.getCurrentUser();
+      if (!user?.clienteId) return [];
       const { data, error } = await this.supabase
         .from('parcelas')
         .select('id, circuito_id, numero, hectareas')
+        .eq('cliente_id', user.clienteId)
         .eq('circuito_id', circuitoId)
         .order('numero');
       if (error) throw new Error(error.message);
@@ -948,9 +969,11 @@ export class SupabaseBackend implements IDataBackend {
    * y guardar en la cola aunque el dispositivo esté completamente offline.
    */
   async warmOfflineCache(): Promise<void> {
+    const user = await this.getCurrentUser();
+    if (!user?.clienteId) return;
+    const clienteId = user.clienteId;
     const campos = await this.refreshCatalog<Campo>('campos', async () => {
-      const user = await this.getCurrentUser();
-      let query = this.supabase.from('campos').select('*');
+      let query = this.supabase.from('campos').select('*').eq('cliente_id', clienteId);
       if (user?.rol === 'operario' && user.campoAsignadoId) {
         query = query.eq('id', user.campoAsignadoId);
       }
@@ -963,19 +986,22 @@ export class SupabaseBackend implements IDataBackend {
       const [, , circuitos] = await Promise.allSettled([
         this.refreshCatalog<Lote>(`lotes:${campo.id}`, async () => {
           const { data, error } = await this.supabase.from('lotes')
-            .select('id, campo_id, nombre').eq('campo_id', campo.id).order('nombre');
+            .select('id, campo_id, nombre').eq('cliente_id', clienteId)
+            .eq('campo_id', campo.id).order('nombre');
           if (error) throw new Error(error.message);
           return (data ?? []).map(rowToLote);
         }),
         this.refreshCatalog<Pluviometro>(`pluviometros:${campo.id}`, async () => {
           const { data, error } = await this.supabase.from('pluviometros')
-            .select('id, campo_id, nombre').eq('campo_id', campo.id).order('nombre');
+            .select('id, campo_id, nombre').eq('cliente_id', clienteId)
+            .eq('campo_id', campo.id).order('nombre');
           if (error) throw new Error(error.message);
           return (data ?? []).map(rowToPluviometro);
         }),
         this.refreshCatalog<Circuito>(`circuitos:${campo.id}`, async () => {
           const { data, error } = await this.supabase.from('circuitos')
-            .select('id, campo_id, nombre, hectareas').eq('campo_id', campo.id).order('nombre');
+            .select('id, campo_id, nombre, hectareas').eq('cliente_id', clienteId)
+            .eq('campo_id', campo.id).order('nombre');
           if (error) throw new Error(error.message);
           return (data ?? []).map(rowToCircuito);
         }),
@@ -986,6 +1012,7 @@ export class SupabaseBackend implements IDataBackend {
           this.refreshCatalog<Parcela>(`parcelas:${circuito.id}`, async () => {
             const { data, error } = await this.supabase.from('parcelas')
               .select('id, circuito_id, numero, hectareas')
+              .eq('cliente_id', clienteId)
               .eq('circuito_id', circuito.id).order('numero');
             if (error) throw new Error(error.message);
             return (data ?? []).map(rowToParcela);
@@ -1003,9 +1030,12 @@ export class SupabaseBackend implements IDataBackend {
   // ---------- Helpers para el form ----------
 
   async ultimaCaravana(campoId: string): Promise<UltimaCaravana | null> {
+    const user = await this.getCurrentUser();
+    if (!user?.clienteId) return null;
     const { data, error } = await this.supabase
       .from('pariciones')
       .select('caravana_color, caravana_numero')
+      .eq('cliente_id', user.clienteId)
       .eq('campo_id', campoId)
       .not('caravana_numero', 'is', null)
       .order('created_at', { ascending: false })
@@ -1021,7 +1051,10 @@ export class SupabaseBackend implements IDataBackend {
   }
 
   async contarPariciones(filtros: { desde?: string; usuarioEmail?: string }): Promise<number> {
-    let q = this.supabase.from('pariciones').select('*', { count: 'exact', head: true });
+    const user = await this.getCurrentUser();
+    if (!user?.clienteId) return 0;
+    let q = this.supabase.from('pariciones').select('*', { count: 'exact', head: true })
+      .eq('cliente_id', user.clienteId);
     if (filtros.desde) q = q.gte('fecha', filtros.desde);
     if (filtros.usuarioEmail) q = q.eq('usuario_email', filtros.usuarioEmail);
     const { count, error } = await q;
@@ -1034,9 +1067,12 @@ export class SupabaseBackend implements IDataBackend {
     numero: string,
     excluirId?: string,
   ): Promise<ParicionRef | null> {
+    const user = await this.getCurrentUser();
+    if (!user?.clienteId) return null;
     let q = this.supabase
       .from('pariciones')
       .select('id, fecha, campo_id, usuario_email, evento')
+      .eq('cliente_id', user.clienteId)
       .eq('caravana_color', color)
       .eq('caravana_numero', numero);
     if (excluirId) q = q.neq('id', excluirId);
@@ -1118,6 +1154,7 @@ export class SupabaseBackend implements IDataBackend {
   async listEventos(tipo: TipoEvento, filters: EventoFilters = {}): Promise<Evento[]> {
     const table = tablaDeEvento(tipo);
     const user = await this.getCurrentUser();
+    if (!user?.clienteId) return [];
     const campoFijo = user?.rol === 'operario' ? user.campoAsignadoId : undefined;
     // Pastoreo usa fecha_entrada en lugar de fecha
     const fechaCol = tipo === 'pastoreo' ? 'fecha_entrada' : 'fecha';
@@ -1125,7 +1162,7 @@ export class SupabaseBackend implements IDataBackend {
     // Función que arma la query con todos los filtros aplicados — la
     // llamamos por cada página para mantener los predicados.
     const buildQuery = () => {
-      let q = this.supabase.from(table).select('*');
+      let q = this.supabase.from(table).select('*').eq('cliente_id', user.clienteId);
       if (campoFijo) q = q.eq('campo_id', campoFijo);
       if (filters.campoId) q = q.eq('campo_id', filters.campoId);
       if (filters.loteId) q = q.eq('lote_id', filters.loteId);

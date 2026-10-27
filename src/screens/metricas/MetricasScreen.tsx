@@ -180,6 +180,7 @@ const EVENTO_ORDEN: EventoParicion[] = ['Nacimiento', 'Muerte', 'Aborto', 'Retac
 export function MetricasScreen() {
   const repo = useRepository();
   const { user } = useAuth();
+  const tenantId = user?.clienteId ?? null;
   const { currentTab } = useTabNav();
   const clientConfig = useClientConfig();
 
@@ -271,7 +272,7 @@ export function MetricasScreen() {
     } finally {
       if (!cancelado()) setLoading(false);
     }
-  }, [metricasHabilitadas, repo]);
+  }, [metricasHabilitadas, repo, tenantId]);
 
   useEffect(() => {
     if (campaniasOperativas.length === 0) {
@@ -290,10 +291,24 @@ export function MetricasScreen() {
   // Cargar al entrar al tab y al montarse.
   useEffect(() => {
     if (currentTab !== 'metricas') return;
+    // El screen puede sobrevivir al cambio de cliente del superadministrador.
+    // Borramos primero la vista anterior para no mostrar ni un instante datos
+    // del tenant que acaba de abandonar.
+    setData([]);
+    setLluvias([]);
+    setMortandad([]);
+    setPastoreo([]);
+    setCompras([]);
+    setVentas([]);
+    setCampos([]);
+    setCampaniasReproductivas([]);
+    setCampaniasOperativas([]);
+    setCampaniaOperativaId(null);
+    setCircuitosMap({});
     let cancelado = false;
     load(() => cancelado);
     return () => { cancelado = true; };
-  }, [currentTab, load]);
+  }, [currentTab, load, tenantId]);
 
   // Scope por rol (operario solo ve lo suyo).
   const scoped = useMemo(() => {
