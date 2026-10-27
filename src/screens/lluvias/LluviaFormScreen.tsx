@@ -21,6 +21,7 @@ import { useRoute, type RouteProp } from '@react-navigation/native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 import { FaltaHint } from '@/components/FaltaHint';
+import { FormField } from '@/components/FormField';
 import { NoLotesBanner } from '@/components/NoLotesBanner';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { colors } from '@/theme/colors';
@@ -42,6 +43,7 @@ export function LluviaFormScreen() {
   // ─── State específico de Lluvia ───
   const [pluviometroId, setPluviometroId] = useState<string>('');
   const [milimetrosStr, setMilimetrosStr] = useState<string>('');
+  const [observaciones, setObservaciones] = useState('');
   const [pluviometros, setPluviometros] = useState<Pluviometro[]>([]);
   const [pickerCampoOpen, setPickerCampoOpen] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -64,12 +66,14 @@ export function LluviaFormScreen() {
         pluviometroId,
         pluviometro: pluvActual?.nombre ?? '',
         milimetros: mmNum,
+        observaciones: observaciones.trim() || undefined,
         syncState: 'pending',
       };
     },
     formatSummary: (e) => `${e.milimetros} mm en ${e.pluviometro}`,
     resetEspecifico: () => {
       setMilimetrosStr('');
+      setObservaciones('');
       setErrores({});
       // Mantenemos campo/pluviómetro/fecha — patrón "cargar otra del mismo día"
     },
@@ -85,6 +89,7 @@ export function LluviaFormScreen() {
       // Lluvias nuevas tienen pluviometroId; las legacy guardaban en loteId.
       setPluviometroId(existing.pluviometroId ?? existing.loteId ?? '');
       setMilimetrosStr(String(existing.milimetros));
+      setObservaciones(existing.observaciones ?? '');
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -120,9 +125,10 @@ export function LluviaFormScreen() {
       campoId !== originalRecord.campoId ||
       pluviometroId !== (originalRecord.pluviometroId ?? originalRecord.loteId ?? '') ||
       fecha !== originalRecord.fecha ||
-      mm !== originalRecord.milimetros
+      mm !== originalRecord.milimetros ||
+      observaciones !== (originalRecord.observaciones ?? '')
     );
-  }, [isEdit, originalRecord, campoId, pluviometroId, fecha, mm]);
+  }, [isEdit, originalRecord, campoId, pluviometroId, fecha, mm, observaciones]);
 
   const puedeGuardar = useMemo(() => {
     if (!campoId) return false;
@@ -309,6 +315,16 @@ export function LluviaFormScreen() {
             {errores.mm && <Text style={styles.err}>{errores.mm}</Text>}
             <Text style={styles.hint}>Rango: 0 a 500 mm</Text>
           </View>
+
+          <FormField
+            label="Observaciones"
+            value={observaciones}
+            onChangeText={setObservaciones}
+            placeholder="Detalles adicionales de la lluvia"
+            multiline
+            numberOfLines={3}
+            textAlignVertical="top"
+          />
 
           <FaltaHint campos={camposFaltantes} />
 

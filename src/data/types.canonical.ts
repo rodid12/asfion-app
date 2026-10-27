@@ -288,6 +288,7 @@ export interface PastoreoCanonical {
   // Datos productivos (mig 0003) — para KPIs del dashboard
   animales?: number;                      // cantidad de cabezas en el stay
   kgPromedio?: number;                    // peso promedio (kg)
+  observaciones?: string;
 
   createdAt: string;
 }

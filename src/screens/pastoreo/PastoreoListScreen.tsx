@@ -226,6 +226,7 @@ export function PastoreoListScreen() {
           p.categoria ?? '',
           p.categoriaAnimal ?? '',
           p.caravanaNumero ?? '',
+          p.observaciones ?? '',
           cir,
         ].join(' ').toLowerCase();
         if (!haystack.includes(q)) return false;
@@ -345,6 +346,11 @@ export function PastoreoListScreen() {
           {item.caravanaNumero && (
             <Text style={styles.caravana} numberOfLines={1}>
               Caravana {item.caravanaNumero}
+            </Text>
+          )}
+          {item.observaciones && (
+            <Text style={styles.caravana} numberOfLines={2}>
+              {item.observaciones}
             </Text>
           )}
           {abierto ? (

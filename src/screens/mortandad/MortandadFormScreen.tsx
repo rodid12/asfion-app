@@ -60,7 +60,9 @@ export function MortandadFormScreen() {
   const CATEGORIAS = catMort.categorias;
   const ACTIVIDADES = catMort.actividades;
   const CAUSAS_TIPO = catMort.causaTipos as readonly CausaMuerteTipo[];
-  const causaLibre = catMort.causaLibre === true;
+  // Texto libre por defecto para todos los clientes. Solo un tenant que lo
+  // desactive explícitamente vuelve al catálogo cerrado de causas.
+  const causaLibre = catMort.causaLibre !== false;
 
   // ─── State específico de Mortandad ───
   const [loteId, setLoteId] = useState<string>('');
@@ -71,6 +73,7 @@ export function MortandadFormScreen() {
   const [numeroCorral, setNumeroCorral] = useState('');
   const [numeroTropa, setNumeroTropa] = useState('');
   const [vacaParida, setVacaParida] = useState<boolean | undefined>();
+  const [observaciones, setObservaciones] = useState('');
   const [fotos, setFotos] = useState<string[]>([]);
   const [gps, setGps] = useState<Mortandad['gps']>(undefined);
   // Estado de la captura de GPS — para que el operario sepa qué está pasando
@@ -120,6 +123,7 @@ export function MortandadFormScreen() {
         numeroCorral: esCampoCorrales ? numeroCorral.trim() || undefined : undefined,
         numeroTropa: esCampoCorrales ? numeroTropa.trim() || undefined : undefined,
         vacaParida,
+        observaciones: observaciones.trim() || undefined,
         fotos: fotos.length > 0 ? fotos : undefined,
         syncState: 'pending',
       };
@@ -132,6 +136,7 @@ export function MortandadFormScreen() {
       setCausaTipo(undefined);
       setCausaDetalle('');
       setVacaParida(undefined);
+      setObservaciones('');
       setFotos([]);
     },
   });
@@ -189,6 +194,7 @@ export function MortandadFormScreen() {
       setNumeroCorral(existing.numeroCorral ?? '');
       setNumeroTropa(existing.numeroTropa ?? '');
       setVacaParida(existing.vacaParida);
+      setObservaciones(existing.observaciones ?? '');
       setFotos(existing.fotos ?? []);
       if (existing.gps) setGps(existing.gps);
     });
@@ -200,7 +206,9 @@ export function MortandadFormScreen() {
     if (!campoId) { setLotes([]); return; }
     let cancelado = false;
     (async () => {
-      const ls = await repo.listLotes(campoId);
+      const ls = [...await repo.listLotes(campoId)].sort((a, b) =>
+        a.nombre.localeCompare(b.nombre, 'es', { numeric: true, sensitivity: 'base' }),
+      );
       if (cancelado) return;
       setLotes(ls);
       if (loteId && !ls.some(l => l.id === loteId)) {
@@ -293,9 +301,10 @@ export function MortandadFormScreen() {
       numeroCorral !== (originalRecord.numeroCorral ?? '') ||
       numeroTropa !== (originalRecord.numeroTropa ?? '') ||
       vacaParida !== originalRecord.vacaParida ||
+      observaciones !== (originalRecord.observaciones ?? '') ||
       JSON.stringify(fotos) !== JSON.stringify(originalRecord.fotos ?? [])
     );
-  }, [isEdit, originalRecord, campoId, loteId, fecha, categoria, actividad, causaLibre, causaTipo, causaDetalle, numeroCorral, numeroTropa, vacaParida, fotos]);
+  }, [isEdit, originalRecord, campoId, loteId, fecha, categoria, actividad, causaLibre, causaTipo, causaDetalle, numeroCorral, numeroTropa, vacaParida, observaciones, fotos]);
 
   const puedeGuardar = useMemo(() => {
     if (!campoId) return false;
@@ -711,6 +720,17 @@ export function MortandadFormScreen() {
               onChange={setCausaTipo}
             />
           )}
+
+          <FormField
+            label="Observaciones"
+            value={observaciones}
+            onChangeText={setObservaciones}
+            placeholder="Agregá cualquier detalle útil del evento"
+            multiline
+            numberOfLines={3}
+            textAlignVertical="top"
+            style={styles.causaInput}
+          />
 
           <PhotoStrip
             fotos={fotos}

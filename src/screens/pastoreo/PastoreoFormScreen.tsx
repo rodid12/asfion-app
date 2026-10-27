@@ -71,6 +71,7 @@ export function PastoreoFormScreen() {
   // Datos productivos (migration 0003) — alimentan KPIs del dashboard
   const [animales, setAnimales] = useState('');
   const [kgPromedio, setKgPromedio] = useState('');
+  const [observaciones, setObservaciones] = useState('');
 
   // UI-only state
   const [circuitos, setCircuitos] = useState<Circuito[]>([]);
@@ -106,6 +107,7 @@ export function PastoreoFormScreen() {
         caravanaNumero: caravanaNumero.trim() || undefined,
         animales: animalesNum != null && Number.isFinite(animalesNum) ? animalesNum : undefined,
         kgPromedio: kgNum != null && Number.isFinite(kgNum) ? kgNum : undefined,
+        observaciones: observaciones.trim() || undefined,
         syncState: 'pending',
       };
     },
@@ -123,6 +125,7 @@ export function PastoreoFormScreen() {
       setEvento('Entrada');
       setAnimales('');
       setKgPromedio('');
+      setObservaciones('');
     },
   });
   // Aliases — fecha es "fechaEntrada" conceptualmente en este form
@@ -143,6 +146,7 @@ export function PastoreoFormScreen() {
       setCaravanaNumero(existing.caravanaNumero ?? '');
       setAnimales(existing.animales != null ? String(existing.animales) : '');
       setKgPromedio(existing.kgPromedio != null ? String(existing.kgPromedio) : '');
+      setObservaciones(existing.observaciones ?? '');
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -206,9 +210,10 @@ export function PastoreoFormScreen() {
       categoriaAnimal !== originalRecord.categoriaAnimal ||
       caravanaNumero !== (originalRecord.caravanaNumero ?? '') ||
       animales !== (originalRecord.animales != null ? String(originalRecord.animales) : '') ||
-      kgPromedio !== (originalRecord.kgPromedio != null ? String(originalRecord.kgPromedio) : '')
+      kgPromedio !== (originalRecord.kgPromedio != null ? String(originalRecord.kgPromedio) : '') ||
+      observaciones !== (originalRecord.observaciones ?? '')
     );
-  }, [isEdit, originalRecord, campoId, circuitoId, parcelaId, fechaEntrada, fechaSalida, evento, categoria, categoriaAnimal, caravanaNumero, animales, kgPromedio]);
+  }, [isEdit, originalRecord, campoId, circuitoId, parcelaId, fechaEntrada, fechaSalida, evento, categoria, categoriaAnimal, caravanaNumero, animales, kgPromedio, observaciones]);
 
   const puedeGuardar = useMemo(() => {
     if (!campoId) return false;
@@ -537,6 +542,16 @@ export function PastoreoFormScreen() {
               );
             })}
           </View>
+
+          <FormField
+            label="Observaciones"
+            value={observaciones}
+            onChangeText={setObservaciones}
+            placeholder="Detalles adicionales del movimiento"
+            multiline
+            numberOfLines={3}
+            textAlignVertical="top"
+          />
 
           <View style={{ height: spacing.md }} />
 

@@ -15,9 +15,8 @@
 // - Usamos `react-native-webview` con HTML inline (Leaflet + tiles de
 //   OpenStreetMap). NO react-native-maps porque eso requiere Google
 //   Maps API key, build dev de Expo, y romperíamos Expo Go.
-// - OpenStreetMap es gratis, sin API key, y los tiles se renderizan
-//   bien en la mayoría de zonas rurales argentinas (es el mismo
-//   sistema que usamos en el dashboard web).
+// - El operario puede alternar entre calles (OpenStreetMap) y satélite
+//   (World Imagery de Esri), especialmente útil en establecimientos rurales.
 // - Comunicación HTML ↔ RN vía window.ReactNativeWebView.postMessage.
 //
 // El HTML está embebido como string (no es un archivo separado) para
@@ -231,19 +230,65 @@ function buildMapHtml({
       z-index: 1000;
       pointer-events: none;
     }
+    .layer-switcher {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      display: flex;
+      gap: 4px;
+      background: rgba(255,255,255,.96);
+      border-radius: 10px;
+      padding: 4px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.24);
+      z-index: 1001;
+    }
+    .layer-btn {
+      border: 0;
+      border-radius: 7px;
+      background: transparent;
+      color: #17384d;
+      padding: 8px 10px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .layer-btn.active { background: #17384d; color: #fff; }
   </style>
 </head>
 <body>
   <div id="map"></div>
   <div class="pin-hint" id="hint">Tocá el mapa para poner el pin</div>
+  <div class="layer-switcher">
+    <button class="layer-btn active" id="streets" type="button">Calles</button>
+    <button class="layer-btn" id="satellite" type="button">Satélite</button>
+  </div>
   <button class="my-location-btn" id="myloc" title="Mi ubicación">📍</button>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
     var map = L.map('map').setView([${startLat}, ${startLon}], ${hasInitialPin ? 15 : 8});
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    var streetsLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       attribution: '© OpenStreetMap'
-    }).addTo(map);
+    });
+    var satelliteLayer = L.tileLayer(
+      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      { maxZoom: 19, attribution: 'Tiles © Esri' }
+    );
+    streetsLayer.addTo(map);
+
+    function setBaseLayer(kind) {
+      var satellite = kind === 'satellite';
+      if (map.hasLayer(streetsLayer)) map.removeLayer(streetsLayer);
+      if (map.hasLayer(satelliteLayer)) map.removeLayer(satelliteLayer);
+      (satellite ? satelliteLayer : streetsLayer).addTo(map);
+      document.getElementById('streets').classList.toggle('active', !satellite);
+      document.getElementById('satellite').classList.toggle('active', satellite);
+    }
+    document.getElementById('streets').addEventListener('click', function(e) {
+      e.preventDefault(); setBaseLayer('streets');
+    });
+    document.getElementById('satellite').addEventListener('click', function(e) {
+      e.preventDefault(); setBaseLayer('satellite');
+    });
 
     var marker = null;
     var hint = document.getElementById('hint');

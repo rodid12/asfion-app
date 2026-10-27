@@ -265,6 +265,7 @@ export const PASTOREO_SCHEMA: Schema<PastoreoCanonical> = {
   causa:            { from: 'causa',             type: 'string?' },
   animales:         { from: 'animales',          type: 'number?' },
   kgPromedio:       { from: 'kg_promedio',       type: 'number?' },
+  observaciones:    { from: 'observaciones',     type: 'string?' },
   createdAt:        { from: 'created_at',        type: 'string'  },
 };
 
