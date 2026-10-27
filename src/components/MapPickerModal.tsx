@@ -52,11 +52,13 @@ const FALLBACK_LAT = -23.5;
 const FALLBACK_LON = -64.0;
 
 export function MapPickerModal({ initialLat, initialLon, onConfirm, onCancel }: Props) {
-  const [currentCoords, setCurrentCoords] = useState<{ lat: number; lon: number } | null>(
-    initialLat != null && initialLon != null && Number.isFinite(initialLat) && Number.isFinite(initialLon)
+  const initialCoords = useMemo(
+    () => initialLat != null && initialLon != null && Number.isFinite(initialLat) && Number.isFinite(initialLon)
       ? { lat: initialLat, lon: initialLon }
       : null,
+    [initialLat, initialLon],
   );
+  const [currentCoords, setCurrentCoords] = useState<{ lat: number; lon: number } | null>(initialCoords);
   // Ref al WebView para poder inyectar JS (ej: centrar el mapa cuando
   // llega un nuevo fix de GPS automático).
   const webviewRef = useRef<WebView>(null);
@@ -65,12 +67,13 @@ export function MapPickerModal({ initialLat, initialLon, onConfirm, onCancel }: 
   // Si después el operario pide "Mi ubicación", el JS dentro del WebView
   // pide GPS del lado RN vía postMessage y nosotros mandamos las coords
   // de vuelta para que centre el mapa.
-  const startLat = currentCoords?.lat ?? initialLat ?? FALLBACK_LAT;
-  const startLon = currentCoords?.lon ?? initialLon ?? FALLBACK_LON;
-  const hasInitialPin = currentCoords != null;
+  const startLat = initialCoords?.lat ?? FALLBACK_LAT;
+  const startLon = initialCoords?.lon ?? FALLBACK_LON;
+  const hasInitialPin = initialCoords != null;
 
-  // El HTML es estático — solo se renderea una vez. Los cambios de pin
-  // se comunican por postMessage, no re-render. Por eso useMemo.
+  // El HTML es estático durante toda la apertura del modal. Los cambios del
+  // pin se comunican por postMessage y NO regeneran el WebView. Esto también
+  // conserva la capa elegida (Calles/Satélite) al mover el pin o usar GPS.
   const html = useMemo(
     () => buildMapHtml({ startLat, startLon, hasInitialPin }),
     [startLat, startLon, hasInitialPin],
