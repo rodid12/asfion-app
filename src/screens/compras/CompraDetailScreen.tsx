@@ -5,7 +5,7 @@
 // "Editar" abajo que abre el CompraForm en modo edición (con nav.replace
 // para que back vaya directo al listado, no al detail).
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -101,16 +101,6 @@ export function CompraDetailScreen() {
     return () => { cancelled = true; };
   }, [compra, repo]);
 
-  // Total compra calculado (precio × kg destino — si ambos están).
-  // Post mig 0021 kg_netos_destino es nullable: si NULL, no hay total real
-  // (la jaula todavía no se pesó al bajar, así que no se puede calcular plata).
-  const total = useMemo(() => {
-    if (!compra) return null;
-    if (compra.precio == null || compra.kgNetosDestino == null) return null;
-    if (!Number.isFinite(compra.kgNetosDestino)) return null;
-    return compra.precio * compra.kgNetosDestino;
-  }, [compra]);
-
   // ─────────────────────────────────────────────────────────────────────────
   // Export PDF — arma el payload usando el MISMO orden de secciones que la
   // pantalla, para que el PDF sea fiel al resumen visual.
@@ -142,10 +132,9 @@ export function CompraDetailScreen() {
         title: 'Comercial',
         rows: [
           { label: 'Precio',          value: compra.precio != null ? `$${compra.precio.toLocaleString('es-AR')} / kg` : '' },
-          { label: 'Total estimado',  value: total != null ? `$${Math.round(total).toLocaleString('es-AR')}` : '' },
           { label: 'Consignado',      value: compra.consignado },
           { label: 'Titular',         value: compra.titular },
-          { label: 'Plazo',           value: compra.plazo },
+          { label: 'Forma de pago',   value: compra.plazo },
         ],
       },
     ];
@@ -246,15 +235,8 @@ export function CompraDetailScreen() {
                 value={`$${compra.precio.toLocaleString('es-AR')} / kg`}
               />
             )}
-            {total != null && (
-              <Row
-                label="Total estimado"
-                value={`$${Math.round(total).toLocaleString('es-AR')}`}
-                highlight
-              />
-            )}
             {compra.titular && <Row label="Titular" value={compra.titular} />}
-            {compra.plazo && <Row label="Plazo" value={compra.plazo} />}
+            {compra.plazo && <Row label="Forma de pago" value={compra.plazo} />}
           </Section>
         )}
 

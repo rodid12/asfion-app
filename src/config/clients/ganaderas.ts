@@ -89,7 +89,7 @@ export const GANADERAS_CONFIG: ClientConfig = {
       // un camión con hacienda comprada, el peón carga primero una Recepción
       // (peso de bajada y conteo) antes de definir actividad productiva.
       actividades: ['Recepción', 'Destete Precoz', 'Engorde', 'Invernada'],
-      plazos: ['Contado', '30 días', '60 días', '90 días'],
+      plazos: ['Contado', '30', '30/60', '30/60/90'],
     },
   },
 };

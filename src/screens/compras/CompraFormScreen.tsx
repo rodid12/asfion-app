@@ -474,7 +474,7 @@ export function CompraFormScreen() {
             <View style={styles.col}>
               {catCompras.plazos.length > 0 ? (
                 <>
-                  <Text style={styles.label}>Plazo</Text>
+                  <Text style={styles.label}>Forma de pago</Text>
                   <View style={styles.plazoRow}>
                     {catCompras.plazos.map(p => {
                       const sel = plazo === p;
@@ -494,10 +494,10 @@ export function CompraFormScreen() {
                 </>
               ) : (
                 <FormField
-                  label="Plazo"
+                  label="Forma de pago"
                   value={plazo ?? ''}
                   onChangeText={setPlazo}
-                  placeholder="Ej. Contado"
+                  placeholder="Ej. 30/60"
                 />
               )}
             </View>

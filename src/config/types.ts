@@ -77,7 +77,7 @@ export interface PastoreoCatalogos {
 
 export interface CompraCatalogos {
   actividades: readonly string[];      // ["Destete Precoz", "Engorde", "Invernada"]
-  plazos: readonly string[];           // ["Contado", "30 días", "60 días", "90 días"]
+  plazos: readonly string[];           // ["Contado", "30", "30/60", "30/60/90"]
 }
 
 /** Catálogos completos del cliente, indexados por módulo. */
