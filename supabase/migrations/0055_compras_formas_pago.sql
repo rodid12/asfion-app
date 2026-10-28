@@ -10,12 +10,15 @@
 BEGIN;
 
 UPDATE public.clientes
-SET catalogos = jsonb_set(
-      COALESCE(catalogos, '{}'::jsonb),
-      '{compras,plazos}',
-      '["Contado","30","30/60","30/60/90"]'::jsonb,
-      true
-    ),
+SET catalogos = COALESCE(catalogos, '{}'::jsonb)
+      || jsonb_build_object(
+        'compras',
+        COALESCE(catalogos -> 'compras', '{}'::jsonb)
+        || jsonb_build_object(
+          'plazos',
+          '["Contado","30","30/60","30/60/90"]'::jsonb
+        )
+      ),
     updated_at = NOW()
 WHERE modulos_habilitados @> ARRAY['compras']::text[]
    OR catalogos ? 'compras';
