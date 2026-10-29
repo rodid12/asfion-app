@@ -53,6 +53,7 @@ export function CompraDetailScreen() {
   const [compra, setCompra] = useState<Compra | null>(null);
   const [campo, setCampo] = useState<Campo | null>(null);
   const [loading, setLoading] = useState(true);
+  const [exportando, setExportando] = useState(false);
 
   // Cargar compra: cache primero (instant), después refresh.
   useEffect(() => {
@@ -106,50 +107,55 @@ export function CompraDetailScreen() {
   // pantalla, para que el PDF sea fiel al resumen visual.
   // ─────────────────────────────────────────────────────────────────────────
   const onExportarPDF = async () => {
-    if (!compra) return;
-    const secciones: PdfSection[] = [
-      {
-        title: 'Hacienda',
-        rows: [
-          { label: 'Campo',              value: campo?.nombre ?? compra.campoId },
-          { label: 'Actividad',          value: compra.actividad },
-          { label: 'Cantidad / categ.',  value: compra.cantCabYCat },
-          { label: 'Kg origen',          value: `${compra.kgNetosOrigen.toLocaleString('es-AR')} kg` },
-          { label: 'Kg destino',         value: compra.kgNetosDestino != null ? `${compra.kgNetosDestino.toLocaleString('es-AR')} kg` : 'Sin pesaje destino' },
-          { label: 'Merma %',            value: compra.mermaPorcentaje != null ? `${compra.mermaPorcentaje.toFixed(2)} %` : '' },
-          { label: 'Kg corregidos',      value: compra.kgCorregidos != null ? `${compra.kgCorregidos.toLocaleString('es-AR')} kg` : '' },
-        ],
-      },
-      {
-        title: 'Logística',
-        rows: [
-          { label: 'Km recorrido', value: compra.kmRecorrido != null ? `${compra.kmRecorrido.toLocaleString('es-AR')} km` : '' },
-          { label: 'Flete',        value: compra.flete },
-          { label: 'N° DTE',       value: compra.numeroDte },
-        ],
-      },
-      {
-        title: 'Comercial',
-        rows: [
-          { label: 'Precio',          value: compra.precio != null ? `$${compra.precio.toLocaleString('es-AR')} / kg` : '' },
-          { label: 'Consignado',      value: compra.consignado },
-          { label: 'Titular',         value: compra.titular },
-          { label: 'Forma de pago',   value: compra.plazo },
-        ],
-      },
-    ];
+    if (!compra || exportando) return;
+    setExportando(true);
+    try {
+      const secciones: PdfSection[] = [
+        {
+          title: 'Hacienda',
+          rows: [
+            { label: 'Campo',              value: campo?.nombre ?? compra.campoId },
+            { label: 'Actividad',          value: compra.actividad },
+            { label: 'Cantidad / categ.',  value: compra.cantCabYCat },
+            { label: 'Kg origen',          value: `${compra.kgNetosOrigen.toLocaleString('es-AR')} kg` },
+            { label: 'Kg destino',         value: compra.kgNetosDestino != null ? `${compra.kgNetosDestino.toLocaleString('es-AR')} kg` : 'Sin pesaje destino' },
+            { label: 'Merma %',            value: compra.mermaPorcentaje != null ? `${compra.mermaPorcentaje.toFixed(2)} %` : '' },
+            { label: 'Kg corregidos',      value: compra.kgCorregidos != null ? `${compra.kgCorregidos.toLocaleString('es-AR')} kg` : '' },
+          ],
+        },
+        {
+          title: 'Logística',
+          rows: [
+            { label: 'Km recorrido', value: compra.kmRecorrido != null ? `${compra.kmRecorrido.toLocaleString('es-AR')} km` : '' },
+            { label: 'Flete',        value: compra.flete },
+            { label: 'N° DTE',       value: compra.numeroDte },
+          ],
+        },
+        {
+          title: 'Comercial',
+          rows: [
+            { label: 'Precio',          value: compra.precio != null ? `$${compra.precio.toLocaleString('es-AR')} / kg` : '' },
+            { label: 'Consignado',      value: compra.consignado },
+            { label: 'Titular',         value: compra.titular },
+            { label: 'Forma de pago',   value: compra.plazo },
+          ],
+        },
+      ];
 
-    await exportarPDF(
-      {
-        titulo:       `Compra ${compra.numeroOperacion ?? '(sin n°)'}`,
-        subtitulo:    `${fechaLarga(compra.fecha)}${compra.consignado ? ` · ${compra.consignado}` : ''}`,
-        cargadoPor:   compra.usuarioEmail,
-        createdAt:    compra.createdAt,
-        secciones,
-        observaciones: compra.observaciones,
-      },
-      `compra-${compra.numeroOperacion ?? compra.id}`,
-    );
+      await exportarPDF(
+        {
+          titulo:       `Compra ${compra.numeroOperacion ?? '(sin n°)'}`,
+          subtitulo:    `${fechaLarga(compra.fecha)}${compra.consignado ? ` · ${compra.consignado}` : ''}`,
+          cargadoPor:   compra.usuarioEmail,
+          createdAt:    compra.createdAt,
+          secciones,
+          observaciones: compra.observaciones,
+        },
+        `compra-${compra.numeroOperacion ?? compra.id}`,
+      );
+    } finally {
+      setExportando(false);
+    }
   };
 
   if (loading && !compra) {
@@ -269,9 +275,11 @@ export function CompraDetailScreen() {
         <View style={styles.actionRow}>
           <View style={styles.actionHalf}>
             <PrimaryButton
-              label="Exportar PDF"
+              label={exportando ? 'Generando…' : 'Exportar PDF'}
               variant="ghost"
               onPress={onExportarPDF}
+              loading={exportando}
+              disabled={exportando}
             />
           </View>
           {puedeEditar && (

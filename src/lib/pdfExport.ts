@@ -138,6 +138,11 @@ export function generarHTML(p: PdfPayload): string {
 // PDF generation + share
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Android rechaza una segunda llamada a shareAsync mientras el diálogo de
+// compartir anterior sigue abierto. El lock es global porque el diálogo es
+// global para toda la app, no para una pantalla en particular.
+let exportacionEnCurso = false;
+
 /**
  * Genera un PDF a partir del payload y abre el share sheet del sistema.
  * Devuelve true si tuvo éxito, false si las deps no están disponibles o el
@@ -148,6 +153,23 @@ export function generarHTML(p: PdfPayload): string {
  * sin requerir un rebuild nativo para deshabilitar el botón).
  */
 export async function exportarPDF(payload: PdfPayload, filenameBase: string): Promise<boolean> {
+  if (exportacionEnCurso) {
+    Alert.alert(
+      'PDF en proceso',
+      'Ya hay un PDF abierto para compartir. Cerrá ese menú antes de volver a exportar.',
+    );
+    return false;
+  }
+
+  exportacionEnCurso = true;
+  try {
+    return await exportarPDFSinBloqueo(payload, filenameBase);
+  } finally {
+    exportacionEnCurso = false;
+  }
+}
+
+async function exportarPDFSinBloqueo(payload: PdfPayload, filenameBase: string): Promise<boolean> {
   const html = generarHTML(payload);
 
   // Imports dinámicos para que el bundle no rompa si las deps no están.
@@ -204,10 +226,16 @@ export async function exportarPDF(payload: PdfPayload, filenameBase: string): Pr
     // Distinguir errores conocidos para dar mensaje más útil al operario.
     const msg = err instanceof Error ? err.message : String(err);
     const isStorageFull = /ENOSPC|no space left|storage full/i.test(msg);
+    const isShareBusy = /another share request|share request is being processed/i.test(msg);
     if (isStorageFull) {
       Alert.alert(
         'Sin espacio en el celular',
         'No hay espacio para guardar el PDF. Borrá archivos o fotos viejas e intentá de nuevo.',
+      );
+    } else if (isShareBusy) {
+      Alert.alert(
+        'PDF en proceso',
+        'El menú para compartir ya está abierto. Cerralo y volvé a intentar.',
       );
     } else {
       Alert.alert('Error al exportar PDF', msg);
