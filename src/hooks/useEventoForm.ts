@@ -103,6 +103,15 @@ export interface UseEventoFormOpts<T extends Evento> {
   /** Reset del state específico del form tras guardar exitoso (modo "cargar otra").
    *  El hook hace su parte (limpiar errores, etc), el caller limpia lo suyo. */
   resetEspecifico?: () => void;
+
+  /**
+   * Permite que un operario edite una carga creada por su propio email.
+   * La autorización se vuelve a comprobar contra el registro original antes
+   * de hidratar el formulario y antes de guardar. Administradores,
+   * moderadores y superadministradores pueden editar cualquier registro del
+   * cliente seleccionado.
+   */
+  allowAuthorEdit?: boolean;
 }
 
 /**
@@ -117,17 +126,21 @@ export function useEventoForm<T extends Evento>(opts: UseEventoFormOpts<T>) {
 
   const isEdit = Boolean(opts.eventoId);
 
-  // Crear eventos es tarea operativa. Modificar una carga ya consolidada es
-  // una acción administrativa. El guard vive en el hook común para cubrir
-  // todos los módulos, incluso si alguien intenta abrir la ruta directamente.
+  const puedeGestionarCualquierCarga = Boolean(
+    user?.isSuperAdmin || user?.rol === 'administrador' || user?.rol === 'moderador',
+  );
+
+  // Guard de entrada. En módulos que habilitan `allowAuthorEdit`, el operario
+  // puede abrir el formulario; la propiedad del registro se verifica después
+  // de descargarlo. En el resto se conserva el comportamiento administrativo.
   useEffect(() => {
-    if (!isEdit || !user || user.rol === 'administrador') return;
+    if (!isEdit || !user || puedeGestionarCualquierCarga || opts.allowAuthorEdit) return;
     Alert.alert(
       'Solo lectura',
-      'Los operarios pueden consultar y crear cargas, pero solamente un administrador puede editar información existente.',
+      'Podés consultar y crear cargas, pero no editar este registro.',
       [{ text: 'Volver', onPress: () => nav.goBack() }],
     );
-  }, [isEdit, user, nav]);
+  }, [isEdit, user, nav, puedeGestionarCualquierCarga, opts.allowAuthorEdit]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // State común (campoId, fecha, campos[], edit flow)
@@ -212,7 +225,7 @@ export function useEventoForm<T extends Evento>(opts: UseEventoFormOpts<T>) {
 
   useEffect(() => {
     if (!isEdit || !opts.eventoId) return;
-    if (user?.rol !== 'administrador') return;
+    if (!puedeGestionarCualquierCarga && !opts.allowAuthorEdit) return;
     let cancelado = false;
     (async () => {
       const list = await repo.listEventos(opts.tipo);
@@ -221,6 +234,15 @@ export function useEventoForm<T extends Evento>(opts: UseEventoFormOpts<T>) {
       if (!existing) {
         Alert.alert('No encontrada', 'Esta carga ya no existe.');
         nav.goBack();
+        return;
+      }
+      const esAutor = existing.usuarioEmail.trim().toLowerCase() === user?.email.trim().toLowerCase();
+      if (!puedeGestionarCualquierCarga && (!opts.allowAuthorEdit || !esAutor)) {
+        Alert.alert(
+          'Solo lectura',
+          'Solo podés corregir cargas realizadas con tu propio usuario.',
+          [{ text: 'Volver', onPress: () => nav.goBack() }],
+        );
         return;
       }
       // Common: campoId + fecha + metadata
@@ -235,7 +257,7 @@ export function useEventoForm<T extends Evento>(opts: UseEventoFormOpts<T>) {
     })();
     return () => { cancelado = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isEdit, opts.eventoId, opts.tipo, user?.rol]);
+  }, [isEdit, opts.eventoId, opts.tipo, user?.email, puedeGestionarCualquierCarga, opts.allowAuthorEdit]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Guardar — orquesta build + save + alerts. Devuelve true si guardó OK.
@@ -249,14 +271,19 @@ export function useEventoForm<T extends Evento>(opts: UseEventoFormOpts<T>) {
       Alert.alert('Falta campo', 'Elegí un campo antes de guardar.');
       return null;
     }
-    if (isEdit && user.rol !== 'administrador') {
-      Alert.alert('Acceso restringido', 'Solo un administrador puede guardar cambios sobre una carga existente.');
-      return null;
+    if (isEdit) {
+      const esAutor = originalRecord?.usuarioEmail.trim().toLowerCase() === user.email.trim().toLowerCase();
+      if (!puedeGestionarCualquierCarga && (!opts.allowAuthorEdit || !esAutor)) {
+        Alert.alert('Acceso restringido', 'Solo podés corregir cargas realizadas con tu propio usuario.');
+        return null;
+      }
     }
     const idDelEvento = opts.eventoId ?? cryptoRandomId();
     const createdAt = createdAtOriginal ?? new Date().toISOString();
     const evento = opts.buildEvento({
-      campoId, fecha, usuarioEmail: user.email,
+      campoId, fecha,
+      // Editar nunca transfiere la autoría al administrador que corrige.
+      usuarioEmail: originalRecord?.usuarioEmail ?? user.email,
       id: idDelEvento, createdAt,
     });
     if (!evento) return null; // el caller no pudo armar el objeto (validación)

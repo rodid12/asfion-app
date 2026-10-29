@@ -71,7 +71,6 @@ export function ParicionDetailScreen() {
   const route = useRoute<Rt>();
   const repo = useRepository();
   const { user } = useAuth();
-  const puedeEditar = user?.rol === 'administrador';
   const paricionId = route.params.paricionId;
 
   const [paricion, setParicion] = useState<Paricion | null>(null);
@@ -147,6 +146,15 @@ export function ParicionDetailScreen() {
     );
   }
   if (!paricion) return null;
+
+  const puedeEditar = Boolean(
+    user && (
+      user.isSuperAdmin ||
+      user.rol === 'administrador' ||
+      user.rol === 'moderador' ||
+      paricion.usuarioEmail.trim().toLowerCase() === user.email.trim().toLowerCase()
+    ),
+  );
 
   const causa = paricion.causaDetalle || paricion.causaTipo || paricion.causaMuerte;
   const tieneCaravana = paricion.caravanaColor || paricion.caravanaNumero;

@@ -10,6 +10,7 @@
 //  - Rango de fecha: Hoy / 7d / 30d / Todo (default: Todo)
 //  - Campo: Todos / <campo específico> (los visibles al usuario)
 //  - Usuario: solo admin/mod — Todos / <email>
+//  - Evento, sexo y color de caravana
 //
 // Además se mantiene: search por caravana, FAB +, pill de pendientes, SectionList agrupada.
 
@@ -40,7 +41,7 @@ import { colors } from '@/theme/colors';
 import { fontSize, fontWeight } from '@/theme/typography';
 import { radius, spacing } from '@/theme/spacing';
 import type { RootStackParamList } from '@/navigation/types';
-import type { Campo, CaravanaColor, EventoParicion, Paricion } from '@/data/types';
+import type { Campo, CaravanaColor, EventoParicion, Paricion, Sexo } from '@/data/types';
 import { useTabNav } from '@/navigation/TabContext';
 
 type Nav = NativeStackNavigationProp<RootStackParamList, 'MainTabs'>;
@@ -104,13 +105,8 @@ const COLOR_HEX: Record<string, string> = {
   Naranja: '#E07B3C',
 };
 
-// Los 4 colores reales en uso (orden como en el AppSheet original).
-// Mantenemos la constante exportable aunque hayamos ocultado el picker visual
-// de caravana en UI (ver comentario en el render). Si en el futuro reactivamos
-// el filtro por color, está todo listo: state, lógica de filtro, COLOR_HEX,
-// estilos de swatch, etc. Solo hay que volver a renderizar el bloque.
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const COLORES_CARAVANA: CaravanaColor[] = ['Celeste', 'Amarillo', 'Blanca', 'Naranja'];
+const SEXOS_FILTRO: Sexo[] = ['Macho', 'Hembra', 'Orejano'];
 
 // Eventos de parición — mismo orden que en el form.
 const EVENTOS_FILTRO: EventoParicion[] = ['Nacimiento', 'Muerte', 'Aborto', 'Retacto'];
@@ -169,13 +165,9 @@ export function ParicionListScreen() {
   const [hastaCustom, setHastaCustom] = useState<string | undefined>();
   const [campoFiltro, setCampoFiltro] = useState<string | null>(null); // null = todos
   const [usuarioFiltro, setUsuarioFiltro] = useState<string | null>(null); // null = todos (solo admin/mod)
-  // Filtro por color de caravana — la lógica sigue acá pero el picker visual
-  // está OCULTO en UI por feedback del cliente. Se mantiene el state porque:
-  //  (a) el setter se sigue exportando vía clearFilters;
-  //  (b) si reactivamos el picker más adelante, no hay que refactorizar nada.
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [colorFiltro, setColorFiltro] = useState<CaravanaColor | null>(null);
-  // Filtro por tipo de evento — REEMPLAZA al picker de caravana en UI.
+  const [sexoFiltro, setSexoFiltro] = useState<Sexo | null>(null);
+  // Filtro por tipo de evento.
   const [eventoFiltro, setEventoFiltro] = useState<EventoParicion | null>(null);
   const [expandedFilter, setExpandedFilter] = useState<'campo' | 'usuario' | null>(null);
 
@@ -269,6 +261,7 @@ export function ParicionListScreen() {
       if (campoFiltro && p.campoId !== campoFiltro) return false;
       if (esAdmin && usuarioFiltro && p.usuarioEmail !== usuarioFiltro) return false;
       if (colorFiltro && p.caravanaColor !== colorFiltro) return false;
+      if (sexoFiltro && p.sexo !== sexoFiltro) return false;
       if (eventoFiltro && p.evento !== eventoFiltro) return false;
       if (q) {
         const num = (p.caravanaNumero ?? '').toLowerCase();
@@ -276,7 +269,7 @@ export function ParicionListScreen() {
       }
       return true;
     });
-  }, [scopedData, rango, desdeCustom, hastaCustom, campoFiltro, usuarioFiltro, colorFiltro, eventoFiltro, query, esAdmin]);
+  }, [scopedData, rango, desdeCustom, hastaCustom, campoFiltro, usuarioFiltro, colorFiltro, sexoFiltro, eventoFiltro, query, esAdmin]);
 
   const pendientes = useMemo(
     () => data.filter(p => p.syncState === 'pending' || p.syncState === 'failed').length,
@@ -290,9 +283,10 @@ export function ParicionListScreen() {
     if (campoFiltro) n++;
     if (esAdmin && usuarioFiltro) n++;
     if (colorFiltro) n++;
+    if (sexoFiltro) n++;
     if (eventoFiltro) n++;
     return n;
-  }, [rango, desdeCustom, hastaCustom, campoFiltro, usuarioFiltro, colorFiltro, eventoFiltro, esAdmin]);
+  }, [rango, desdeCustom, hastaCustom, campoFiltro, usuarioFiltro, colorFiltro, sexoFiltro, eventoFiltro, esAdmin]);
 
   const clearFilters = () => {
     setRango('todo');
@@ -301,6 +295,7 @@ export function ParicionListScreen() {
     setCampoFiltro(null);
     setUsuarioFiltro(null);
     setColorFiltro(null);
+    setSexoFiltro(null);
     setEventoFiltro(null);
     setExpandedFilter(null);
   };
@@ -433,9 +428,11 @@ export function ParicionListScreen() {
         </View>
 
         {/* Fila 2: atributos del animal */}
-        {(sexo || item.vacasGrupo) && (
+        {(sexo || item.vacasGrupo || item.caravanaColor) && (
           <Text style={styles.attrLine} numberOfLines={1}>
-            {[sexo, item.vacasGrupo].filter(Boolean).join('  ·  ')}
+            {[sexo, item.vacasGrupo, item.caravanaColor ? `Caravana ${item.caravanaColor}` : null]
+              .filter(Boolean)
+              .join('  ·  ')}
           </Text>
         )}
 
@@ -600,6 +597,48 @@ export function ParicionListScreen() {
                   numberOfLines={1}
                 >
                   {ev}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {/* Control individual: sexo y color de caravana. Se muestran como
+            filas separadas para que en tablet se lean como una planilla y en
+            teléfono sigan siendo botones grandes y claros. */}
+        <Text style={styles.swatchLabel}>SEXO</Text>
+        <View style={styles.swatchRow}>
+          {SEXOS_FILTRO.map(s => {
+            const sel = sexoFiltro === s;
+            return (
+              <Pressable
+                key={s}
+                onPress={() => setSexoFiltro(sel ? null : s)}
+                style={[styles.controlChip, sel && styles.controlChipSel]}
+                accessibilityLabel={`Filtrar por sexo ${s}`}
+                accessibilityState={{ selected: sel }}
+              >
+                <Text style={[styles.controlChipTxt, sel && styles.controlChipTxtSel]}>{s}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        <Text style={styles.swatchLabel}>COLOR DE CARAVANA</Text>
+        <View style={styles.swatchRow}>
+          {COLORES_CARAVANA.map(color => {
+            const sel = colorFiltro === color;
+            return (
+              <Pressable
+                key={color}
+                onPress={() => setColorFiltro(sel ? null : color)}
+                style={[styles.colorChip, sel && styles.controlChipSel]}
+                accessibilityLabel={`Filtrar por caravana ${color}`}
+                accessibilityState={{ selected: sel }}
+              >
+                <View style={[styles.swatchDot, { backgroundColor: COLOR_HEX[color] }]} />
+                <Text style={[styles.colorChipTxt, sel && styles.controlChipTxtSel]} numberOfLines={1}>
+                  {color}
                 </Text>
               </Pressable>
             );
@@ -979,6 +1018,49 @@ const styles = StyleSheet.create({
   swatchTxtSel: {
     color: colors.navy,
     fontWeight: fontWeight.bold as '700',
+  },
+  controlChip: {
+    flex: 1,
+    minHeight: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 8,
+    borderRadius: radius.round,
+    borderWidth: 1,
+    borderColor: colors.borderSoft,
+    backgroundColor: colors.white,
+  },
+  controlChipSel: {
+    borderColor: colors.navy,
+    backgroundColor: colors.navy,
+  },
+  controlChipTxt: {
+    fontSize: fontSize.sm,
+    color: colors.textDark,
+    fontWeight: fontWeight.semibold as '600',
+  },
+  controlChipTxtSel: { color: colors.white },
+  colorChip: {
+    flex: 1,
+    minWidth: 72,
+    minHeight: 36,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    paddingHorizontal: 6,
+    paddingVertical: 8,
+    borderRadius: radius.round,
+    borderWidth: 1,
+    borderColor: colors.borderSoft,
+    backgroundColor: colors.white,
+  },
+  colorChipTxt: {
+    flexShrink: 1,
+    fontSize: 11,
+    color: colors.textDark,
+    fontWeight: fontWeight.semibold as '600',
   },
 
   // Pending pill

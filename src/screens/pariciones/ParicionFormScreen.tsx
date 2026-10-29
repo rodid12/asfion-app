@@ -127,6 +127,9 @@ export function ParicionFormScreen(_p: Props) {
     titleNew: 'Nueva parición',
     titleEdit: 'Editar parición',
     tabName: 'lista',  // Pariciones vive bajo la tab "lista" (no tiene tab propia)
+    // Los operarios pueden corregir únicamente sus propias pariciones. La DB
+    // replica la misma regla y DELETE está bloqueado para usuarios de la app.
+    allowAuthorEdit: true,
     buildEvento: ({ campoId, fecha, usuarioEmail, id, createdAt }) => {
       if (!campoId || !loteId || !vacasGrupo || !evento) return null;
       return {
