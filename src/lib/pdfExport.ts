@@ -250,6 +250,16 @@ async function exportarPDFSinBloqueo(payload: PdfPayload, filenameBase: string):
     const ts = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
     const filename = `${filenameBase}-${ts}.pdf`;
 
+    // Alternativa OTA para Android: no dependemos de expo-sharing. Algunos
+    // fabricantes no devuelven onActivityResult al cerrar el chooser y dejan
+    // el módulo nativo bloqueado para siempre. El framework de impresión de
+    // Android ya forma parte del APK actual y ofrece "Guardar como PDF", por
+    // lo que funciona sin instalar una versión nueva y también sin internet.
+    if (Platform.OS === 'android') {
+      await Print.printAsync({ uri });
+      return true;
+    }
+
     if (!(await Sharing.isAvailableAsync())) {
       Alert.alert('PDF generado', `Se guardó en:\n${uri}\n\nPero el share del sistema no está disponible en este dispositivo.`);
       return true;
