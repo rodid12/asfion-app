@@ -57,6 +57,10 @@ export interface IDataBackend {
 
   // Catálogos
   listCampos(): Promise<Campo[]>;
+  /** Fuerza una consulta online de campos y actualiza el cache local. Si no
+   *  hay señal, devuelve la última copia offline. Se usa para métricas cuyos
+   *  valores administrativos (por ejemplo stock inicial) deben verse frescos. */
+  refreshCampos?(): Promise<Campo[]>;
   /** Opcional para mantener compatibles backends legacy (Sheets/memory). */
   listCampaniasReproductivas?(): Promise<CampaniaReproductiva[]>;
   listCampaniasOperativas?(): Promise<CampaniaOperativa[]>;
@@ -209,6 +213,8 @@ export class Repository {
 
   // Catálogos
   listCampos = () => this.backend.listCampos();
+  refreshCampos = (): Promise<Campo[]> =>
+    this.backend.refreshCampos ? this.backend.refreshCampos() : this.backend.listCampos();
   listCampaniasReproductivas = (): Promise<CampaniaReproductiva[]> =>
     this.backend.listCampaniasReproductivas
       ? this.backend.listCampaniasReproductivas()

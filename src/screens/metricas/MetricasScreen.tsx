@@ -240,7 +240,10 @@ export function MetricasScreen() {
         metricasHabilitadas.pastoreo ? repo.listEventos('pastoreo') : Promise.resolve([]),
         metricasHabilitadas.compras ? repo.listEventos('compra') : Promise.resolve([]),
         metricasHabilitadas.ventas ? repo.listEventos('venta') : Promise.resolve([]),
-        repo.listCampos(),
+        // Network-first: el stock inicial es un dato administrativo mutable.
+        // Cache-first podía mostrar 826 aunque Supabase ya tuviera 417 y recién
+        // actualizar el storage en background, sin refrescar esta pantalla.
+        repo.refreshCampos(),
         metricasHabilitadas.pariciones ? repo.listCampaniasReproductivas() : Promise.resolve([]),
         repo.listCampaniasOperativas(),
       ]);

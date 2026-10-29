@@ -142,6 +142,45 @@ export function generarHTML(p: PdfPayload): string {
 // compartir anterior sigue abierto. El lock es global porque el diálogo es
 // global para toda la app, no para una pantalla en particular.
 let exportacionEnCurso = false;
+let compartirDisponibleDesde = 0;
+const SHARE_COOLDOWN_MS = 1500;
+
+const esperar = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
+
+/**
+ * expo-sharing puede resolver su Promise antes de que Android libere por
+ * completo el intent nativo. En ese intervalo una exportación nueva falla con
+ * "Another share request is being processed now" aunque el botón ya parezca
+ * disponible. Serializamos, respetamos un cooldown y reintentamos una vez el
+ * error nativo transitorio.
+ */
+async function compartirPDF(
+  Sharing: any,
+  uri: string,
+  options: { dialogTitle: string; mimeType: string; UTI: string },
+): Promise<void> {
+  const esperaInicial = compartirDisponibleDesde - Date.now();
+  if (esperaInicial > 0) await esperar(esperaInicial);
+
+  try {
+    await Sharing.shareAsync(uri, options);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const ocupado = /another share request|share request is being processed/i.test(msg);
+    if (!ocupado) throw err;
+
+    // El chooser anterior ya se está cerrando, pero Android todavía conserva
+    // su lock. Una única espera/reintento evita mostrar un error al usuario.
+    await esperar(SHARE_COOLDOWN_MS);
+    await Sharing.shareAsync(uri, options);
+  } finally {
+    compartirDisponibleDesde = Date.now() + SHARE_COOLDOWN_MS;
+  }
+
+  // Mantenemos también el lock JS durante el período en que Android termina
+  // de liberar el Activity result. Así el botón no puede adelantarse al SO.
+  await esperar(SHARE_COOLDOWN_MS);
+}
 
 /**
  * Genera un PDF a partir del payload y abre el share sheet del sistema.
@@ -216,7 +255,7 @@ async function exportarPDFSinBloqueo(payload: PdfPayload, filenameBase: string):
       return true;
     }
 
-    await Sharing.shareAsync(uri, {
+    await compartirPDF(Sharing, uri, {
       dialogTitle: filename,
       mimeType: 'application/pdf',
       UTI: 'com.adobe.pdf', // iOS

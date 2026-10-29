@@ -856,18 +856,33 @@ export class SupabaseBackend implements IDataBackend {
 
   async listCampos(): Promise<Campo[]> {
     return this.cachedCatalog('campos', async () => {
-      const user = await this.getCurrentUser();
-      if (!user?.clienteId) return [];
-      let query = this.supabase.from('campos').select('*').eq('cliente_id', user.clienteId);
-      // Operario con campo fijo: solo ese campo. Operario sin asignación:
-      // todos los campos del tenant (RLS sigue aislando a Ganaderas).
-      if (user?.rol === 'operario' && user.campoAsignadoId) {
-        query = query.eq('id', user.campoAsignadoId);
-      }
-      const { data, error } = await query.order('nombre');
-      if (error) throw new Error(error.message);
-      return (data ?? []).map(rowToCampo);
+      return this.fetchCamposOnline();
     });
+  }
+
+  /**
+   * Variante network-first para dashboards. `listCampos()` sigue siendo
+   * cache-first para que los formularios abran instantáneamente sin señal;
+   * las métricas, en cambio, necesitan esperar el valor administrativo más
+   * reciente de stock_inicial_vacas. Si la red falla, refreshCatalog conserva
+   * el comportamiento offline y devuelve el último cache disponible.
+   */
+  async refreshCampos(): Promise<Campo[]> {
+    return this.refreshCatalog('campos', () => this.fetchCamposOnline());
+  }
+
+  private async fetchCamposOnline(): Promise<Campo[]> {
+    const user = await this.getCurrentUser();
+    if (!user?.clienteId) return [];
+    let query = this.supabase.from('campos').select('*').eq('cliente_id', user.clienteId);
+    // Operario con campo fijo: solo ese campo. Operario sin asignación:
+    // todos los campos del tenant (RLS sigue aislando a Ganaderas).
+    if (user?.rol === 'operario' && user.campoAsignadoId) {
+      query = query.eq('id', user.campoAsignadoId);
+    }
+    const { data, error } = await query.order('nombre');
+    if (error) throw new Error(error.message);
+    return (data ?? []).map(rowToCampo);
   }
 
   async listCampaniasReproductivas(): Promise<CampaniaReproductiva[]> {
