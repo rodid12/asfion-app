@@ -4,12 +4,12 @@
 -- Fuente: Compra_actualizada.xlsx, hoja Compra, recibida el 29/10/2026.
 --
 -- - Reemplaza el histórico anterior por las 25 operaciones oficiales del Excel.
--- - Conserva la compra nueva ya cargada y corrige su número a 26-26.
--- - La próxima compra de 2026 será generada por la app como 27-26.
+-- - Conserva las dos compras nuevas ya cargadas: 26-26 y 27-26.
+-- - La próxima compra de 2026 será generada por la app como 28-26.
 -- - Conserva los kilómetros decimales presentes en la fuente.
 --
--- Seguridad: si no se encuentra exactamente una compra nueva posterior al Excel,
--- la transacción se cancela para no renumerar un registro incorrecto.
+-- Seguridad: si no se encuentran exactamente las dos compras nuevas verificadas,
+-- la transacción se cancela para no renumerar o borrar un registro incorrecto.
 -- Script idempotente.
 -- =============================================================================
 
@@ -19,14 +19,13 @@ ALTER TABLE public.compras
   ALTER COLUMN km_recorrido TYPE NUMERIC(10,2)
   USING km_recorrido::NUMERIC;
 
--- Identificar la única compra nueva que no forma parte de las 25 filas oficiales.
+-- Verificar las dos compras nuevas que no forman parte de las 25 filas oficiales.
 DO $$
 DECLARE
-  v_id TEXT;
   v_cantidad INTEGER;
 BEGIN
-  SELECT COUNT(*), MAX(id)
-  INTO v_cantidad, v_id
+  SELECT COUNT(*)
+  INTO v_cantidad
   FROM public.compras
   WHERE cliente_id = 'ganaderas'
     AND id NOT IN (
@@ -62,19 +61,34 @@ BEGIN
       OR created_at::date > DATE '2026-10-23'
     );
 
-  IF v_cantidad <> 1 THEN
+  IF v_cantidad <> 2 THEN
     RAISE EXCEPTION
-      'Se esperaba exactamente 1 compra nueva para asignarle 26-26, pero se encontraron %.',
+      'Se esperaban exactamente 2 compras nuevas (26-26 y 27-26), pero se encontraron %.',
       v_cantidad;
   END IF;
 
+  IF NOT EXISTS (
+    SELECT 1 FROM public.compras
+    WHERE id = 'evt-mvr5tkvw-ieim2uz6' AND cliente_id = 'ganaderas'
+  ) OR NOT EXISTS (
+    SELECT 1 FROM public.compras
+    WHERE id = 'evt-mvtiqw1a-eko46s9u' AND cliente_id = 'ganaderas'
+  ) THEN
+    RAISE EXCEPTION
+      'Las dos compras nuevas encontradas no coinciden con los registros verificados.';
+  END IF;
+
   UPDATE public.compras
-  SET numero_operacion = '26-26'
-  WHERE id = v_id;
+  SET numero_operacion = CASE id
+    WHEN 'evt-mvr5tkvw-ieim2uz6' THEN '26-26'
+    WHEN 'evt-mvtiqw1a-eko46s9u' THEN '27-26'
+  END
+  WHERE cliente_id = 'ganaderas'
+    AND id IN ('evt-mvr5tkvw-ieim2uz6', 'evt-mvtiqw1a-eko46s9u');
 END $$;
 
 -- Quitar cualquier histórico anterior que no pertenezca al Excel oficial.
--- La única fila externa preservada es la compra nueva, ya corregida a 26-26.
+-- Las únicas filas externas preservadas son las dos compras nuevas verificadas.
 DELETE FROM public.compras
 WHERE cliente_id = 'ganaderas'
   AND id NOT IN (
@@ -82,9 +96,9 @@ WHERE cliente_id = 'ganaderas'
     '68d62ea6','2d2efebd','7f5ff68a','c6139ac7','2a9bb778',
     'f8194997','aea28ba2','3147ccd3','8e6eb597','97cf0c30',
     '9a95120f','8c3042b3','c0896340','1ad4b310','23eab457',
-    '969c5463','4d595099','e3af7b6e','fcba561d','261ec7ec'
-  )
-  AND numero_operacion IS DISTINCT FROM '26-26';
+    '969c5463','4d595099','e3af7b6e','fcba561d','261ec7ec',
+    'evt-mvr5tkvw-ieim2uz6','evt-mvtiqw1a-eko46s9u'
+  );
 
 INSERT INTO public.compras (
   id, cliente_id, campo_id, usuario_email, fecha, actividad,
@@ -211,13 +225,17 @@ CREATE UNIQUE INDEX IF NOT EXISTS compras_ganaderas_numero_operacion_unico_idx
 
 COMMIT;
 
--- Verificación esperada: 26 operaciones numeradas consecutivamente, 1-26.
+-- Verificación esperada: 27 operaciones numeradas consecutivamente, 1-27.
 SELECT
   COUNT(DISTINCT numero_operacion) AS operaciones,
   MIN(fecha) AS primera_fecha,
   MAX(fecha) AS ultima_fecha,
-  SUM(kg_netos_origen) FILTER (WHERE numero_operacion <> '26-26') AS kg_origen_excel,
-  SUM(kg_netos_destino) FILTER (WHERE numero_operacion <> '26-26') AS kg_destino_excel
+  SUM(kg_netos_origen) FILTER (
+    WHERE split_part(numero_operacion, '-', 1)::INTEGER BETWEEN 1 AND 25
+  ) AS kg_origen_excel,
+  SUM(kg_netos_destino) FILTER (
+    WHERE split_part(numero_operacion, '-', 1)::INTEGER BETWEEN 1 AND 25
+  ) AS kg_destino_excel
 FROM public.compras
 WHERE cliente_id = 'ganaderas'
   AND numero_operacion ~ '^[0-9]+-26$';
