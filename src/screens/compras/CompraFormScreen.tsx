@@ -45,15 +45,15 @@ type Rt = RouteProp<RootStackParamList, 'CompraForm'>;
 /**
  * Auto-genera un numero_operacion con el formato del cliente:
  *
- *   NN_YY
+ *   NN-YY
  *
  * Donde:
  *   - YY = año de la fecha de la compra (2 dígitos: 2026 → "26")
  *   - NN = correlativo ascendente del mismo año (sin padding)
  *
  * Ejemplos:
- *   - Compra en 2026, ya hay 16 cargadas ese año → "17_26"
- *   - Primera compra del 2027                   → "1_27"
+ *   - Compra en 2026, ya hay 26 cargadas ese año → "27-26"
+ *   - Primera compra del 2027                    → "1-27"
  *
  * El secuencial es UNO MÁS que el máximo correlativo encontrado en las
  * compras del año dado. NO es count() — eso falla si hay huecos (ej.
@@ -61,7 +61,7 @@ type Rt = RouteProp<RootStackParamList, 'CompraForm'>;
  */
 function generarNumeroOperacion(fechaISO: string, maxCorrelativo: number): string {
   const año = fechaISO.slice(2, 4); // "2026-06-25" → "26"
-  return `${maxCorrelativo + 1}_${año}`;
+  return `${maxCorrelativo + 1}-${año}`;
 }
 
 /**
@@ -74,8 +74,9 @@ function maxCorrelativoDelAño(compras: Array<{ numeroOperacion?: string }>, añ
   for (const c of compras) {
     const op = c.numeroOperacion?.trim();
     if (!op) continue;
-    // Matchea solo el formato N_YY (rechaza "COR_28" del formato viejo)
-    const m = /^(\d+)_(\d{2})$/.exec(op);
+    // Acepta tanto el formato histórico N_YY como el vigente N-YY. La app
+    // siempre genera con guion, pero debe contar correctamente el histórico.
+    const m = /^(\d+)[_-](\d{2})$/.exec(op);
     if (!m || !m[1] || !m[2]) continue;
     if (m[2] !== añoYY) continue;
     const n = parseInt(m[1], 10);
@@ -185,7 +186,7 @@ export function CompraFormScreen() {
         numeroDte: numeroDte.trim() || undefined,
         // Prioridad: ref (auto-generado en handleGuardar) > state (lo que tipeó el operario)
         numeroOperacion: (numeroOpRef.current || numeroOperacion.trim()) || undefined,
-        kmRecorrido: kmNum != null && Number.isFinite(kmNum) ? Math.round(kmNum) : undefined,
+        kmRecorrido: kmNum != null && Number.isFinite(kmNum) ? kmNum : undefined,
         flete: flete.trim() || undefined,
         observaciones: observaciones.trim() || undefined,
         syncState: 'pending',
@@ -282,7 +283,7 @@ export function CompraFormScreen() {
       Alert.alert('Faltan datos', `Completá: ${errores.join(', ')}`);
       return;
     }
-    // Auto-gen numero_operacion si está vacío — patrón cliente "NN_YY".
+    // Auto-gen numero_operacion si está vacío — patrón cliente "NN-YY".
     // Lo guardamos en ref (síncrono) para que buildEvento del hook lo vea,
     // y también lo seteamos en state para que la UI lo refleje en el textbox.
     if (!numeroOperacion.trim()) {
@@ -535,7 +536,7 @@ export function CompraFormScreen() {
                 value={kmRecorridoStr}
                 onChangeText={setKmRecorridoStr}
                 placeholder="0"
-                keyboardType="number-pad"
+                keyboardType="decimal-pad"
               />
             </View>
           </View>
@@ -547,16 +548,17 @@ export function CompraFormScreen() {
             placeholder="Empresa, transportista o referencia"
           />
 
-          <FormField
-            label="N° Operación"
-            value={numeroOperacion}
-            onChangeText={setNumeroOperacion}
-            placeholder={`auto: N_${fecha.slice(2, 4)} al guardar`}
-          />
-          {!numeroOperacion.trim() && (
+          {isEdit ? (
+            <FormField
+              label="N° Operación"
+              value={numeroOperacion}
+              onChangeText={setNumeroOperacion}
+              placeholder={`Ej. 27-${fecha.slice(2, 4)}`}
+            />
+          ) : (
             <Text style={styles.helperTxt}>
-              Se genera al guardar: correlativo del año (ej. 17_{fecha.slice(2, 4)}).
-              Si querés ponerlo a mano, escribilo y se respeta.
+              N° de operación: se asigna automáticamente al guardar según el
+              último correlativo del año (ej. 27-{fecha.slice(2, 4)}).
             </Text>
           )}
 

@@ -331,7 +331,7 @@ export interface CompraCanonical {
   precio?: number;                        // ARS/kg
   consignado?: string;
   titular?: string;
-  plazo?: string;                         // 'Contado' | '30 días' | '60 días' | '90 días'
+  plazo?: string;                         // 'Contado' | '30' | '30/60' | '30/60/90'
 
   // Logística
   numeroDte?: string;
