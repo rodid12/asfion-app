@@ -10,6 +10,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
+    "check:regressions": "node scripts/check-critical-regressions.mjs",
     "client:upload-logo": "node --env-file=.env.local scripts/upload-client-logo.mjs",
     "app-store:setup-review-demo": "node --env-file=.env.local scripts/setup-app-review-demo.mjs",
     "postinstall": "patch-package",

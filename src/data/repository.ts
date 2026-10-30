@@ -1,8 +1,9 @@
 // Repository pattern. Los screens NUNCA hablan con Sheets ni con Supabase directo.
 // Siempre pasan por acá. Eso nos permite cambiar el backend sin tocar la UI.
 
-import type { CampaniaOperativa, CampaniaReproductiva, CaravanaColor, Campo, Circuito, ClienteConfigRow, ClienteDisponible, Evento, Lote, Parcela, Pastoreo, Pluviometro, Subscription, TipoEvento, Usuario } from './types';
+import type { CampaniaOperativa, CampaniaReproductiva, CaravanaColor, Campo, Circuito, ClienteConfigRow, ClienteDisponible, Evento, Lote, Parcela, Paricion, Pastoreo, Pluviometro, Subscription, TipoEvento, Usuario } from './types';
 import { isSessionExpiredError, looksLikeRlsBlock, SubscriptionBlockedError } from './backends/supabase';
+import { esMismaCaravana } from '@/utils/caravana';
 
 /** Última caravana cargada en un campo — alimenta el autocomplete del form. */
 export interface UltimaCaravana {
@@ -234,8 +235,32 @@ export class Repository {
   ultimaCaravana = (campoId: string) => this.backend.ultimaCaravana(campoId);
   contarPariciones = (filtros: { desde?: string; usuarioEmail?: string }) =>
     this.backend.contarPariciones(filtros);
-  buscarCaravana = (color: CaravanaColor, numero: string, excluirId?: string) =>
-    this.backend.buscarCaravana(color, numero, excluirId);
+  /**
+   * Busca primero en la cola offline y en las listas ya vistas, y después en
+   * el servidor. Así también impedimos duplicados cuando dos cargas se hacen
+   * sin señal en el mismo dispositivo. La base de datos aplica la misma regla
+   * como última defensa para cargas concurrentes desde distintos equipos.
+   */
+  buscarCaravana = async (color: CaravanaColor, numero: string, excluirId?: string): Promise<ParicionRef | null> => {
+    const esCoincidencia = (e: Evento): e is Paricion => (
+      e.tipo === 'paricion' &&
+      e.id !== excluirId &&
+      esMismaCaravana(e, color, numero)
+    );
+
+    const pendientes = await this.backend.listPending().catch(() => [] as Evento[]);
+    const localPendiente = pendientes.find(esCoincidencia);
+    if (localPendiente) return paricionARef(localPendiente);
+
+    // Puede haber varias copias del mismo registro por filtros distintos;
+    // alcanza con encontrar la primera coincidencia.
+    for (const eventos of this.listCache.values()) {
+      const localCache = eventos.find(esCoincidencia);
+      if (localCache) return paricionARef(localCache);
+    }
+
+    return this.backend.buscarCaravana(color, numero.trim(), excluirId);
+  };
 
   /**
    * Intenta guardar el evento online. Si falla por red, lo encola.
@@ -256,11 +281,17 @@ export class Repository {
       if (isSessionExpiredError(err)) {
         throw err;
       }
+      // Un conflicto de datos nunca es un problema de conectividad. Encolarlo
+      // como si estuviera offline haría que el duplicado quede reintentándose
+      // indefinidamente y engañaría al usuario con "Guardado offline".
+      const msg = err instanceof Error ? err.message : String(err);
+      if (looksLikeDataConflict(msg)) {
+        throw err;
+      }
       // Si fue un bloqueo de RLS (típicamente: subscription en mora), tampoco
       // encolamos — el reintento va a fallar hasta que regularicen el pago.
       // Lo elevamos como SubscriptionBlockedError para que la UI muestre un
       // mensaje claro en vez del "pending" típico de errores de red.
-      const msg = err instanceof Error ? err.message : String(err);
       if (looksLikeRlsBlock(msg)) {
         throw new SubscriptionBlockedError(
           'No se puede cargar este evento: la cuenta está en mora. Regularizá el pago para volver a cargar datos.',
@@ -313,6 +344,25 @@ export class Repository {
 
   listPending = () => this.backend.listPending();
   flushPending = () => this.backend.flushPending();
+}
+
+function paricionARef(p: Paricion): ParicionRef {
+  return {
+    id: p.id,
+    fecha: p.fecha,
+    campoId: p.campoId,
+    usuarioEmail: p.usuarioEmail,
+    evento: p.evento,
+  };
+}
+
+function looksLikeDataConflict(message: string): boolean {
+  const msg = message.toLowerCase();
+  return (
+    msg.includes('duplicate key value') ||
+    msg.includes('unique constraint') ||
+    (msg.includes('caravana') && (msg.includes('ya existe') || msg.includes('duplicad')))
+  );
 }
 
 /** Validaciones mínimas. Acá agregamos reglas de negocio que apliquen a cualquier backend. */

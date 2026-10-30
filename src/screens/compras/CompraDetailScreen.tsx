@@ -232,7 +232,9 @@ export function CompraDetailScreen() {
           </Section>
         )}
 
-        {/* SECCIÓN: Comercial (Consignado ya está arriba) */}
+        {/* SECCIÓN: Comercial (Consignado ya está arriba).
+            Regla acordada: mostrar precio por kg, pero NUNCA derivar ni
+            presentar un importe total desde precio × kilos. */}
         {(compra.precio != null || compra.titular || compra.plazo) && (
           <Section title="Comercial">
             {compra.precio != null && (
@@ -305,12 +307,12 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function Row({ label, value, small, highlight }: { label: string; value: string; small?: boolean; highlight?: boolean }) {
+function Row({ label, value, small }: { label: string; value: string; small?: boolean }) {
   return (
     <View style={styles.row}>
       <Text style={styles.rowLabel}>{label}</Text>
       <Text
-        style={[styles.rowVal, small && styles.rowValSmall, highlight && styles.rowValHighlight]}
+        style={[styles.rowVal, small && styles.rowValSmall]}
         numberOfLines={2}
       >
         {value}
@@ -382,12 +384,6 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   rowValSmall: { fontSize: fontSize.sm, color: colors.textMuted, fontWeight: fontWeight.regular as '400' },
-  rowValHighlight: {
-    color: colors.navyDeep,
-    fontWeight: fontWeight.bold as '700',
-    fontSize: fontSize.lg,
-  },
-
   obsTxt: { fontSize: fontSize.md, color: colors.textDark, lineHeight: 22 },
 
   actionBar: {

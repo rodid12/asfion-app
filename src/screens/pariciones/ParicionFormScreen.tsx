@@ -92,6 +92,7 @@ export function ParicionFormScreen(_p: Props) {
   const [fotos, setFotos] = useState<string[]>([]);
   const [gps, setGps] = useState<Paricion['gps']>(undefined);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [validandoCaravana, setValidandoCaravana] = useState(false);
 
   // ─── Visibility por tipo de evento (necesarios ANTES del hook ───
   //     porque buildEvento los lee del closure) ───
@@ -281,10 +282,36 @@ export function ParicionFormScreen(_p: Props) {
   }, [user]);
 
   const onSubmit = async () => {
+    if (submitting || validandoCaravana) return;
     if (!valid || !campoId || !loteId || !vacasGrupo || !evento) {
       Alert.alert('Faltan datos', 'Completá los campos obligatorios.');
       return;
     }
+
+    // Color + número identifican un animal. Excluimos el registro actual en
+    // modo edición para permitir corregir otros campos sin chocar consigo
+    // mismo. Si no hay red, Repository todavía revisa cache y cola local; la
+    // base vuelve a validar al sincronizar para cubrir otros dispositivos.
+    const numero = caravanaNumero.trim();
+    if (caravanaVisible && caravanaColor && numero) {
+      setValidandoCaravana(true);
+      try {
+        const duplicada = await repo.buscarCaravana(caravanaColor, numero, paricionId);
+        if (duplicada) {
+          Alert.alert(
+            'Caravana ya cargada',
+            `Ya existe una carga con la caravana ${caravanaColor} ${numero}: ${duplicada.evento} del ${duplicada.fecha}, cargada por ${duplicada.usuarioEmail}. Revisá ese registro antes de continuar.`,
+          );
+          return;
+        }
+      } catch {
+        // El modo offline sigue habilitado. La cola local ya fue revisada y
+        // Supabase rechazará una colisión al sincronizar con el servidor.
+      } finally {
+        setValidandoCaravana(false);
+      }
+    }
+
     await onGuardar();
   };
 
@@ -518,8 +545,8 @@ export function ParicionFormScreen(_p: Props) {
           <PrimaryButton
             label={isEdit ? 'GUARDAR CAMBIOS' : 'GUARDAR PARICIÓN'}
             onPress={onSubmit}
-            loading={submitting}
-            disabled={!valid}
+            loading={submitting || validandoCaravana}
+            disabled={!valid || validandoCaravana}
           />
           <View style={{ height: spacing.sm }} />
           <PrimaryButton
