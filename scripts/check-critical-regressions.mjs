@@ -4,7 +4,7 @@ const files = {
   compra: new URL('../src/screens/compras/CompraDetailScreen.tsx', import.meta.url),
   pdf: new URL('../src/lib/pdfExport.ts', import.meta.url),
   paricion: new URL('../src/screens/pariciones/ParicionFormScreen.tsx', import.meta.url),
-  migracion: new URL('../supabase/migrations/0060_pariciones_caravana_unica.sql', import.meta.url),
+  migracion: new URL('../supabase/migrations/0061_hotfix_caravana_unica_por_campania.sql', import.meta.url),
 };
 
 const [compra, pdf, paricion, migracion] = await Promise.all(
@@ -21,12 +21,15 @@ const checks = [
     message: 'Se perdió la alternativa estable de exportación PDF para Android.',
   },
   {
-    ok: /repo\.buscarCaravana\(caravanaColor, numero, paricionId\)/.test(paricion),
+    ok: /repo\.buscarCaravana\([\s\S]*caravanaColor,[\s\S]*numero,[\s\S]*evento,[\s\S]*fecha,[\s\S]*paricionId/.test(paricion),
     message: 'El formulario dejó de validar caravanas repetidas.',
   },
   {
-    ok: /CREATE TRIGGER pariciones_caravana_unica_trigger/.test(migracion),
-    message: 'Falta la protección de caravanas repetidas en la base de datos.',
+    ok: /CREATE TRIGGER pariciones_caravana_unica_trigger/.test(migracion) &&
+      /evento_normalizado/.test(migracion) &&
+      /campania_scope/.test(migracion) &&
+      /p\.campania_id/.test(migracion),
+    message: 'Falta la protección correctamente acotada de caravanas repetidas en la base de datos.',
   },
 ];
 

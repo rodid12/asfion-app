@@ -15,7 +15,7 @@
 // Vamos a llenarlos cuando conectemos con el Apps Script real.
 
 import type { Campo, CaravanaColor, Circuito, Evento, Lote, Parcela, Pluviometro, TipoEvento, Usuario } from '../types';
-import type { EventoFilters, FlushResult, IDataBackend, ParicionRef, UltimaCaravana } from '../repository';
+import type { CaravanaScope, EventoFilters, FlushResult, IDataBackend, ParicionRef, UltimaCaravana } from '../repository';
 
 export interface SheetsBackendConfig {
   /** URL del despliegue de Google Apps Script como Web App. */
@@ -83,8 +83,8 @@ export class GoogleSheetsBackend implements IDataBackend {
     return this.call<number>('contarPariciones', filtros);
   }
 
-  buscarCaravana(caravanaColor: CaravanaColor, caravanaNumero: string, excluirId?: string): Promise<ParicionRef | null> {
-    return this.call<ParicionRef | null>('buscarCaravana', { caravanaColor, caravanaNumero, excluirId });
+  buscarCaravana(caravanaColor: CaravanaColor, caravanaNumero: string, scope: CaravanaScope, excluirId?: string): Promise<ParicionRef | null> {
+    return this.call<ParicionRef | null>('buscarCaravana', { caravanaColor, caravanaNumero, scope, excluirId });
   }
 
   listLotes(campoId: string): Promise<Lote[]> {

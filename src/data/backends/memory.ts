@@ -20,6 +20,7 @@ import type {
   Usuario,
 } from '../types';
 import type {
+  CaravanaScope,
   EventoFilters,
   FlushResult,
   IDataBackend,
@@ -234,14 +235,19 @@ export class InMemoryBackend implements IDataBackend {
     };
   }
 
-  async buscarCaravana(color: CaravanaColor, numero: string, excluirId?: string) {
+  async buscarCaravana(color: CaravanaColor, numero: string, scope: CaravanaScope, excluirId?: string) {
     await this.load();
     // Búsqueda case-sensitive en número (porque "0200" ≠ "JT764O504"),
     // pero color es enum estricto.
     const match = this.db.eventos
       .filter((e): e is Paricion => e.tipo === 'paricion')
       .filter(p => p.id !== excluirId)
-      .find(p => p.caravanaColor === color && p.caravanaNumero === numero);
+      .find(p => (
+        p.evento === scope.evento &&
+        (scope.campaniaId ? p.campaniaId === scope.campaniaId : p.fecha === scope.fecha) &&
+        p.caravanaColor === color &&
+        p.caravanaNumero === numero
+      ));
     if (!match) return null;
     return {
       id: match.id,

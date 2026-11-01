@@ -37,6 +37,7 @@ import type {
   Venta,
 } from '../types';
 import type {
+  CaravanaScope,
   EventoFilters,
   FlushResult,
   IDataBackend,
@@ -1087,6 +1088,7 @@ export class SupabaseBackend implements IDataBackend {
   async buscarCaravana(
     color: CaravanaColor,
     numero: string,
+    scope: CaravanaScope,
     excluirId?: string,
   ): Promise<ParicionRef | null> {
     const user = await this.getCurrentUser();
@@ -1096,7 +1098,10 @@ export class SupabaseBackend implements IDataBackend {
       .select('id, fecha, campo_id, usuario_email, evento')
       .eq('cliente_id', user.clienteId)
       .eq('caravana_color', color)
-      .eq('caravana_numero', numero);
+      .eq('caravana_numero', numero)
+      .eq('evento', scope.evento);
+    if (scope.campaniaId) q = q.eq('campania_id', scope.campaniaId);
+    else q = q.eq('fecha', scope.fecha);
     if (excluirId) q = q.neq('id', excluirId);
     const { data, error } = await q.limit(1);
     if (error) throw new Error(error.message);

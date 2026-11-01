@@ -22,6 +22,16 @@ export interface ParicionRef {
   evento: string;
 }
 
+/** Alcance funcional de la unicidad de una caravana.
+ * Una misma identificación puede reaparecer en otra campaña y un nacimiento
+ * puede tener luego un evento de muerte. Solo consideramos duplicada la misma
+ * carga dentro de campaña + tipo de evento. */
+export interface CaravanaScope {
+  evento: string;
+  fecha: string;
+  campaniaId?: string;
+}
+
 /**
  * Contrato que debe implementar cualquier backend (Sheets, Supabase, memoria).
  * Si aparece un nuevo backend, implementa esta interface y listo.
@@ -79,12 +89,12 @@ export interface IDataBackend {
   ultimaCaravana(campoId: string): Promise<UltimaCaravana | null>;
   contarPariciones(filtros: { desde?: string; usuarioEmail?: string }): Promise<number>;
   /**
-   * Busca si ya existe una parición con esta combinación (color, número).
-   * Scope: global dentro de los campos visibles al usuario actual.
+   * Busca si ya existe una parición con esta combinación (color, número)
+   * dentro de la misma campaña y tipo de evento.
    * Devuelve null si no hay colisión. Si hay, devuelve el registro previo
    * para que el UI pueda mostrar "ya cargada el día X por Y".
    */
-  buscarCaravana(caravanaColor: CaravanaColor, caravanaNumero: string, excluirId?: string): Promise<ParicionRef | null>;
+  buscarCaravana(caravanaColor: CaravanaColor, caravanaNumero: string, scope: CaravanaScope, excluirId?: string): Promise<ParicionRef | null>;
 
   // Eventos (genérico)
   saveEvento(evento: Evento): Promise<Evento>;
@@ -241,10 +251,31 @@ export class Repository {
    * sin señal en el mismo dispositivo. La base de datos aplica la misma regla
    * como última defensa para cargas concurrentes desde distintos equipos.
    */
-  buscarCaravana = async (color: CaravanaColor, numero: string, excluirId?: string): Promise<ParicionRef | null> => {
+  buscarCaravana = async (
+    color: CaravanaColor,
+    numero: string,
+    scope: CaravanaScope,
+    excluirId?: string,
+  ): Promise<ParicionRef | null> => {
+    const campanias = await (this.backend.listCampaniasReproductivas?.() ?? Promise.resolve([]))
+      .catch(() => [] as CampaniaReproductiva[]);
+    const campania = scope.campaniaId
+      ? campanias.find(c => c.id === scope.campaniaId)
+      : campanias.find(c => scope.fecha >= c.fechaInicio && scope.fecha <= c.fechaFin);
+    const resolvedScope: CaravanaScope = {
+      ...scope,
+      campaniaId: scope.campaniaId ?? campania?.id,
+    };
+
     const esCoincidencia = (e: Evento): e is Paricion => (
       e.tipo === 'paricion' &&
       e.id !== excluirId &&
+      e.evento === resolvedScope.evento &&
+      (resolvedScope.campaniaId
+        ? (e.campaniaId === resolvedScope.campaniaId || (
+            campania != null && e.fecha >= campania.fechaInicio && e.fecha <= campania.fechaFin
+          ))
+        : e.fecha === resolvedScope.fecha) &&
       esMismaCaravana(e, color, numero)
     );
 
@@ -259,7 +290,7 @@ export class Repository {
       if (localCache) return paricionARef(localCache);
     }
 
-    return this.backend.buscarCaravana(color, numero.trim(), excluirId);
+    return this.backend.buscarCaravana(color, numero.trim(), resolvedScope, excluirId);
   };
 
   /**

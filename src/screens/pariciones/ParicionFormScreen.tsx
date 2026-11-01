@@ -296,7 +296,16 @@ export function ParicionFormScreen(_p: Props) {
     if (caravanaVisible && caravanaColor && numero) {
       setValidandoCaravana(true);
       try {
-        const duplicada = await repo.buscarCaravana(caravanaColor, numero, paricionId);
+        const duplicada = await repo.buscarCaravana(
+          caravanaColor,
+          numero,
+          {
+            evento,
+            fecha,
+            campaniaId: originalRecord?.campaniaId,
+          },
+          paricionId,
+        );
         if (duplicada) {
           Alert.alert(
             'Caravana ya cargada',
