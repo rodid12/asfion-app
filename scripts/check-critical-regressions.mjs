@@ -10,12 +10,13 @@ const files = {
   paricionList: new URL('../src/screens/pariciones/ParicionListScreen.tsx', import.meta.url),
   mapa: new URL('../src/components/MapPickerModal.tsx', import.meta.url),
   compraForm: new URL('../src/screens/compras/CompraFormScreen.tsx', import.meta.url),
+  metricas: new URL('../src/screens/metricas/MetricasScreen.tsx', import.meta.url),
   migracionDelete: new URL('../supabase/migrations/0059_bloquear_borrado_total_pariciones.sql', import.meta.url),
   migracion: new URL('../supabase/migrations/0061_hotfix_caravana_unica_por_campania.sql', import.meta.url),
   migracionRecepcion: new URL('../supabase/migrations/0062_urgencias_recepcion_ganaderas.sql', import.meta.url),
 };
 
-const [compra, pdf, paricion, mortandad, ganaderas, clientConfig, paricionList, mapa, compraForm, migracionDelete, migracion, migracionRecepcion] = await Promise.all(
+const [compra, pdf, paricion, mortandad, ganaderas, clientConfig, paricionList, mapa, compraForm, metricas, migracionDelete, migracion, migracionRecepcion] = await Promise.all(
   Object.values(files).map(file => readFile(file, 'utf8')),
 );
 
@@ -86,6 +87,12 @@ const checks = [
     ok: /pariciones_delete/.test(migracionDelete) &&
       /FOR DELETE TO authenticated[\s\S]*USING \(false\)/.test(migracionDelete),
     message: 'Pariciones dejó de bloquear el borrado de registros.',
+  },
+  {
+    ok: /const campoIdsVisibles = useMemo/.test(metricas) &&
+      /data\.filter\(p => campoIdsVisibles\.has\(p\.campoId\)\)/.test(metricas) &&
+      !/data\.filter\(p => p\.usuarioEmail === user\.email\)/.test(metricas),
+    message: 'Las métricas del operario volvieron a mostrar solo sus cargas en vez del campo asignado.',
   },
 ];
 

@@ -23,7 +23,9 @@
 //
 // Scope de datos:
 //  - Administrador/moderador: todos los eventos del cliente.
-//  - Operario: solo lo que él cargó (consistente con la Lista).
+//  - Operario: actividad completa de los campos que tiene asignados. Las
+//    métricas representan al establecimiento, no solamente al autor de cada
+//    carga; la lista operativa puede conservar permisos más restrictivos.
 //
 // Filtros disponibles: campaña operativa + rango de fecha. La vista inicial
 // muestra la campaña actual completa; el histórico sigue accesible sin mezclar
@@ -313,11 +315,20 @@ export function MetricasScreen() {
     return () => { cancelado = true; };
   }, [currentTab, load, tenantId]);
 
-  // Scope por rol (operario solo ve lo suyo).
+  // Los campos ya vienen acotados por el backend según el rol/asignación del
+  // usuario. Usamos ese mismo conjunto como única fuente de verdad para todos
+  // los módulos; así un operario ve el estado completo de SU campo, pero nunca
+  // métricas de otro establecimiento.
+  const campoIdsVisibles = useMemo(
+    () => new Set(campos.map(c => c.id)),
+    [campos],
+  );
+
+  // Scope por rol/campo.
   const scoped = useMemo(() => {
-    if (!esAdmin && user?.email) return data.filter(p => p.usuarioEmail === user.email);
+    if (!esAdmin) return data.filter(p => campoIdsVisibles.has(p.campoId));
     return data;
-  }, [data, esAdmin, user]);
+  }, [data, esAdmin, campoIdsVisibles]);
 
   // Los KPIs reproductivos acumulativos usan la campaña elegida. La fecha es
   // la fuente de verdad: también cubre históricos cuyo campania_id quedó vacío
@@ -368,9 +379,9 @@ export function MetricasScreen() {
 
   // Scope + rango para lluvias (mismo criterio que pariciones).
   const scopedLluvias = useMemo(() => {
-    if (!esAdmin && user?.email) return lluvias.filter(l => l.usuarioEmail === user.email);
+    if (!esAdmin) return lluvias.filter(l => campoIdsVisibles.has(l.campoId));
     return lluvias;
-  }, [lluvias, esAdmin, user]);
+  }, [lluvias, esAdmin, campoIdsVisibles]);
 
   const filteredLluviasRango = useMemo(() => {
     return scopedLluvias.filter(l =>
@@ -439,9 +450,9 @@ export function MetricasScreen() {
 
   // Scope + rango para mortandad.
   const scopedMortandad = useMemo(() => {
-    if (!esAdmin && user?.email) return mortandad.filter(m => m.usuarioEmail === user.email);
+    if (!esAdmin) return mortandad.filter(m => campoIdsVisibles.has(m.campoId));
     return mortandad;
-  }, [mortandad, esAdmin, user]);
+  }, [mortandad, esAdmin, campoIdsVisibles]);
 
   const filteredMortandad = useMemo(() => {
     return scopedMortandad.filter(m =>
@@ -451,9 +462,9 @@ export function MetricasScreen() {
 
   // Scope + rango para pastoreo.
   const scopedPastoreo = useMemo(() => {
-    if (!esAdmin && user?.email) return pastoreo.filter(p => p.usuarioEmail === user.email);
+    if (!esAdmin) return pastoreo.filter(p => campoIdsVisibles.has(p.campoId));
     return pastoreo;
-  }, [pastoreo, esAdmin, user]);
+  }, [pastoreo, esAdmin, campoIdsVisibles]);
 
   const filteredPastoreoRango = useMemo(() => {
     return scopedPastoreo.filter(p =>
@@ -854,9 +865,9 @@ export function MetricasScreen() {
   // ====== COMPRAS ======
   // Scope + rango paralelos a los otros módulos.
   const scopedCompras = useMemo(() => {
-    if (!esAdmin && user?.email) return compras.filter(c => c.usuarioEmail === user.email);
+    if (!esAdmin) return compras.filter(c => campoIdsVisibles.has(c.campoId));
     return compras;
-  }, [compras, esAdmin, user]);
+  }, [compras, esAdmin, campoIdsVisibles]);
 
   const filteredCompras = useMemo(() => {
     return scopedCompras.filter(c =>
