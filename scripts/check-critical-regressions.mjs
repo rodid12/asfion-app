@@ -52,6 +52,11 @@ const checks = [
     message: 'Un tenant desconocido puede volver a heredar catálogos de Ganaderas.',
   },
   {
+    ok: /!isSuperAdmin && clienteId !== ACTIVE_CONFIG\.id[\s\S]*catalogos:\s*\{\}/.test(clientConfig) &&
+      /mergeStringArrayRecords\([\s\S]*fallback\.categoriasPorActividad/.test(clientConfig),
+    message: 'El arranque o un cache antiguo puede volver a filtrar catálogos entre clientes.',
+  },
+  {
     ok: /categoriasPorActividad,Recepción/.test(migracionRecepcion) &&
       /Novillito/.test(migracionRecepcion) && /Vaq 1/.test(migracionRecepcion),
     message: 'Falta la migración de categorías de Recepción en Supabase.',

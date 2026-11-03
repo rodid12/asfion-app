@@ -77,6 +77,19 @@ export function ClientConfigProvider({ config: override, children }: ProviderPro
       setError(null);
       return;
     }
+    // Un usuario normal de un tenant distinto al compilado tampoco debe ver
+    // durante el arranque el fallback de Ganaderas. Antes de leer SU cache o
+    // pedir SU configuración remota dejamos un shell neutral. Es preferible
+    // mostrar momentáneamente menos opciones a filtrar catálogos de otro
+    // cliente en un cold-start sin cache.
+    if (!isSuperAdmin && clienteId !== ACTIVE_CONFIG.id) {
+      setConfig(mapRowToClientConfig({
+        id: clienteId,
+        nombre: 'ASFION',
+        modulosHabilitados: [],
+        catalogos: {},
+      }));
+    }
     // Al cambiar de tenant, pintar inmediatamente el nombre y los módulos del
     // resumen autorizado. Si estamos offline y nunca se cacheó la config
     // completa, esto evita mostrar accidentalmente el branding del cliente
@@ -259,9 +272,21 @@ function pickMortandadCatalogo(raw: any, fallback: MortandadCatalogos): Mortanda
     actividades: arrOr(raw?.actividades, fallback.actividades),
     causaTipos:  arrOr(raw?.causaTipos,  fallback.causaTipos),
     causaLibre: typeof raw?.causaLibre === 'boolean' ? raw.causaLibre : fallback.causaLibre,
-    actividadesPorCampo: stringArrayRecordOrUndefined(raw?.actividadesPorCampo),
-    categoriasPorActividad: stringArrayRecordOrUndefined(raw?.categoriasPorActividad),
-    etiquetas: stringRecordOrUndefined(raw?.etiquetas),
+    // Merge por clave: una config remota válida puede sobrescribir el valor
+    // local, pero si su cache es anterior a una corrección crítica (por ej.
+    // Recepción) no elimina las claves nuevas incluidas en el bundle.
+    actividadesPorCampo: mergeStringArrayRecords(
+      fallback.actividadesPorCampo,
+      stringArrayRecordOrUndefined(raw?.actividadesPorCampo),
+    ),
+    categoriasPorActividad: mergeStringArrayRecords(
+      fallback.categoriasPorActividad,
+      stringArrayRecordOrUndefined(raw?.categoriasPorActividad),
+    ),
+    etiquetas: mergeStringRecords(
+      fallback.etiquetas,
+      stringRecordOrUndefined(raw?.etiquetas),
+    ),
   };
 }
 function pickPastoreoCatalogo(raw: any, fallback: PastoreoCatalogos): PastoreoCatalogos {
@@ -303,4 +328,20 @@ function stringRecordOrUndefined(raw: any): Readonly<Record<string, string>> | u
     return undefined;
   }
   return raw as Record<string, string>;
+}
+
+function mergeStringArrayRecords(
+  fallback?: Readonly<Record<string, readonly string[]>>,
+  raw?: Readonly<Record<string, readonly string[]>>,
+): Readonly<Record<string, readonly string[]>> | undefined {
+  const merged = { ...(fallback ?? {}), ...(raw ?? {}) };
+  return Object.keys(merged).length > 0 ? merged : undefined;
+}
+
+function mergeStringRecords(
+  fallback?: Readonly<Record<string, string>>,
+  raw?: Readonly<Record<string, string>>,
+): Readonly<Record<string, string>> | undefined {
+  const merged = { ...(fallback ?? {}), ...(raw ?? {}) };
+  return Object.keys(merged).length > 0 ? merged : undefined;
 }
