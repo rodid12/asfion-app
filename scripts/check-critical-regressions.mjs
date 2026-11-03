@@ -26,8 +26,10 @@ const checks = [
     message: 'Compras volvió a mostrar o calcular el total estimado.',
   },
   {
-    ok: /Platform\.OS\s*===\s*['"]android['"][\s\S]*Print\.printAsync\(\{ uri \}\)/.test(pdf),
-    message: 'Se perdió la alternativa estable de exportación PDF para Android.',
+    ok: /Print\.printToFileAsync\(\{ html, base64: false \}\)/.test(pdf) &&
+      /await compartirPDF\(Sharing, uri,/.test(pdf) &&
+      !/Print\.printAsync\(\{ uri \}\)/.test(pdf),
+    message: 'El PDF volvió a enviarse al diálogo de impresión vacío en vez de abrir el selector para compartir.',
   },
   {
     ok: /repo\.buscarCaravana\([\s\S]*caravanaColor,[\s\S]*numero,[\s\S]*evento,[\s\S]*fecha,[\s\S]*paricionId/.test(paricion),

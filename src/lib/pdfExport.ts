@@ -19,7 +19,7 @@
 // Si las deps `expo-print` / `expo-sharing` no están instaladas, las imports
 // fallan en runtime y mostramos un Alert con instrucciones. NO crasheamos.
 
-import { Alert, Platform } from 'react-native';
+import { Alert } from 'react-native';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tipos públicos
@@ -250,16 +250,6 @@ async function exportarPDFSinBloqueo(payload: PdfPayload, filenameBase: string):
     const ts = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
     const filename = `${filenameBase}-${ts}.pdf`;
 
-    // Alternativa OTA para Android: no dependemos de expo-sharing. Algunos
-    // fabricantes no devuelven onActivityResult al cerrar el chooser y dejan
-    // el módulo nativo bloqueado para siempre. El framework de impresión de
-    // Android ya forma parte del APK actual y ofrece "Guardar como PDF", por
-    // lo que funciona sin instalar una versión nueva y también sin internet.
-    if (Platform.OS === 'android') {
-      await Print.printAsync({ uri });
-      return true;
-    }
-
     if (!(await Sharing.isAvailableAsync())) {
       Alert.alert('PDF generado', `Se guardó en:\n${uri}\n\nPero el share del sistema no está disponible en este dispositivo.`);
       return true;
@@ -302,6 +292,3 @@ export function fechaLargaES(iso: string): string {
   const mes = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'][mm - 1];
   return `${dow} ${dd} de ${mes} de ${yy}`;
 }
-
-// Suprime "use Platform" warning si no se usa en builds de prod.
-void Platform;
