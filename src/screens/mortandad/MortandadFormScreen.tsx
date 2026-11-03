@@ -47,6 +47,10 @@ import { radius, spacing } from '@/theme/spacing';
 import type { RootStackParamList } from '@/navigation/types';
 import type { CaravanaColor, CausaMuerteTipo, Lote, Mortandad } from '@/data/types';
 import { fechaBonita } from '@/utils/fechas';
+import {
+  CAUSAS_MORTANDAD_SUGERIDAS,
+  canonicalizarCausaMortandad,
+} from '@/lib/mortandadCause';
 
 type Rt = RouteProp<RootStackParamList, 'MortandadForm'>;
 
@@ -124,7 +128,9 @@ export function MortandadFormScreen() {
         categoria,
         actividad,
         causaTipo: causaLibre ? undefined : causaTipo,
-        causaDetalle: causaLibre ? causaDetalle.trim() || undefined : undefined,
+        causaDetalle: causaLibre && causaDetalle.trim()
+          ? canonicalizarCausaMortandad(causaDetalle)
+          : undefined,
         numeroCorral: esCampoCorrales ? numeroCorral.trim() || undefined : undefined,
         numeroTropa: esCampoCorrales ? numeroTropa.trim() || undefined : undefined,
         caravanaColor,
@@ -419,7 +425,13 @@ export function MortandadFormScreen() {
                 {campos.map(c => (
                   <Pressable
                     key={c.id}
-                    onPress={() => { setCampoId(c.id); setPickerCampoOpen(false); }}
+                    onPress={() => {
+                      setCampoId(c.id);
+                      setLoteId('');
+                      setActividad(undefined);
+                      setCategoria(undefined);
+                      setPickerCampoOpen(false);
+                    }}
                     style={[styles.pickerChip, campoId === c.id && styles.pickerChipSel]}
                   >
                     <Text style={[styles.pickerChipTxt, campoId === c.id && styles.pickerChipTxtSel]}>
@@ -668,8 +680,9 @@ export function MortandadFormScreen() {
               return (
                 <Pressable
                   key={a}
+                  disabled={!campoId}
                   onPress={() => setActividad(a)}
-                  style={[styles.catChip, sel && styles.catChipSel]}
+                  style={[styles.catChip, sel && styles.catChipSel, !campoId && { opacity: 0.45 }]}
                 >
                   <Text style={[styles.catChipTxt, sel && styles.catChipTxtSel]}>{etiqueta(a)}</Text>
                 </Pressable>
@@ -684,8 +697,9 @@ export function MortandadFormScreen() {
               return (
                 <Pressable
                   key={c}
+                  disabled={!actividad}
                   onPress={() => setCategoria(c)}
-                  style={[styles.catChip, sel && styles.catChipSel]}
+                  style={[styles.catChip, sel && styles.catChipSel, !actividad && { opacity: 0.45 }]}
                 >
                   <Text style={[styles.catChipTxt, sel && styles.catChipTxtSel]}>{etiqueta(c)}</Text>
                 </Pressable>
@@ -703,6 +717,7 @@ export function MortandadFormScreen() {
                 label="N° de corral"
                 value={numeroCorral}
                 onChangeText={setNumeroCorral}
+                editable={!!categoria}
                 placeholder="Ej. C1, D8, Enf1"
                 autoCapitalize="characters"
               />
@@ -710,6 +725,7 @@ export function MortandadFormScreen() {
                 label="N° de tropa"
                 value={numeroTropa}
                 onChangeText={setNumeroTropa}
+                editable={!!categoria}
                 placeholder="Ej. Trm1, Trh2.2"
                 autoCapitalize="sentences"
               />
@@ -721,11 +737,13 @@ export function MortandadFormScreen() {
                     value={caravanaColor}
                     options={COLORES_CARAVANA}
                     onChange={setCaravanaColor}
+                    disabled={!categoria}
                   />
                   <FormField
                     label="N° de caravana"
                     value={caravanaNumero}
                     onChangeText={setCaravanaNumero}
+                    editable={!!categoria}
                     placeholder="Ej. 0466"
                     autoCapitalize="characters"
                   />
@@ -743,8 +761,9 @@ export function MortandadFormScreen() {
                   return (
                     <Pressable
                       key={String(value)}
+                      disabled={!categoria}
                       onPress={() => setVacaParida(value)}
-                      style={[styles.catChip, sel && styles.catChipSel]}
+                      style={[styles.catChip, sel && styles.catChipSel, !categoria && { opacity: 0.45 }]}
                     >
                       <Text style={[styles.catChipTxt, sel && styles.catChipTxtSel]}>
                         {value ? 'Sí' : 'No'}
@@ -757,22 +776,45 @@ export function MortandadFormScreen() {
           )}
 
           {causaLibre ? (
-            <FormField
-              label="Causa de muerte"
-              value={causaDetalle}
-              onChangeText={setCausaDetalle}
-              placeholder="Escribí la causa"
-              multiline
-              numberOfLines={3}
-              textAlignVertical="top"
-              style={styles.causaInput}
-            />
+            <>
+              <Text style={styles.label}>Causa de muerte</Text>
+              <View style={styles.catRow}>
+                {CAUSAS_MORTANDAD_SUGERIDAS.map(causa => {
+                  const sel = canonicalizarCausaMortandad(causaDetalle) === causa;
+                  return (
+                    <Pressable
+                      key={causa}
+                      disabled={!categoria}
+                      onPress={() => setCausaDetalle(causa)}
+                      style={[styles.catChip, sel && styles.catChipSel, !categoria && { opacity: 0.45 }]}
+                    >
+                      <Text style={[styles.catChipTxt, sel && styles.catChipTxtSel]}>{causa}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              <FormField
+                label="Otra causa o detalle"
+                value={causaDetalle}
+                onChangeText={setCausaDetalle}
+                editable={!!categoria}
+                onBlur={() => {
+                  if (causaDetalle.trim()) setCausaDetalle(canonicalizarCausaMortandad(causaDetalle));
+                }}
+                placeholder="Elegí una opción o escribí otra causa"
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
+                style={styles.causaInput}
+              />
+            </>
           ) : (
             <ChipGroup<CausaMuerteTipo>
               label="Causa — tipo"
               value={causaTipo}
               options={CAUSAS_TIPO}
               onChange={setCausaTipo}
+              disabled={!categoria}
             />
           )}
 
@@ -780,6 +822,7 @@ export function MortandadFormScreen() {
             label="Observaciones"
             value={observaciones}
             onChangeText={setObservaciones}
+            editable={!!categoria}
             placeholder="Agregá cualquier detalle útil del evento"
             multiline
             numberOfLines={3}

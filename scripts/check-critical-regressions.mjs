@@ -11,12 +11,16 @@ const files = {
   mapa: new URL('../src/components/MapPickerModal.tsx', import.meta.url),
   compraForm: new URL('../src/screens/compras/CompraFormScreen.tsx', import.meta.url),
   metricas: new URL('../src/screens/metricas/MetricasScreen.tsx', import.meta.url),
+  pastoreoForm: new URL('../src/screens/pastoreo/PastoreoFormScreen.tsx', import.meta.url),
+  lluviaForm: new URL('../src/screens/lluvias/LluviaFormScreen.tsx', import.meta.url),
+  causaMortandad: new URL('../src/lib/mortandadCause.ts', import.meta.url),
   migracionDelete: new URL('../supabase/migrations/0059_bloquear_borrado_total_pariciones.sql', import.meta.url),
   migracion: new URL('../supabase/migrations/0061_hotfix_caravana_unica_por_campania.sql', import.meta.url),
   migracionRecepcion: new URL('../supabase/migrations/0062_urgencias_recepcion_ganaderas.sql', import.meta.url),
+  migracionMetricas311: new URL('../supabase/migrations/0063_metricas_311_ganaderas.sql', import.meta.url),
 };
 
-const [compra, pdf, paricion, mortandad, ganaderas, clientConfig, paricionList, mapa, compraForm, metricas, migracionDelete, migracion, migracionRecepcion] = await Promise.all(
+const [compra, pdf, paricion, mortandad, ganaderas, clientConfig, paricionList, mapa, compraForm, metricas, pastoreoForm, lluviaForm, causaMortandad, migracionDelete, migracion, migracionRecepcion, migracionMetricas311] = await Promise.all(
   Object.values(files).map(file => readFile(file, 'utf8')),
 );
 
@@ -99,9 +103,35 @@ const checks = [
   {
     ok: /title=["']Mermas["']/.test(metricas) &&
       /Retacto/.test(metricas) && /Nacido muerto/.test(metricas) &&
-      /Muerte señalado/.test(metricas) && /Orejano \(registros\)/.test(metricas) &&
-      !/orejanos\.size\s*\/\s*2/.test(metricas),
-    message: 'Se perdió el desglose de mermas o se volvió a dividir Orejanos de forma global.',
+      /Muerte señalado/.test(metricas) && /Math\.floor\(orejanos\.size \/ 2\)/.test(metricas),
+    message: 'Se perdió el desglose de mermas o el criterio Orejanos ÷ 2.',
+  },
+  {
+    ok: /mortandadCampo/.test(metricas) && /camposDisponiblesMortandad/.test(metricas) &&
+      /canonicalizarCausaMortandad/.test(metricas) &&
+      /origen: ['"]Pariciones['"]/.test(metricas) &&
+      /\.filter\(p => p\.evento === ['"]Muerte['"]\)/.test(metricas) &&
+      /claveAnimalMortandad/.test(metricas) &&
+      /Desconocida/.test(causaMortandad) && /Infección/.test(causaMortandad),
+    message: 'Mortandad perdió el filtro por campo, la vista consolidada o la estandarización de causas.',
+  },
+  {
+    ok: /p\.evento === ['"]Nacimiento['"] && p\.sexo !== ['"]Orejano['"]/.test(metricas),
+    message: 'El KPI Nacimientos volvió a incluir Orejanos y dejó de coincidir con el dashboard web.',
+  },
+  {
+    ok: /disabled=\{!loteId\}/.test(paricion) &&
+      /disabled=\{!loteId \|\| !vacasGrupo\}/.test(paricion) &&
+      /disabled=\{!campoId\}/.test(mortandad) && /disabled=\{!actividad\}/.test(mortandad) &&
+      /disabled=\{!parcelaId\}/.test(pastoreoForm) && /editable=\{!!pluviometroId\}/.test(lluviaForm),
+    message: 'Los formularios dejaron de respetar la jerarquía de carga.',
+  },
+  {
+    ok: /p\.campaniaId === campaniaReproductivaSeleccionada\.id/.test(metricas) &&
+      /d0a6ea85/.test(migracionMetricas311) &&
+      /evento = 'Retacto'/.test(migracionMetricas311) &&
+      /campania-ganaderas-2026-2027/.test(migracionMetricas311),
+    message: 'Retacto o la corrección del Orejano inválido dejaron de vincularse a la campaña actual.',
   },
 ];
 

@@ -209,7 +209,12 @@ export function LluviaFormScreen() {
                 {campos.map(c => (
                   <Pressable
                     key={c.id}
-                    onPress={() => { setCampoId(c.id); setPickerCampoOpen(false); }}
+                    onPress={() => {
+                      setCampoId(c.id);
+                      setPluviometroId('');
+                      setMilimetrosStr('');
+                      setPickerCampoOpen(false);
+                    }}
                     style={[styles.pickerChip, campoId === c.id && styles.pickerChipSel]}
                   >
                     <Text style={[styles.pickerChipTxt, campoId === c.id && styles.pickerChipTxtSel]}>
@@ -298,6 +303,7 @@ export function LluviaFormScreen() {
             >
               <TextInput
                 value={milimetrosStr}
+                editable={!!pluviometroId}
                 onChangeText={t => {
                   const clean = t.replace(/[^0-9.,]/g, '').replace(/([.,]).*?([.,])/g, '$1');
                   setMilimetrosStr(clean);
@@ -320,6 +326,7 @@ export function LluviaFormScreen() {
             label="Observaciones"
             value={observaciones}
             onChangeText={setObservaciones}
+            editable={!!pluviometroId}
             placeholder="Detalles adicionales de la lluvia"
             multiline
             numberOfLines={3}

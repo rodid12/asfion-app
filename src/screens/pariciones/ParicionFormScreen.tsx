@@ -81,7 +81,7 @@ export function ParicionFormScreen(_p: Props) {
   const [pickerCampoOpen, setPickerCampoOpen] = useState(false);
   const [loteId, setLoteId] = useState<string | undefined>();
   const [vacasGrupo, setVacasGrupo] = useState<VacasGrupo | undefined>();
-  const [evento, setEvento] = useState<EventoParicion | undefined>('Nacimiento');
+  const [evento, setEvento] = useState<EventoParicion | undefined>();
   const [sexo, setSexo] = useState<Sexo | undefined>();
   const [asistencia, setAsistencia] = useState<SiNo | undefined>();
   const [caravanaColor, setCaravanaColor] = useState<Paricion['caravanaColor']>();
@@ -105,7 +105,7 @@ export function ParicionFormScreen(_p: Props) {
   // Un orejano todavía no fue señalado ni identificado con caravana.
   // Ocultamos ambos datos (color y número) y evitamos persistir valores que
   // hayan quedado seleccionados antes de cambiar el sexo a Orejano.
-  const caravanaVisible   = evento !== 'Retacto' && sexo !== 'Orejano';
+  const caravanaVisible   = !!evento && evento !== 'Retacto' && sexo !== 'Orejano';
 
   // Causa de muerte no corresponde a Aborto/Nacimiento/Retacto. Además de
   // ocultarla, limpiamos el state para que cambiar de Muerte a otro evento no
@@ -157,7 +157,7 @@ export function ParicionFormScreen(_p: Props) {
     formatSummary: () => 'Parición guardada.',
     resetEspecifico: () => {
       setVacasGrupo(undefined);
-      setEvento('Nacimiento');
+      setEvento(undefined);
       setSexo(undefined);
       setAsistencia(undefined);
       setCaravanaNumero('');
@@ -208,6 +208,20 @@ export function ParicionFormScreen(_p: Props) {
     return () => { cancelado = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [campoId, repo]);
+
+  // Jerarquía estricta: Campo → Lote → Grupo → Evento → Sexo/detalle.
+  // Si se borra un nivel superior limpiamos los inferiores para que nunca
+  // quede una combinación armada "de abajo hacia arriba".
+  useEffect(() => {
+    if (!loteId) {
+      setVacasGrupo(undefined);
+      setEvento(undefined);
+    }
+  }, [loteId]);
+
+  useEffect(() => {
+    if (!vacasGrupo) setEvento(undefined);
+  }, [vacasGrupo]);
 
   // GPS silencioso
   useEffect(() => {
@@ -366,7 +380,13 @@ export function ParicionFormScreen(_p: Props) {
                 {campos.map(c => (
                   <Pressable
                     key={c.id}
-                    onPress={() => { setCampoId(c.id); setPickerCampoOpen(false); }}
+                    onPress={() => {
+                      setCampoId(c.id);
+                      setLoteId(undefined);
+                      setVacasGrupo(undefined);
+                      setEvento(undefined);
+                      setPickerCampoOpen(false);
+                    }}
                     style={[styles.pickerChip, campoId === c.id && styles.pickerChipSel]}
                   >
                     <Text style={[styles.pickerChipTxt, campoId === c.id && styles.pickerChipTxtSel]}>
@@ -456,6 +476,7 @@ export function ParicionFormScreen(_p: Props) {
             value={vacasGrupo}
             options={VACAS_GRUPOS}
             onChange={setVacasGrupo}
+            disabled={!loteId}
           />
 
           <ChipGroup<EventoParicion>
@@ -463,6 +484,7 @@ export function ParicionFormScreen(_p: Props) {
             value={evento}
             options={EVENTOS}
             onChange={setEvento}
+            disabled={!loteId || !vacasGrupo}
           />
 
           {sexoRequerido && (
@@ -471,6 +493,7 @@ export function ParicionFormScreen(_p: Props) {
               value={sexo}
               options={SEXOS}
               onChange={setSexo}
+              disabled={!evento}
             />
           )}
 

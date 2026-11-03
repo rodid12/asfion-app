@@ -47,6 +47,7 @@ import { LineChart } from '@/components/LineChart';
 import { useClientConfig } from '@/config/ClientConfigContext';
 import { useRepository } from '@/data';
 import { colors } from '@/theme/colors';
+import { canonicalizarCausaMortandad } from '@/lib/mortandadCause';
 import { fontSize, fontWeight } from '@/theme/typography';
 import { radius, spacing } from '@/theme/spacing';
 import type {
@@ -77,6 +78,10 @@ const RANGO_LABEL: Record<Rango, string> = {
 // los demás muestran los gráficos detallados de ese módulo. Cuando sumemos
 // Medición, agregamos la key acá y la envolvemos igual.
 type MetricaTab = 'resumen' | 'pariciones' | 'lluvias' | 'mortandad' | 'pastoreo' | 'compras' | 'ventas';
+type MortandadMetrica = Pick<
+  Mortandad,
+  'id' | 'campoId' | 'categoria' | 'causaTipo' | 'causaDetalle' | 'caravanaNumero'
+> & { origen: 'Mortandad' | 'Pariciones' };
 const METRICA_TABS: MetricaTab[] = ['resumen', 'pariciones', 'lluvias', 'mortandad', 'pastoreo', 'compras', 'ventas'];
 const METRICA_LABEL: Record<MetricaTab, string> = {
   resumen: 'Resumen',
@@ -94,6 +99,16 @@ const LLUVIAS_ACCENT = '#1F4E6A';
 const PASTOREO_ACCENT = colors.amber;
 const COMPRAS_ACCENT = colors.navy;
 const VENTAS_ACCENT = colors.orange;
+
+// La métrica histórica de Mortandad en Ganaderas usa DISTINCTCOUNT del
+// número de caravana. Centralizamos la clave para que el total, el desglose
+// por campo, por categoría y por causa cuenten exactamente lo mismo.
+function claveAnimalMortandad(
+  m: Pick<MortandadMetrica, 'id' | 'caravanaNumero' | 'origen'>,
+): string {
+  return m.caravanaNumero?.trim()
+    || (m.origen === 'Pariciones' ? m.id : '__SIN_CARAVANA__');
+}
 
 // Pluviómetro representativo acordado para Ganaderas. En campos nuevos sin
 // configuración usamos el promedio diario entre estaciones, nunca la suma.
@@ -365,8 +380,11 @@ export function MetricasScreen() {
       );
     }
     return scoped.filter(p =>
-      p.fecha >= campaniaReproductivaSeleccionada.fechaInicio
-      && p.fecha <= campaniaReproductivaSeleccionada.fechaFin,
+      p.campaniaId === campaniaReproductivaSeleccionada.id
+      || (
+        p.fecha >= campaniaReproductivaSeleccionada.fechaInicio
+        && p.fecha <= campaniaReproductivaSeleccionada.fechaFin
+      ),
     );
   }, [scoped, campaniaOperativaSeleccionada, campaniaReproductivaSeleccionada]);
 
@@ -454,11 +472,50 @@ export function MetricasScreen() {
     return mortandad;
   }, [mortandad, esAdmin, campoIdsVisibles]);
 
-  const filteredMortandad = useMemo(() => {
-    return scopedMortandad.filter(m =>
-      dentroDeCampaniaYRango(m.fecha, campaniaOperativaSeleccionada, rango),
-    );
-  }, [scopedMortandad, campaniaOperativaSeleccionada, rango]);
+  const filteredMortandadRango = useMemo<MortandadMetrica[]>(() => {
+    const propias: MortandadMetrica[] = scopedMortandad
+      .filter(m => dentroDeCampaniaYRango(m.fecha, campaniaOperativaSeleccionada, rango))
+      .map(m => ({ ...m, origen: 'Mortandad' }));
+    // La vista web consolidada suma también las muertes cargadas desde
+    // Pariciones. La app debe usar la misma fuente para que teléfono, tablet
+    // y dashboard den exactamente el mismo total y desglose por campo.
+    const desdePariciones: MortandadMetrica[] = filtered
+      .filter(p => p.evento === 'Muerte')
+      .map(p => ({
+        id: `paricion:${p.id}`,
+        campoId: p.campoId,
+        categoria: p.sexo ? `Ternero ${p.sexo}` : 'Ternero',
+        causaTipo: p.causaTipo,
+        causaDetalle: p.causaDetalle,
+        caravanaNumero: p.caravanaNumero,
+        origen: 'Pariciones',
+      }));
+    return [...propias, ...desdePariciones];
+  }, [scopedMortandad, campaniaOperativaSeleccionada, rango, filtered]);
+
+  // La eficiencia de mortandad se analiza por establecimiento. El filtro se
+  // aplica a TODOS los desgloses (categoría, causa y KPIs), no solamente al
+  // gráfico "por campo".
+  const [mortandadCampo, setMortandadCampo] = useState<string | null>(null);
+  const camposDisponiblesMortandad = useMemo(() => {
+    const ids = new Set(filteredMortandadRango.map(m => m.campoId));
+    return campos
+      .filter(c => ids.has(c.id))
+      .sort((a, b) => a.nombre.localeCompare(b.nombre));
+  }, [filteredMortandadRango, campos]);
+
+  useEffect(() => {
+    if (mortandadCampo && !camposDisponiblesMortandad.some(c => c.id === mortandadCampo)) {
+      setMortandadCampo(null);
+    }
+  }, [mortandadCampo, camposDisponiblesMortandad]);
+
+  const filteredMortandad = useMemo(
+    () => mortandadCampo
+      ? filteredMortandadRango.filter(m => m.campoId === mortandadCampo)
+      : filteredMortandadRango,
+    [filteredMortandadRango, mortandadCampo],
+  );
 
   // Scope + rango para pastoreo.
   const scopedPastoreo = useMemo(() => {
@@ -541,9 +598,8 @@ export function MetricasScreen() {
     [eventosPorTipo],
   );
 
-  // Mermas reproductivas desglosadas. No dividimos Orejanos por dos: cada
-  // registro conserva su identidad y evitamos aplicar una corrección global
-  // que sería incorrecta cuando no existan pares exactos.
+  // Mermas reproductivas desglosadas. Ganaderas confirmó que Orejano se carga
+  // en dos registros operativos por animal; por eso la métrica aplica ÷ 2.
   const mermasPariciones = useMemo(() => {
     const retactos = new Set<string>();
     const nacidosMuertos = new Set<string>();
@@ -563,7 +619,7 @@ export function MetricasScreen() {
       { label: 'Nacido muerto', count: nacidosMuertos.size, color: colors.danger },
       { label: 'Aborto', count: abortos.size, color: colors.terracota },
       { label: 'Muerte señalado', count: muertesSenaladas.size, color: colors.danger },
-      { label: 'Orejano (registros)', count: orejanos.size, color: colors.navy },
+      { label: 'Orejano', count: Math.floor(orejanos.size / 2), color: colors.navy },
     ];
   }, [scopedCampania]);
 
@@ -748,7 +804,12 @@ export function MetricasScreen() {
   );
 
   const totalEventos = filtered.length;
-  const totalNacimientos = eventosPorTipo.find(e => e.evento === 'Nacimiento')?.count ?? 0;
+  // Igual que el dashboard web/AppSheet: Orejano se informa como una merma
+  // separada y no integra el KPI de nacimientos identificados.
+  const totalNacimientos = useMemo(
+    () => filtered.filter(p => p.evento === 'Nacimiento' && p.sexo !== 'Orejano').length,
+    [filtered],
+  );
   const totalMuertes = eventosPorTipo.find(e => e.evento === 'Muerte')?.count ?? 0;
   // totalMM = suma de promedios diarios por campo (no de lecturas crudas).
   // Si el cliente tiene N campos y M pluviómetros, ese número refleja la
@@ -763,7 +824,7 @@ export function MetricasScreen() {
     const counts = new Map<string, Set<string>>();
     filteredMortandad.forEach(m => {
       const set = counts.get(m.campoId) ?? new Set<string>();
-      set.add(m.id);
+      set.add(claveAnimalMortandad(m));
       counts.set(m.campoId, set);
     });
     return campos
@@ -786,7 +847,7 @@ export function MetricasScreen() {
     filteredMortandad.forEach(m => {
       const cat = m.categoria || 'Sin categoría';
       const set = counts.get(cat) ?? new Set<string>();
-      set.add(m.id);
+      set.add(claveAnimalMortandad(m));
       counts.set(cat, set);
     });
     return Array.from(counts.entries())
@@ -803,9 +864,9 @@ export function MetricasScreen() {
   const mortandadPorCausa = useMemo(() => {
     const counts = new Map<string, Set<string>>();
     filteredMortandad.forEach(m => {
-      const key = m.causaDetalle?.trim() || m.causaTipo || 'Sin especificar';
+      const key = canonicalizarCausaMortandad(m.causaDetalle ?? m.causaTipo);
       const set = counts.get(key) ?? new Set<string>();
-      set.add(m.id);
+      set.add(claveAnimalMortandad(m));
       counts.set(key, set);
     });
     return Array.from(counts.entries())
@@ -1056,11 +1117,10 @@ export function MetricasScreen() {
     [ventasPorCategoria],
   );
 
-  // Misma medida que Power BI/web: DISTINCTCOUNT(N° Caravana), incluyendo
-  // todos los blanks como un único valor.
+  // Misma medida que Power BI/web y que los tres desgloses de arriba.
   const totalMortandad = useMemo(() => {
     const ids = new Set<string>();
-    filteredMortandad.forEach(m => ids.add(m.caravanaNumero?.trim() || '__SIN_CARAVANA__'));
+    filteredMortandad.forEach(m => ids.add(claveAnimalMortandad(m)));
     return ids.size;
   }, [filteredMortandad]);
   const totalMovimientos = filteredPastoreo.length;
@@ -1438,7 +1498,7 @@ export function MetricasScreen() {
             <Section
               title="Mermas"
               subtitle="Desglose de la campaña seleccionada"
-              footer="Los orejanos se muestran como registros reales; no se dividen automáticamente."
+              footer="Orejano se calcula como registros cargados ÷ 2, según el criterio operativo confirmado."
             >
               {maxMermasPariciones === 0 ? (
                 <Empty msg="Sin mermas registradas en la campaña" />
@@ -1662,6 +1722,32 @@ export function MetricasScreen() {
         {/* ============ MORTANDAD ============ */}
         {metricaTab === 'mortandad' && metricasHabilitadas.mortandad && (
           <>
+            <View style={styles.pasFilterCol}>
+              <Text style={styles.campaniaLabel}>CAMPO</Text>
+              <View style={styles.pasFilterRow}>
+                <Pressable
+                  onPress={() => setMortandadCampo(null)}
+                  style={[styles.fChip, styles.pasChipSm, mortandadCampo === null && styles.fChipSel]}
+                >
+                  <Text style={[styles.fChipTxt, mortandadCampo === null && styles.fChipTxtSel]}>
+                    Todos
+                  </Text>
+                </Pressable>
+                {camposDisponiblesMortandad.map(campo => {
+                  const sel = mortandadCampo === campo.id;
+                  return (
+                    <Pressable
+                      key={campo.id}
+                      onPress={() => setMortandadCampo(campo.id)}
+                      style={[styles.fChip, styles.pasChipSm, sel && styles.fChipSel]}
+                    >
+                      <Text style={[styles.fChipTxt, sel && styles.fChipTxtSel]}>{campo.nombre}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
             <View style={styles.kpiRow}>
               <Kpi value={totalMortandad} label="MUERTES" color={MORTANDAD_ACCENT} />
               <Kpi value={mortandadPorCampo.length} label="CAMPOS" color={colors.navy} />

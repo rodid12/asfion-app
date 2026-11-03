@@ -192,6 +192,16 @@ export function PastoreoFormScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [circuitoId, repo]);
 
+  useEffect(() => {
+    if (parcelaId) return;
+    setEvento(undefined);
+    setCategoria(undefined);
+    setCategoriaAnimal(undefined);
+    setCaravanaNumero('');
+    setAnimales('');
+    setKgPromedio('');
+  }, [parcelaId]);
+
   // ---------- valores derivados ----------
   const circuitoActual = useMemo(() => circuitos.find(c => c.id === circuitoId), [circuitos, circuitoId]);
   const parcelaActual = useMemo(() => parcelas.find(p => p.id === parcelaId), [parcelas, parcelaId]);
@@ -308,7 +318,14 @@ export function PastoreoFormScreen() {
                 {campos.map(c => (
                   <Pressable
                     key={c.id}
-                    onPress={() => { setCampoId(c.id); setPickerCampoOpen(false); }}
+                    onPress={() => {
+                      setCampoId(c.id);
+                      setCircuitoId('');
+                      setParcelaId('');
+                      setCategoria(undefined);
+                      setEvento(undefined);
+                      setPickerCampoOpen(false);
+                    }}
                     style={[styles.pickerChip, campoId === c.id && styles.pickerChipSel]}
                   >
                     <Text style={[styles.pickerChipTxt, campoId === c.id && styles.pickerChipTxtSel]}>
@@ -392,8 +409,9 @@ export function PastoreoFormScreen() {
               return (
                 <Pressable
                   key={ev}
+                  disabled={!parcelaId}
                   onPress={() => setEvento(prev => (prev === ev ? undefined : ev))}
-                  style={[styles.pickerChip, sel && styles.pickerChipSel]}
+                  style={[styles.pickerChip, sel && styles.pickerChipSel, !parcelaId && { opacity: 0.45 }]}
                 >
                   <Text style={[styles.pickerChipTxt, sel && styles.pickerChipTxtSel]}>{ev}</Text>
                 </Pressable>
@@ -483,8 +501,9 @@ export function PastoreoFormScreen() {
               return (
                 <Pressable
                   key={c}
+                  disabled={!parcelaId}
                   onPress={() => setCategoria(prev => (prev === c ? undefined : c))}
-                  style={[styles.catChip, sel && styles.catChipSel]}
+                  style={[styles.catChip, sel && styles.catChipSel, !parcelaId && { opacity: 0.45 }]}
                 >
                   <Text style={[styles.catChipTxt, sel && styles.catChipTxtSel]}>{c}</Text>
                 </Pressable>
@@ -502,6 +521,7 @@ export function PastoreoFormScreen() {
                 label="Animales"
                 value={animales}
                 onChangeText={setAnimales}
+                editable={!!parcelaId}
                 placeholder="cabezas"
                 keyboardType="number-pad"
               />
@@ -511,6 +531,7 @@ export function PastoreoFormScreen() {
                 label="Kg promedio"
                 value={kgPromedio}
                 onChangeText={setKgPromedio}
+                editable={!!parcelaId}
                 placeholder="kg / cab"
                 keyboardType="decimal-pad"
               />
@@ -522,6 +543,7 @@ export function PastoreoFormScreen() {
             label="N° Caravana"
             value={caravanaNumero}
             onChangeText={setCaravanaNumero}
+            editable={!!parcelaId}
             placeholder="Ej. 0202"
             autoCapitalize="characters"
           />
@@ -534,8 +556,9 @@ export function PastoreoFormScreen() {
               return (
                 <Pressable
                   key={c}
+                  disabled={!parcelaId}
                   onPress={() => setCategoriaAnimal(prev => (prev === c ? undefined : c))}
-                  style={[styles.catChip, sel && styles.catChipSel]}
+                  style={[styles.catChip, sel && styles.catChipSel, !parcelaId && { opacity: 0.45 }]}
                 >
                   <Text style={[styles.catChipTxt, sel && styles.catChipTxtSel]}>{c}</Text>
                 </Pressable>
@@ -547,6 +570,7 @@ export function PastoreoFormScreen() {
             label="Observaciones"
             value={observaciones}
             onChangeText={setObservaciones}
+            editable={!!parcelaId}
             placeholder="Detalles adicionales del movimiento"
             multiline
             numberOfLines={3}
