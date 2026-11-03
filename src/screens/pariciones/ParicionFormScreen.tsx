@@ -97,7 +97,10 @@ export function ParicionFormScreen(_p: Props) {
   // ─── Visibility por tipo de evento (necesarios ANTES del hook ───
   //     porque buildEvento los lee del closure) ───
   const sexoRequerido     = evento === 'Nacimiento' || evento === 'Muerte';
-  const causaVisible      = evento === 'Muerte';
+  // Un orejano no se identifica ni se clasifica con causa individual en este
+  // flujo. La condición vive en la visibilidad Y en la serialización para que
+  // nunca quede una causa oculta guardada al cambiar el sexo.
+  const causaVisible      = evento === 'Muerte' && sexo !== 'Orejano';
   const asistenciaVisible = evento === 'Nacimiento';
   // Un orejano todavía no fue señalado ni identificado con caravana.
   // Ocultamos ambos datos (color y número) y evitamos persistir valores que
@@ -108,11 +111,11 @@ export function ParicionFormScreen(_p: Props) {
   // ocultarla, limpiamos el state para que cambiar de Muerte a otro evento no
   // deje una causa escondida que luego termine guardada o reaparezca al volver.
   useEffect(() => {
-    if (evento !== 'Muerte') {
+    if (!causaVisible) {
       setCausaTipo(undefined);
       setCausaDetalle('');
     }
-  }, [evento]);
+  }, [causaVisible]);
 
   useEffect(() => {
     if (sexo === 'Orejano') {

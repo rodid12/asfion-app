@@ -45,7 +45,7 @@ import { colors } from '@/theme/colors';
 import { fontSize, fontWeight } from '@/theme/typography';
 import { radius, spacing } from '@/theme/spacing';
 import type { RootStackParamList } from '@/navigation/types';
-import type { CausaMuerteTipo, Lote, Mortandad } from '@/data/types';
+import type { CaravanaColor, CausaMuerteTipo, Lote, Mortandad } from '@/data/types';
 import { fechaBonita } from '@/utils/fechas';
 
 type Rt = RouteProp<RootStackParamList, 'MortandadForm'>;
@@ -57,7 +57,9 @@ export function MortandadFormScreen() {
   const mortandadId = route.params?.mortandadId;
 
   // Catálogos del cliente activo
-  const catMort = useClientConfig().catalogos.mortandad;
+  const clientConfig = useClientConfig();
+  const catMort = clientConfig.catalogos.mortandad;
+  const COLORES_CARAVANA = clientConfig.catalogos.pariciones.caravanaColores as readonly CaravanaColor[];
   const CATEGORIAS = catMort.categorias;
   const ACTIVIDADES = catMort.actividades;
   const CAUSAS_TIPO = catMort.causaTipos as readonly CausaMuerteTipo[];
@@ -73,6 +75,8 @@ export function MortandadFormScreen() {
   const [causaDetalle, setCausaDetalle] = useState('');
   const [numeroCorral, setNumeroCorral] = useState('');
   const [numeroTropa, setNumeroTropa] = useState('');
+  const [caravanaColor, setCaravanaColor] = useState<CaravanaColor | undefined>();
+  const [caravanaNumero, setCaravanaNumero] = useState('');
   const [vacaParida, setVacaParida] = useState<boolean | undefined>();
   const [observaciones, setObservaciones] = useState('');
   const [fotos, setFotos] = useState<string[]>([]);
@@ -123,7 +127,11 @@ export function MortandadFormScreen() {
         causaDetalle: causaLibre ? causaDetalle.trim() || undefined : undefined,
         numeroCorral: esCampoCorrales ? numeroCorral.trim() || undefined : undefined,
         numeroTropa: esCampoCorrales ? numeroTropa.trim() || undefined : undefined,
-        vacaParida,
+        caravanaColor,
+        caravanaNumero: caravanaNumero.trim() || undefined,
+        // En Recepción todavía no corresponde clasificar al vientre como
+        // parido. El valor se limpia también en UI al cambiar de actividad.
+        vacaParida: actividad === 'Recepción' ? undefined : vacaParida,
         observaciones: observaciones.trim() || undefined,
         fotos: fotos.length > 0 ? fotos : undefined,
         syncState: 'pending',
@@ -136,6 +144,8 @@ export function MortandadFormScreen() {
       setCategoria(undefined);
       setCausaTipo(undefined);
       setCausaDetalle('');
+      setCaravanaColor(undefined);
+      setCaravanaNumero('');
       setVacaParida(undefined);
       setObservaciones('');
       setFotos([]);
@@ -149,8 +159,13 @@ export function MortandadFormScreen() {
     [campoActual?.nombre],
   );
   esCorralesRef.current = esCorrales;
+  const esRecepcion = actividad === 'Recepción';
 
   const actividadesDisponibles = useMemo(() => {
+    // La jerarquía es Campo → Actividad → Categoría. Sin campo no mostramos
+    // un catálogo genérico que después pueda quedar asociado al establecimiento
+    // equivocado.
+    if (!campoActual) return [] as readonly string[];
     const porCampo = catMort.actividadesPorCampo;
     const base = porCampo
       ? (porCampo[campoActual?.nombre ?? ''] ?? porCampo.__otros__ ?? ACTIVIDADES)
@@ -194,6 +209,8 @@ export function MortandadFormScreen() {
       setCausaDetalle(existing.causaDetalle ?? (causaLibre ? existing.causaTipo ?? '' : ''));
       setNumeroCorral(existing.numeroCorral ?? '');
       setNumeroTropa(existing.numeroTropa ?? '');
+      setCaravanaColor(existing.caravanaColor);
+      setCaravanaNumero(existing.caravanaNumero ?? '');
       setVacaParida(existing.vacaParida);
       setObservaciones(existing.observaciones ?? '');
       setFotos(existing.fotos ?? []);
@@ -201,6 +218,10 @@ export function MortandadFormScreen() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (esRecepcion) setVacaParida(undefined);
+  }, [esRecepcion]);
 
   // ─── Cargar lotes del campo + auto-select cuando hay 1 ───
   useEffect(() => {
@@ -301,11 +322,13 @@ export function MortandadFormScreen() {
         : causaTipo !== originalRecord.causaTipo) ||
       numeroCorral !== (originalRecord.numeroCorral ?? '') ||
       numeroTropa !== (originalRecord.numeroTropa ?? '') ||
+      caravanaColor !== originalRecord.caravanaColor ||
+      caravanaNumero !== (originalRecord.caravanaNumero ?? '') ||
       vacaParida !== originalRecord.vacaParida ||
       observaciones !== (originalRecord.observaciones ?? '') ||
       JSON.stringify(fotos) !== JSON.stringify(originalRecord.fotos ?? [])
     );
-  }, [isEdit, originalRecord, campoId, loteId, fecha, categoria, actividad, causaLibre, causaTipo, causaDetalle, numeroCorral, numeroTropa, vacaParida, observaciones, fotos]);
+  }, [isEdit, originalRecord, campoId, loteId, fecha, categoria, actividad, causaLibre, causaTipo, causaDetalle, numeroCorral, numeroTropa, caravanaColor, caravanaNumero, vacaParida, observaciones, fotos]);
 
   const puedeGuardar = useMemo(() => {
     if (!campoId) return false;
@@ -636,6 +659,9 @@ export function MortandadFormScreen() {
           {/* Primero elegimos actividad: esa selección determina las
               categorías válidas y evita combinaciones incorrectas. */}
           <Text style={styles.label}>Actividad *</Text>
+          {!campoId && (
+            <Text style={styles.helperText}>Elegí un campo primero.</Text>
+          )}
           <View style={styles.catRow}>
             {actividadesDisponibles.map(a => {
               const sel = a === actividad;
@@ -687,26 +713,48 @@ export function MortandadFormScreen() {
                 placeholder="Ej. Trm1, Trh2.2"
                 autoCapitalize="sentences"
               />
+
+              {esRecepcion && (
+                <>
+                  <ChipGroup<CaravanaColor>
+                    label="Color de caravana"
+                    value={caravanaColor}
+                    options={COLORES_CARAVANA}
+                    onChange={setCaravanaColor}
+                  />
+                  <FormField
+                    label="N° de caravana"
+                    value={caravanaNumero}
+                    onChangeText={setCaravanaNumero}
+                    placeholder="Ej. 0466"
+                    autoCapitalize="characters"
+                  />
+                </>
+              )}
             </View>
           )}
 
-          <Text style={styles.label}>Vaca parida</Text>
-          <View style={styles.catRow}>
-            {([true, false] as const).map(value => {
-              const sel = vacaParida === value;
-              return (
-                <Pressable
-                  key={String(value)}
-                  onPress={() => setVacaParida(value)}
-                  style={[styles.catChip, sel && styles.catChipSel]}
-                >
-                  <Text style={[styles.catChipTxt, sel && styles.catChipTxtSel]}>
-                    {value ? 'Sí' : 'No'}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
+          {!esRecepcion && (
+            <>
+              <Text style={styles.label}>Vaca parida</Text>
+              <View style={styles.catRow}>
+                {([true, false] as const).map(value => {
+                  const sel = vacaParida === value;
+                  return (
+                    <Pressable
+                      key={String(value)}
+                      onPress={() => setVacaParida(value)}
+                      style={[styles.catChip, sel && styles.catChipSel]}
+                    >
+                      <Text style={[styles.catChipTxt, sel && styles.catChipTxtSel]}>
+                        {value ? 'Sí' : 'No'}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </>
+          )}
 
           {causaLibre ? (
             <FormField

@@ -58,6 +58,10 @@ export const GANADERAS_CONFIG: ClientConfig = {
         __otros__: ['Cria', 'Recria P'],
       },
       categoriasPorActividad: {
+        // Recepción es una clasificación propia de Corrales. No debe caer en
+        // el catálogo general porque habilitaría categorías productivas que
+        // todavía no corresponden al momento de bajar la hacienda.
+        Recepción: ['Novillito', 'Vaq 1', 'TernH', 'TernM'],
         Cria: ['Vc Preñ', 'Vc Venta', 'Toros', 'Toro Venta', 'TernH', 'TernM', 'Vaq 1° Servicio', 'Vaq 2° Servicio'],
         'Recria P': ['Vaq 2', 'Novillo', 'Vaq 1', 'Novillito'],
         engorde: ['Vc Venta', 'Novillo', 'Vaq 2'],
@@ -76,6 +80,7 @@ export const GANADERAS_CONFIG: ClientConfig = {
         'Vaq 2° Servicio': 'Vaquilla 27M',
         'Vaq 1': 'Vaquilla 1',
         'Vaq 2': 'Vaquilla 2',
+        Recepción: 'Recepción',
       },
     },
     pastoreo: {

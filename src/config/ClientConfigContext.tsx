@@ -177,7 +177,14 @@ function mapRowToClientConfig(row: {
   modulosHabilitados: string[];
   catalogos: Record<string, any>;
 }): ClientConfig {
-  const fallback = ACTIVE_CONFIG.catalogos;
+  // Nunca completar un tenant desconocido con los catálogos compilados de
+  // Ganaderas. Eso podía hacer que un superadministrador cambiara a Carahuasi
+  // y viera opciones productivas del cliente anterior cuando el JSONB remoto
+  // estaba incompleto. Para el tenant compilado conservamos el fallback rico;
+  // para cualquier otro usamos un contrato neutral y seguro.
+  const fallback = row.id === ACTIVE_CONFIG.id
+    ? ACTIVE_CONFIG.catalogos
+    : EMPTY_CATALOGOS;
   const c = row.catalogos ?? {};
 
   const catalogos: ClientCatalogos = {
@@ -207,6 +214,33 @@ function mapRowToClientConfig(row: {
     catalogos,
   };
 }
+
+const EMPTY_CATALOGOS: ClientCatalogos = {
+  pariciones: {
+    vacasGrupos: [],
+    eventos: [],
+    sexos: [],
+    asistencia: [],
+    caravanaColores: [],
+    causaTipos: [],
+    causasFrecuentes: [],
+  },
+  mortandad: {
+    categorias: [],
+    actividades: [],
+    causaTipos: [],
+    causaLibre: true,
+  },
+  pastoreo: {
+    categorias: [],
+    eventos: [],
+    catAnimal: [],
+  },
+  compras: {
+    actividades: [],
+    plazos: [],
+  },
+};
 
 function pickParicionesCatalogo(raw: any, fallback: ParicionCatalogos): ParicionCatalogos {
   return {
