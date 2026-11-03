@@ -541,6 +541,37 @@ export function MetricasScreen() {
     [eventosPorTipo],
   );
 
+  // Mermas reproductivas desglosadas. No dividimos Orejanos por dos: cada
+  // registro conserva su identidad y evitamos aplicar una corrección global
+  // que sería incorrecta cuando no existan pares exactos.
+  const mermasPariciones = useMemo(() => {
+    const retactos = new Set<string>();
+    const nacidosMuertos = new Set<string>();
+    const abortos = new Set<string>();
+    const muertesSenaladas = new Set<string>();
+    const orejanos = new Set<string>();
+    scopedCampania.forEach(p => {
+      const causa = normalizarTexto(p.causaTipo);
+      if (p.evento === 'Retacto') retactos.add(p.id);
+      if (causa === 'NACIDO MUERTO') nacidosMuertos.add(p.id);
+      if (p.evento === 'Aborto') abortos.add(p.id);
+      if (causa === 'MUERTE SENALADO') muertesSenaladas.add(p.id);
+      if (p.sexo === 'Orejano') orejanos.add(p.id);
+    });
+    return [
+      { label: 'Retacto', count: retactos.size, color: colors.amber },
+      { label: 'Nacido muerto', count: nacidosMuertos.size, color: colors.danger },
+      { label: 'Aborto', count: abortos.size, color: colors.terracota },
+      { label: 'Muerte señalado', count: muertesSenaladas.size, color: colors.danger },
+      { label: 'Orejano (registros)', count: orejanos.size, color: colors.navy },
+    ];
+  }, [scopedCampania]);
+
+  const maxMermasPariciones = useMemo(
+    () => mermasPariciones.reduce((max, item) => Math.max(max, item.count), 0),
+    [mermasPariciones],
+  );
+
   // ---------- 3. Vacas por parir ----------
   // Fórmula AppSheet validada por Ganaderas:
   // Stock inicial − nacimientos − muertes de terneros − mortandad de vientres
@@ -1398,6 +1429,28 @@ export function MetricasScreen() {
                       value={r.count}
                       max={maxEventosTipo}
                       color={EVENTO_COLOR[r.evento]}
+                    />
+                  ))}
+                </View>
+              )}
+            </Section>
+
+            <Section
+              title="Mermas"
+              subtitle="Desglose de la campaña seleccionada"
+              footer="Los orejanos se muestran como registros reales; no se dividen automáticamente."
+            >
+              {maxMermasPariciones === 0 ? (
+                <Empty msg="Sin mermas registradas en la campaña" />
+              ) : (
+                <View style={styles.chartBody}>
+                  {mermasPariciones.map(item => (
+                    <HBar
+                      key={item.label}
+                      label={item.label}
+                      value={item.count}
+                      max={maxMermasPariciones}
+                      color={item.color}
                     />
                   ))}
                 </View>

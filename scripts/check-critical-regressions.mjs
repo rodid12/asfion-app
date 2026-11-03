@@ -94,6 +94,13 @@ const checks = [
       !/data\.filter\(p => p\.usuarioEmail === user\.email\)/.test(metricas),
     message: 'Las métricas del operario volvieron a mostrar solo sus cargas en vez del campo asignado.',
   },
+  {
+    ok: /title=["']Mermas["']/.test(metricas) &&
+      /Retacto/.test(metricas) && /Nacido muerto/.test(metricas) &&
+      /Muerte señalado/.test(metricas) && /Orejano \(registros\)/.test(metricas) &&
+      !/orejanos\.size\s*\/\s*2/.test(metricas),
+    message: 'Se perdió el desglose de mermas o se volvió a dividir Orejanos de forma global.',
+  },
 ];
 
 const failed = checks.filter(check => !check.ok);
@@ -102,4 +109,4 @@ if (failed.length > 0) {
   process.exit(1);
 }
 
-console.log('✓ Regresiones críticas verificadas: compras, PDF, caravanas, Orejano, Recepción, aislamiento, orden/filtros, mapa y permisos.');
+console.log('✓ Regresiones críticas verificadas: compras, PDF, caravanas, Orejano, Recepción, aislamiento, orden/filtros, mapa, permisos y mermas.');
