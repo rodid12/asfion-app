@@ -7,11 +7,15 @@ const files = {
   mortandad: new URL('../src/screens/mortandad/MortandadFormScreen.tsx', import.meta.url),
   ganaderas: new URL('../src/config/clients/ganaderas.ts', import.meta.url),
   clientConfig: new URL('../src/config/ClientConfigContext.tsx', import.meta.url),
+  paricionList: new URL('../src/screens/pariciones/ParicionListScreen.tsx', import.meta.url),
+  mapa: new URL('../src/components/MapPickerModal.tsx', import.meta.url),
+  compraForm: new URL('../src/screens/compras/CompraFormScreen.tsx', import.meta.url),
+  migracionDelete: new URL('../supabase/migrations/0059_bloquear_borrado_total_pariciones.sql', import.meta.url),
   migracion: new URL('../supabase/migrations/0061_hotfix_caravana_unica_por_campania.sql', import.meta.url),
   migracionRecepcion: new URL('../supabase/migrations/0062_urgencias_recepcion_ganaderas.sql', import.meta.url),
 };
 
-const [compra, pdf, paricion, mortandad, ganaderas, clientConfig, migracion, migracionRecepcion] = await Promise.all(
+const [compra, pdf, paricion, mortandad, ganaderas, clientConfig, paricionList, mapa, compraForm, migracionDelete, migracion, migracionRecepcion] = await Promise.all(
   Object.values(files).map(file => readFile(file, 'utf8')),
 );
 
@@ -61,6 +65,28 @@ const checks = [
       /Novillito/.test(migracionRecepcion) && /Vaq 1/.test(migracionRecepcion),
     message: 'Falta la migración de categorías de Recepción en Supabase.',
   },
+  {
+    ok: /b\.fecha\.localeCompare\(a\.fecha\)/.test(paricionList) &&
+      /b\.createdAt[\s\S]*localeCompare\(a\.createdAt/.test(paricionList) &&
+      /colorFiltro[\s\S]*caravanaColor/.test(paricionList) &&
+      /sexoFiltro[\s\S]*p\.sexo/.test(paricionList),
+    message: 'El listado de pariciones perdió el orden por carga o sus filtros de sexo/color.',
+  },
+  {
+    ok: /NO regeneran el WebView/.test(mapa) &&
+      /setBaseLayer\(['"]satellite['"]\)/.test(mapa) &&
+      /marker\.setLatLng/.test(mapa),
+    message: 'El mapa puede volver a cambiar de capa al mover el pin.',
+  },
+  {
+    ok: /maxCorrelativoDelAño/.test(compraForm) && /generarNumeroOperacion\(fecha, max\)/.test(compraForm),
+    message: 'Compras perdió la numeración correlativa automática.',
+  },
+  {
+    ok: /pariciones_delete/.test(migracionDelete) &&
+      /FOR DELETE TO authenticated[\s\S]*USING \(false\)/.test(migracionDelete),
+    message: 'Pariciones dejó de bloquear el borrado de registros.',
+  },
 ];
 
 const failed = checks.filter(check => !check.ok);
@@ -69,4 +95,4 @@ if (failed.length > 0) {
   process.exit(1);
 }
 
-console.log('✓ Regresiones críticas verificadas: compras, PDF, caravanas, Orejano, Recepción y aislamiento de catálogos.');
+console.log('✓ Regresiones críticas verificadas: compras, PDF, caravanas, Orejano, Recepción, aislamiento, orden/filtros, mapa y permisos.');
