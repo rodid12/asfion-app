@@ -18,9 +18,10 @@ const files = {
   migracion: new URL('../supabase/migrations/0061_hotfix_caravana_unica_por_campania.sql', import.meta.url),
   migracionRecepcion: new URL('../supabase/migrations/0062_urgencias_recepcion_ganaderas.sql', import.meta.url),
   migracionMetricas311: new URL('../supabase/migrations/0063_metricas_311_ganaderas.sql', import.meta.url),
+  migracionEmailsCarahuasi: new URL('../supabase/migrations/0064_actualizar_emails_administradores_carahuasi.sql', import.meta.url),
 };
 
-const [compra, pdf, paricion, mortandad, ganaderas, clientConfig, paricionList, mapa, compraForm, metricas, pastoreoForm, lluviaForm, causaMortandad, migracionDelete, migracion, migracionRecepcion, migracionMetricas311] = await Promise.all(
+const [compra, pdf, paricion, mortandad, ganaderas, clientConfig, paricionList, mapa, compraForm, metricas, pastoreoForm, lluviaForm, causaMortandad, migracionDelete, migracion, migracionRecepcion, migracionMetricas311, migracionEmailsCarahuasi] = await Promise.all(
   Object.values(files).map(file => readFile(file, 'utf8')),
 );
 
@@ -132,6 +133,12 @@ const checks = [
       /evento = 'Retacto'/.test(migracionMetricas311) &&
       /campania-ganaderas-2026-2027/.test(migracionMetricas311),
     message: 'Retacto o la corrección del Orejano inválido dejaron de vincularse a la campaña actual.',
+  },
+  {
+    ok: /hugosaravia\.carahuasi@gmail\.com/.test(migracionEmailsCarahuasi) &&
+      /hugosaraviafigueroa@gmail\.com/.test(migracionEmailsCarahuasi) &&
+      /torreshuidobrozoe@gmail\.com/.test(migracionEmailsCarahuasi),
+    message: 'La migración dejó de conservar los emails corregidos de los administradores de Carahuasi.',
   },
 ];
 
