@@ -19,9 +19,10 @@ const files = {
   migracionRecepcion: new URL('../supabase/migrations/0062_urgencias_recepcion_ganaderas.sql', import.meta.url),
   migracionMetricas311: new URL('../supabase/migrations/0063_metricas_311_ganaderas.sql', import.meta.url),
   migracionEmailsCarahuasi: new URL('../supabase/migrations/0064_actualizar_emails_administradores_carahuasi.sql', import.meta.url),
+  migracionOrejano: new URL('../supabase/migrations/0065_limpiar_causa_orejanos.sql', import.meta.url),
 };
 
-const [compra, pdf, paricion, mortandad, ganaderas, clientConfig, paricionList, mapa, compraForm, metricas, pastoreoForm, lluviaForm, causaMortandad, migracionDelete, migracion, migracionRecepcion, migracionMetricas311, migracionEmailsCarahuasi] = await Promise.all(
+const [compra, pdf, paricion, mortandad, ganaderas, clientConfig, paricionList, mapa, compraForm, metricas, pastoreoForm, lluviaForm, causaMortandad, migracionDelete, migracion, migracionRecepcion, migracionMetricas311, migracionEmailsCarahuasi, migracionOrejano] = await Promise.all(
   Object.values(files).map(file => readFile(file, 'utf8')),
 );
 
@@ -104,8 +105,17 @@ const checks = [
   {
     ok: /title=["']Mermas["']/.test(metricas) &&
       /Retacto/.test(metricas) && /Nacido muerto/.test(metricas) &&
-      /Muerte señalado/.test(metricas) && /Math\.floor\(orejanos\.size \/ 2\)/.test(metricas),
+      /Muerte señalado/.test(metricas) && /Math\.floor\(orejanos\.size \/ 2\)/.test(metricas) &&
+      /cantidad \/ stockBaseMermas/.test(metricas) &&
+      /p\.sexo !== ['"]Orejano['"] && causa === ['"]NACIDO MUERTO['"]/.test(metricas),
     message: 'Se perdió el desglose de mermas o el criterio Orejanos ÷ 2.',
+  },
+  {
+    ok: /UPDATE public\.pariciones/.test(migracionOrejano) &&
+      /causa_tipo = NULL/.test(migracionOrejano) &&
+      /pariciones_limpiar_causa_orejano/.test(migracionOrejano) &&
+      /BEFORE INSERT OR UPDATE OF sexo, causa_tipo/.test(migracionOrejano),
+    message: 'Falta limpiar o impedir la causa Nacido Muerto en Orejanos.',
   },
   {
     ok: /mortandadCampo/.test(metricas) && /camposDisponiblesMortandad/.test(metricas) &&
