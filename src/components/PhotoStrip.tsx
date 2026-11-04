@@ -42,11 +42,17 @@ export function PhotoStrip({
 }: Props) {
   const [busy, setBusy] = useState(false);
 
-  const onAdd = async () => {
-    if (fotos.length >= max) {
-      Alert.alert('Máximo de fotos', `Hasta ${max} fotos por evento.`);
-      return;
-    }
+  const agregarAssets = (assets: Array<{ uri: string }> | null | undefined) => {
+    if (!assets?.length) return;
+    const disponibles = Math.max(0, max - fotos.length);
+    const nuevas = assets
+      .map(asset => asset.uri)
+      .filter(Boolean)
+      .slice(0, disponibles);
+    onChange(Array.from(new Set([...fotos, ...nuevas])).slice(0, max));
+  };
+
+  const abrirCamara = async () => {
     setBusy(true);
     try {
       const ImagePicker = await loadPicker();
@@ -63,18 +69,62 @@ export function PhotoStrip({
         return;
       }
       const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
         quality: 0.6,           // suficiente para ver caravana, ahorra ancho de banda
         allowsEditing: false,
         exif: false,
       });
-      if (!result.canceled && result.assets?.[0]) {
-        onChange([...fotos, result.assets[0].uri]);
-      }
+      if (!result.canceled) agregarAssets(result.assets);
     } catch (err) {
       Alert.alert('Error', err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
     }
+  };
+
+  const abrirGaleria = async () => {
+    setBusy(true);
+    try {
+      const ImagePicker = await loadPicker();
+      if (!ImagePicker) {
+        Alert.alert(
+          'Galería no disponible',
+          'Falta instalar expo-image-picker. Ejecutá npm install y reiniciá.',
+        );
+        return;
+      }
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (perm.status !== 'granted') {
+        Alert.alert('Permiso de fotos', 'Habilitá el acceso a Fotos y galería desde Ajustes.');
+        return;
+      }
+      const disponibles = Math.max(1, max - fotos.length);
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 0.6,
+        allowsEditing: false,
+        allowsMultipleSelection: disponibles > 1,
+        selectionLimit: disponibles,
+        exif: false,
+      });
+      if (!result.canceled) agregarAssets(result.assets);
+    } catch (err) {
+      Alert.alert('Error', err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onAdd = () => {
+    if (fotos.length >= max) {
+      Alert.alert('Máximo de fotos', `Hasta ${max} fotos por evento.`);
+      return;
+    }
+    Alert.alert('Agregar foto', 'Elegí desde dónde querés agregarla.', [
+      { text: 'Cámara', onPress: () => void abrirCamara() },
+      { text: 'Galería', onPress: () => void abrirGaleria() },
+      { text: 'Cancelar', style: 'cancel' },
+    ]);
   };
 
   const onRemove = (idx: number) => {

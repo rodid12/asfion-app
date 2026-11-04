@@ -20,9 +20,10 @@ const files = {
   migracionMetricas311: new URL('../supabase/migrations/0063_metricas_311_ganaderas.sql', import.meta.url),
   migracionEmailsCarahuasi: new URL('../supabase/migrations/0064_actualizar_emails_administradores_carahuasi.sql', import.meta.url),
   migracionOrejano: new URL('../supabase/migrations/0065_limpiar_causa_orejanos.sql', import.meta.url),
+  fotos: new URL('../src/components/PhotoStrip.tsx', import.meta.url),
 };
 
-const [compra, pdf, paricion, mortandad, ganaderas, clientConfig, paricionList, mapa, compraForm, metricas, pastoreoForm, lluviaForm, causaMortandad, migracionDelete, migracion, migracionRecepcion, migracionMetricas311, migracionEmailsCarahuasi, migracionOrejano] = await Promise.all(
+const [compra, pdf, paricion, mortandad, ganaderas, clientConfig, paricionList, mapa, compraForm, metricas, pastoreoForm, lluviaForm, causaMortandad, migracionDelete, migracion, migracionRecepcion, migracionMetricas311, migracionEmailsCarahuasi, migracionOrejano, fotos] = await Promise.all(
   Object.values(files).map(file => readFile(file, 'utf8')),
 );
 
@@ -117,6 +118,14 @@ const checks = [
       /pariciones_limpiar_causa_orejano/.test(migracionOrejano) &&
       /BEFORE INSERT OR UPDATE OF sexo, causa_tipo/.test(migracionOrejano),
     message: 'Falta limpiar o impedir la causa Nacido Muerto en Orejanos.',
+  },
+  {
+    ok: /launchCameraAsync/.test(fotos) &&
+      /requestMediaLibraryPermissionsAsync/.test(fotos) &&
+      /launchImageLibraryAsync/.test(fotos) &&
+      /allowsMultipleSelection:\s*disponibles > 1/.test(fotos) &&
+      /text:\s*['"]Galería['"]/.test(fotos),
+    message: 'El selector de fotos perdió la opción de cámara o galería.',
   },
   {
     ok: /mortandadCampo/.test(metricas) && /camposDisponiblesMortandad/.test(metricas) &&
