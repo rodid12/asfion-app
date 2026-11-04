@@ -598,17 +598,9 @@ export function MetricasScreen() {
     [eventosPorTipo],
   );
 
-  const stockBaseMermas = useMemo(
-    () => campaniaReproductivaSeleccionada?.activa === false
-      ? 0
-      : campos.reduce((total, campo) => total + (campo.stockInicialVacas ?? 0), 0),
-    [campaniaReproductivaSeleccionada, campos],
-  );
-
-  // Mermas reproductivas desglosadas. Aborto, Muerte señalado, Nacido muerto
-  // y Orejano se expresan como porcentaje del Stock Base. Ganaderas confirmó
-  // que Orejano se carga en dos registros operativos por animal; por eso su
-  // numerador aplica ÷ 2 antes de calcular el porcentaje.
+  // Mermas reproductivas desglosadas como cantidades absolutas. Ganaderas
+  // confirmó que Orejano se carga en dos registros operativos por animal;
+  // por eso su cantidad aplica ÷ 2.
   const mermasPariciones = useMemo(() => {
     const retactos = new Set<string>();
     const nacidosMuertos = new Set<string>();
@@ -623,22 +615,17 @@ export function MetricasScreen() {
       if (causa === 'MUERTE SENALADO') muertesSenaladas.add(p.id);
       if (p.sexo === 'Orejano') orejanos.add(p.id);
     });
-    const pct = (cantidad: number) => stockBaseMermas > 0
-      ? (cantidad / stockBaseMermas) * 100
-      : 0;
-    return {
-      retactos: retactos.size,
-      porcentajes: [
-        { label: 'Nacido muerto', value: pct(nacidosMuertos.size), color: colors.danger },
-        { label: 'Aborto', value: pct(abortos.size), color: colors.terracota },
-        { label: 'Muerte señalado', value: pct(muertesSenaladas.size), color: colors.danger },
-        { label: 'Orejano (÷2)', value: pct(Math.floor(orejanos.size / 2)), color: colors.navy },
-      ],
-    };
-  }, [scopedCampania, stockBaseMermas]);
+    return [
+      { label: 'Retacto', count: retactos.size, color: colors.amber },
+      { label: 'Nacido muerto', count: nacidosMuertos.size, color: colors.danger },
+      { label: 'Aborto', count: abortos.size, color: colors.terracota },
+      { label: 'Muerte señalado', count: muertesSenaladas.size, color: colors.danger },
+      { label: 'Orejano (÷2)', count: Math.floor(orejanos.size / 2), color: colors.navy },
+    ];
+  }, [scopedCampania]);
 
   const maxMermasPariciones = useMemo(
-    () => mermasPariciones.porcentajes.reduce((max, item) => Math.max(max, item.value), 0),
+    () => mermasPariciones.reduce((max, item) => Math.max(max, item.count), 0),
     [mermasPariciones],
   );
 
@@ -1511,27 +1498,20 @@ export function MetricasScreen() {
 
             <Section
               title="Mermas"
-              subtitle={`Porcentajes sobre Stock Base (${stockBaseMermas.toLocaleString('es-AR')})`}
-              footer="Retacto se muestra como cantidad. Orejano usa registros cargados ÷ 2 antes de dividir por el Stock Base."
+              subtitle="Cantidades absolutas de la campaña seleccionada"
+              footer="Orejano se calcula como registros cargados ÷ 2, según el criterio operativo confirmado."
             >
-              {mermasPariciones.retactos === 0 && maxMermasPariciones === 0 ? (
+              {maxMermasPariciones === 0 ? (
                 <Empty msg="Sin mermas registradas en la campaña" />
               ) : (
                 <View style={styles.chartBody}>
-                  <HBar
-                    label="Retacto"
-                    value={mermasPariciones.retactos}
-                    max={Math.max(1, mermasPariciones.retactos)}
-                    color={colors.amber}
-                  />
-                  {mermasPariciones.porcentajes.map(item => (
+                  {mermasPariciones.map(item => (
                     <HBar
                       key={item.label}
                       label={item.label}
-                      value={item.value}
-                      max={100}
+                      value={item.count}
+                      max={maxMermasPariciones}
                       color={item.color}
-                      valueLabel={`${item.value.toLocaleString('es-AR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`}
                     />
                   ))}
                 </View>

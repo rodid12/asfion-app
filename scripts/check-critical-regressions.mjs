@@ -106,7 +106,8 @@ const checks = [
     ok: /title=["']Mermas["']/.test(metricas) &&
       /Retacto/.test(metricas) && /Nacido muerto/.test(metricas) &&
       /Muerte señalado/.test(metricas) && /Math\.floor\(orejanos\.size \/ 2\)/.test(metricas) &&
-      /cantidad \/ stockBaseMermas/.test(metricas) &&
+      /Cantidades absolutas/.test(metricas) &&
+      !/stockBaseMermas/.test(metricas) &&
       /p\.sexo !== ['"]Orejano['"] && causa === ['"]NACIDO MUERTO['"]/.test(metricas),
     message: 'Se perdió el desglose de mermas o el criterio Orejanos ÷ 2.',
   },
