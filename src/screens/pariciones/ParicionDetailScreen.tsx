@@ -17,6 +17,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -77,6 +79,7 @@ export function ParicionDetailScreen() {
   const [campo, setCampo] = useState<Campo | null>(null);
   const [lote, setLote] = useState<Lote | null>(null);
   const [loading, setLoading] = useState(true);
+  const [fotoAmpliada, setFotoAmpliada] = useState<string | null>(null);
 
   // Cargar parición desde el cache primero (instant), luego refresh.
   useEffect(() => {
@@ -225,6 +228,32 @@ export function ParicionDetailScreen() {
           </Section>
         )}
 
+        {/* Evidencia fotográfica: antes solo era visible al entrar a Editar. */}
+        {paricion.fotos && paricion.fotos.length > 0 && (
+          <Section title={paricion.fotos.length === 1 ? 'Foto' : `Fotos (${paricion.fotos.length})`}>
+            <View style={styles.photosGrid}>
+              {paricion.fotos.map((uri, index) => (
+                <Pressable
+                  key={`${uri}-${index}`}
+                  onPress={() => setFotoAmpliada(uri)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Ampliar foto ${index + 1}`}
+                  style={({ pressed }) => [
+                    styles.photoButton,
+                    paricion.fotos?.length === 1 && styles.photoButtonSingle,
+                    pressed && styles.photoPressed,
+                  ]}
+                >
+                  <Image source={{ uri }} style={styles.photo} resizeMode="cover" />
+                  <View style={styles.photoHint}>
+                    <Text style={styles.photoHintText}>Ver foto</Text>
+                  </View>
+                </Pressable>
+              ))}
+            </View>
+          </Section>
+        )}
+
         {/* Metadata: quién y cuándo */}
         <Section title="Metadata">
           <Row label="Cargado por" value={paricion.usuarioEmail} small />
@@ -235,6 +264,27 @@ export function ParicionDetailScreen() {
 
         <View style={{ height: spacing.lg }} />
       </ScrollView>
+
+      <Modal
+        visible={Boolean(fotoAmpliada)}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setFotoAmpliada(null)}
+      >
+        <View style={styles.photoModal}>
+          <Pressable
+            onPress={() => setFotoAmpliada(null)}
+            style={styles.photoModalClose}
+            accessibilityRole="button"
+            accessibilityLabel="Cerrar foto"
+          >
+            <Text style={styles.photoModalCloseText}>Cerrar</Text>
+          </Pressable>
+          {fotoAmpliada && (
+            <Image source={{ uri: fotoAmpliada }} style={styles.photoExpanded} resizeMode="contain" />
+          )}
+        </View>
+      </Modal>
 
       {/* Botones fijos abajo: Exportar PDF (ghost) + Editar.
           Editar usa replace para no apilar Detail+Form en el stack. */}
@@ -420,6 +470,65 @@ const styles = StyleSheet.create({
     color: colors.textDark,
     lineHeight: 22,
   },
+
+  photosGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  photoButton: {
+    position: 'relative',
+    width: '48%',
+    height: 150,
+    borderRadius: radius.md,
+    overflow: 'hidden',
+    backgroundColor: colors.bgLight,
+    borderWidth: 1,
+    borderColor: colors.borderSoft,
+  },
+  photoButtonSingle: {
+    width: '100%',
+    height: 240,
+  },
+  photoPressed: { opacity: 0.82 },
+  photo: { width: '100%', height: '100%' },
+  photoHint: {
+    position: 'absolute',
+    right: spacing.sm,
+    bottom: spacing.sm,
+    backgroundColor: 'rgba(8, 28, 40, 0.82)',
+    borderRadius: radius.round,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 5,
+  },
+  photoHintText: {
+    color: colors.white,
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.bold,
+  },
+  photoModal: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.94)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.md,
+  },
+  photoModalClose: {
+    position: 'absolute',
+    top: 54,
+    right: spacing.md,
+    zIndex: 2,
+    backgroundColor: 'rgba(255, 255, 255, 0.16)',
+    borderRadius: radius.round,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  photoModalCloseText: {
+    color: colors.white,
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.bold,
+  },
+  photoExpanded: { width: '100%', height: '86%' },
 
   actionBar: {
     padding: spacing.md,

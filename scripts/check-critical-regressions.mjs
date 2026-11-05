@@ -8,6 +8,7 @@ const files = {
   ganaderas: new URL('../src/config/clients/ganaderas.ts', import.meta.url),
   clientConfig: new URL('../src/config/ClientConfigContext.tsx', import.meta.url),
   paricionList: new URL('../src/screens/pariciones/ParicionListScreen.tsx', import.meta.url),
+  paricionDetail: new URL('../src/screens/pariciones/ParicionDetailScreen.tsx', import.meta.url),
   mapa: new URL('../src/components/MapPickerModal.tsx', import.meta.url),
   compraForm: new URL('../src/screens/compras/CompraFormScreen.tsx', import.meta.url),
   metricas: new URL('../src/screens/metricas/MetricasScreen.tsx', import.meta.url),
@@ -22,11 +23,13 @@ const files = {
   migracionOrejano: new URL('../supabase/migrations/0065_limpiar_causa_orejanos.sql', import.meta.url),
   fotos: new URL('../src/components/PhotoStrip.tsx', import.meta.url),
   migracionEscrituraCarahuasi: new URL('../supabase/migrations/0066_hotfix_escritura_carahuasi.sql', import.meta.url),
+  migracionEscrituraGoogle: new URL('../supabase/migrations/0067_escritura_google_y_tenant_superadmin.sql', import.meta.url),
+  migracionFotosUpsert: new URL('../supabase/migrations/0068_fotos_storage_upsert.sql', import.meta.url),
   repository: new URL('../src/data/repository.ts', import.meta.url),
   supabaseBackend: new URL('../src/data/backends/supabase.ts', import.meta.url),
 };
 
-const [compra, pdf, paricion, mortandad, ganaderas, clientConfig, paricionList, mapa, compraForm, metricas, pastoreoForm, lluviaForm, causaMortandad, migracionDelete, migracion, migracionRecepcion, migracionMetricas311, migracionEmailsCarahuasi, migracionOrejano, fotos, migracionEscrituraCarahuasi, repository, supabaseBackend] = await Promise.all(
+const [compra, pdf, paricion, mortandad, ganaderas, clientConfig, paricionList, paricionDetail, mapa, compraForm, metricas, pastoreoForm, lluviaForm, causaMortandad, migracionDelete, migracion, migracionRecepcion, migracionMetricas311, migracionEmailsCarahuasi, migracionOrejano, fotos, migracionEscrituraCarahuasi, migracionEscrituraGoogle, migracionFotosUpsert, repository, supabaseBackend] = await Promise.all(
   Object.values(files).map(file => readFile(file, 'utf8')),
 );
 
@@ -131,11 +134,29 @@ const checks = [
     message: 'El selector de fotos perdió la opción de cámara o galería.',
   },
   {
+    ok: /paricion\.fotos && paricion\.fotos\.length > 0/.test(paricionDetail) &&
+      /setFotoAmpliada\(uri\)/.test(paricionDetail) &&
+      /source=\{\{ uri: fotoAmpliada \}\}/.test(paricionDetail),
+    message: 'El detalle de pariciones dejó de mostrar o ampliar las fotos cargadas.',
+  },
+  {
     ok: /lower\(btrim\(u\.email\)\) = lower\(btrim\(auth\.jwt\(\) ->> 'email'\)\)/.test(migracionEscrituraCarahuasi) &&
       /CREATE POLICY pariciones_write/.test(migracionEscrituraCarahuasi) &&
       /CREATE POLICY fotos_eventos_insert_policy/.test(migracionEscrituraCarahuasi) &&
       /CREATE POLICY fotos_eventos_update_policy/.test(migracionEscrituraCarahuasi),
     message: 'Falta el hotfix de escritura para clientes activos y fotos.',
+  },
+  {
+    ok: /public\.current_user_email\(\)/.test(migracionEscrituraGoogle) &&
+      /public\.requested_admin_cliente_id\(\)/.test(migracionEscrituraGoogle) &&
+      /CREATE POLICY pariciones_write/.test(migracionEscrituraGoogle),
+    message: 'La escritura dejó de preservar el acceso con Google o el tenant del superadministrador.',
+  },
+  {
+    ok: /CREATE POLICY fotos_eventos_select_policy/.test(migracionFotosUpsert) &&
+      /FOR SELECT TO authenticated/.test(migracionFotosUpsert) &&
+      /CREATE POLICY fotos_eventos_update_policy/.test(migracionFotosUpsert),
+    message: 'Storage dejó de permitir el upsert seguro de fotos por cliente.',
   },
   {
     ok: /subscription\.status === ['"]active['"]/.test(repository) &&
