@@ -2,7 +2,7 @@
 // Siempre pasan por acá. Eso nos permite cambiar el backend sin tocar la UI.
 
 import type { CampaniaOperativa, CampaniaReproductiva, CaravanaColor, Campo, Circuito, ClienteConfigRow, ClienteDisponible, Evento, Lote, Parcela, Paricion, Pastoreo, Pluviometro, Subscription, TipoEvento, Usuario } from './types';
-import { isSessionExpiredError, looksLikeRlsBlock, SubscriptionBlockedError } from './backends/supabase';
+import { isSessionExpiredError, looksLikeRlsBlock, SessionExpiredError, SubscriptionBlockedError } from './backends/supabase';
 import { esMismaCaravana } from '@/utils/caravana';
 
 /** Última caravana cargada en un campo — alimenta el autocomplete del form. */
@@ -324,6 +324,13 @@ export class Repository {
       // Lo elevamos como SubscriptionBlockedError para que la UI muestre un
       // mensaje claro en vez del "pending" típico de errores de red.
       if (looksLikeRlsBlock(msg)) {
+        const subscription = await this.backend.getSubscription().catch(() => null);
+        if (subscription && (subscription.status === 'active' || subscription.status === 'past_due')) {
+          throw new SessionExpiredError(
+            'La cuenta está habilitada, pero esta sesión no tiene permisos de escritura actualizados. '
+            + 'Salí de ASFION, volvé a ingresar y reintentá. Si continúa, contactá a soporte.',
+          );
+        }
         throw new SubscriptionBlockedError(
           'No se puede cargar este evento: la cuenta está en mora. Regularizá el pago para volver a cargar datos.',
         );

@@ -21,9 +21,12 @@ const files = {
   migracionEmailsCarahuasi: new URL('../supabase/migrations/0064_actualizar_emails_administradores_carahuasi.sql', import.meta.url),
   migracionOrejano: new URL('../supabase/migrations/0065_limpiar_causa_orejanos.sql', import.meta.url),
   fotos: new URL('../src/components/PhotoStrip.tsx', import.meta.url),
+  migracionEscrituraCarahuasi: new URL('../supabase/migrations/0066_hotfix_escritura_carahuasi.sql', import.meta.url),
+  repository: new URL('../src/data/repository.ts', import.meta.url),
+  supabaseBackend: new URL('../src/data/backends/supabase.ts', import.meta.url),
 };
 
-const [compra, pdf, paricion, mortandad, ganaderas, clientConfig, paricionList, mapa, compraForm, metricas, pastoreoForm, lluviaForm, causaMortandad, migracionDelete, migracion, migracionRecepcion, migracionMetricas311, migracionEmailsCarahuasi, migracionOrejano, fotos] = await Promise.all(
+const [compra, pdf, paricion, mortandad, ganaderas, clientConfig, paricionList, mapa, compraForm, metricas, pastoreoForm, lluviaForm, causaMortandad, migracionDelete, migracion, migracionRecepcion, migracionMetricas311, migracionEmailsCarahuasi, migracionOrejano, fotos, migracionEscrituraCarahuasi, repository, supabaseBackend] = await Promise.all(
   Object.values(files).map(file => readFile(file, 'utf8')),
 );
 
@@ -126,6 +129,19 @@ const checks = [
       /allowsMultipleSelection:\s*disponibles > 1/.test(fotos) &&
       /text:\s*['"]Galería['"]/.test(fotos),
     message: 'El selector de fotos perdió la opción de cámara o galería.',
+  },
+  {
+    ok: /lower\(btrim\(u\.email\)\) = lower\(btrim\(auth\.jwt\(\) ->> 'email'\)\)/.test(migracionEscrituraCarahuasi) &&
+      /CREATE POLICY pariciones_write/.test(migracionEscrituraCarahuasi) &&
+      /CREATE POLICY fotos_eventos_insert_policy/.test(migracionEscrituraCarahuasi) &&
+      /CREATE POLICY fotos_eventos_update_policy/.test(migracionEscrituraCarahuasi),
+    message: 'Falta el hotfix de escritura para clientes activos y fotos.',
+  },
+  {
+    ok: /subscription\.status === ['"]active['"]/.test(repository) &&
+      /La cuenta está habilitada, pero esta sesión no tiene permisos/.test(repository) &&
+      /msg\.toLowerCase\(\)\.includes\(['"]jwt['"]\)[\s\S]*msg\.toLowerCase\(\)\.includes\(['"]expired['"]\)/.test(supabaseBackend),
+    message: 'La app puede volver a confundir cualquier rechazo RLS con una mora.',
   },
   {
     ok: /mortandadCampo/.test(metricas) && /camposDisponiblesMortandad/.test(metricas) &&

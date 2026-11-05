@@ -1163,13 +1163,14 @@ export class SupabaseBackend implements IDataBackend {
     const row = eventoToRow(eventoConFotos, user.clienteId);
     const { error } = await this.supabase.from(table).upsert(row, { onConflict: 'id' });
     if (error) {
-      // Errores de auth/RLS: marcamos como SessionExpired para que el caller
-      // pueda ofrecer re-login en vez de quedarse colgado en pending.
+      // JWT vencido sí es un problema de sesión. Un rechazo RLS se deja pasar
+      // al Repository: allí se consulta el estado real de cobranza antes de
+      // mostrar "mora". Antes cualquier RLS (Storage, tenant o policy faltante)
+      // se etiquetaba erróneamente como deuda.
       const msg = error.message || '';
       if (
         msg.toLowerCase().includes('jwt') ||
-        msg.toLowerCase().includes('expired') ||
-        msg.toLowerCase().includes('row-level security')
+        msg.toLowerCase().includes('expired')
       ) {
         throw new SessionExpiredError(`Problema de sesión: ${msg}`);
       }
