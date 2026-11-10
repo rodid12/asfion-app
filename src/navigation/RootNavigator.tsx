@@ -15,6 +15,8 @@ import { CompraDetailScreen } from '@/screens/compras/CompraDetailScreen';
 import { VentaListScreen } from '@/screens/ventas/VentaListScreen';
 import { VentaDetailScreen } from '@/screens/ventas/VentaDetailScreen';
 import { VentaFormScreen } from '@/screens/ventas/VentaFormScreen';
+import { TareaListScreen } from '@/screens/tareas/TareaListScreen';
+import { TareaFormScreen } from '@/screens/tareas/TareaFormScreen';
 import { useAuth } from '@/auth/context';
 import { ActivityIndicator, View } from 'react-native';
 import { colors } from '@/theme/colors';
@@ -46,7 +48,7 @@ export function RootNavigator() {
   // Si un cliente tiene solo Pariciones+Lluvias, MortandadForm y PastoreoForm
   // ni siquiera existen en el stack — un nav.navigate('MortandadForm') daría
   // error, lo que está bien porque la UI tampoco ofrece esa navegación.
-  const hasModulo = (k: 'pariciones' | 'lluvias' | 'mortandad' | 'pastoreo' | 'compras' | 'ventas') =>
+  const hasModulo = (k: 'pariciones' | 'lluvias' | 'mortandad' | 'pastoreo' | 'compras' | 'tareas' | 'ventas') =>
     clientConfig.modulosHabilitados.includes(k);
 
   if (loading) {
@@ -114,6 +116,12 @@ export function RootNavigator() {
                   <Stack.Screen name="VentaList" component={VentaListScreen} options={{ title: 'Ventas' }} />
                   <Stack.Screen name="VentaDetail" component={VentaDetailScreen} options={{ title: 'Detalle' }} />
                   <Stack.Screen name="VentaForm" component={VentaFormScreen} options={{ title: 'Venta' }} />
+                </>
+              )}
+              {hasModulo('tareas') && (
+                <>
+                  <Stack.Screen name="TareaList" component={TareaListScreen} options={{ title: 'Tareas' }} />
+                  <Stack.Screen name="TareaForm" component={TareaFormScreen} options={{ title: 'Tarea' }} />
                 </>
               )}
             </>

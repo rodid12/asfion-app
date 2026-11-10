@@ -27,9 +27,12 @@ const files = {
   migracionFotosUpsert: new URL('../supabase/migrations/0068_fotos_storage_upsert.sql', import.meta.url),
   repository: new URL('../src/data/repository.ts', import.meta.url),
   supabaseBackend: new URL('../src/data/backends/supabase.ts', import.meta.url),
+  tareaList: new URL('../src/screens/tareas/TareaListScreen.tsx', import.meta.url),
+  tareaForm: new URL('../src/screens/tareas/TareaFormScreen.tsx', import.meta.url),
+  migracionTareas: new URL('../supabase/migrations/0069_tareas_carahuasi.sql', import.meta.url),
 };
 
-const [compra, pdf, paricion, mortandad, ganaderas, clientConfig, paricionList, paricionDetail, mapa, compraForm, metricas, pastoreoForm, lluviaForm, causaMortandad, migracionDelete, migracion, migracionRecepcion, migracionMetricas311, migracionEmailsCarahuasi, migracionOrejano, fotos, migracionEscrituraCarahuasi, migracionEscrituraGoogle, migracionFotosUpsert, repository, supabaseBackend] = await Promise.all(
+const [compra, pdf, paricion, mortandad, ganaderas, clientConfig, paricionList, paricionDetail, mapa, compraForm, metricas, pastoreoForm, lluviaForm, causaMortandad, migracionDelete, migracion, migracionRecepcion, migracionMetricas311, migracionEmailsCarahuasi, migracionOrejano, fotos, migracionEscrituraCarahuasi, migracionEscrituraGoogle, migracionFotosUpsert, repository, supabaseBackend, tareaList, tareaForm, migracionTareas] = await Promise.all(
   Object.values(files).map(file => readFile(file, 'utf8')),
 );
 
@@ -197,6 +200,30 @@ const checks = [
       /torreshuidobrozoe@gmail\.com/.test(migracionEmailsCarahuasi),
     message: 'La migración dejó de conservar los emails corregidos de los administradores de Carahuasi.',
   },
+  {
+    ok: /current_user_is_task_admin/.test(migracionTareas) &&
+      /lower\(btrim\(asignado_email\)\) = public\.current_user_email\(\)/.test(migracionTareas) &&
+      /observación es obligatoria/.test(migracionTareas) &&
+      /tareas_historial/.test(migracionTareas) &&
+      /deleted_at/.test(migracionTareas) &&
+      /WHERE id = 'estancia-carahuasi'/.test(migracionTareas),
+    message: 'Tareas perdió el aislamiento de Carahuasi, la auditoría o los permisos por rol.',
+  },
+  {
+    ok: /label="TOTAL"/.test(tareaList) &&
+      /metricas\.completadas/.test(tareaList) &&
+      /metricas\.noCompletadas/.test(tareaList) &&
+      /metricas\.pendientes/.test(tareaList) &&
+      /Math\.round\(completadas \/ total \* 100\)/.test(tareaList) &&
+      /repo\.subscribeTareas/.test(tareaList),
+    message: 'El seguimiento de tareas perdió métricas, filtros o actualización automática.',
+  },
+  {
+    ok: /estado !== ['"]no_completada['"] \|\| observacionesOperario\.trim\(\)/.test(tareaForm) &&
+      /repo\.listTareaHistorial/.test(tareaForm) &&
+      /repo\.eliminarTarea/.test(tareaForm),
+    message: 'El formulario de tareas perdió la observación obligatoria, historial o baja auditada.',
+  },
 ];
 
 const failed = checks.filter(check => !check.ok);
@@ -205,4 +232,4 @@ if (failed.length > 0) {
   process.exit(1);
 }
 
-console.log('✓ Regresiones críticas verificadas: compras, PDF, caravanas, Orejano, Recepción, aislamiento, orden/filtros, mapa, permisos y mermas.');
+console.log('✓ Regresiones críticas verificadas: compras, PDF, caravanas, Orejano, Recepción, aislamiento, orden/filtros, mapa, permisos, mermas y tareas.');

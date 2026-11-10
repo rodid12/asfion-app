@@ -1,7 +1,7 @@
 // Repository pattern. Los screens NUNCA hablan con Sheets ni con Supabase directo.
 // Siempre pasan por acá. Eso nos permite cambiar el backend sin tocar la UI.
 
-import type { CampaniaOperativa, CampaniaReproductiva, CaravanaColor, Campo, Circuito, ClienteConfigRow, ClienteDisponible, Evento, Lote, Parcela, Paricion, Pastoreo, Pluviometro, Subscription, TipoEvento, Usuario } from './types';
+import type { CampaniaOperativa, CampaniaReproductiva, CaravanaColor, Campo, Circuito, ClienteConfigRow, ClienteDisponible, Evento, Lote, Parcela, Paricion, Pastoreo, Pluviometro, Subscription, Tarea, TareaEstado, TareaFiltros, TareaHistorial, TareaInput, TipoEvento, Usuario } from './types';
 import { isSessionExpiredError, looksLikeRlsBlock, SessionExpiredError, SubscriptionBlockedError } from './backends/supabase';
 import { esMismaCaravana } from '@/utils/caravana';
 
@@ -79,6 +79,15 @@ export interface IDataBackend {
   listPluviometros(campoId: string): Promise<Pluviometro[]>;
   listCircuitos(campoId: string): Promise<Circuito[]>;
   listParcelas(circuitoId: string): Promise<Parcela[]>;
+
+  // Tareas. Son opcionales para mantener compatibles los backends de demo.
+  listTareas?(filters?: TareaFiltros): Promise<Tarea[]>;
+  listOperariosTareas?(): Promise<Usuario[]>;
+  saveTareaAdmin?(input: TareaInput): Promise<Tarea>;
+  informarTarea?(tareaId: string, estado: Exclude<TareaEstado, 'pendiente'>, observaciones?: string): Promise<Tarea>;
+  eliminarTarea?(tareaId: string): Promise<void>;
+  listTareaHistorial?(tareaId: string): Promise<TareaHistorial[]>;
+  subscribeTareas?(onChange: () => void): () => void;
   /**
    * Descarga y persiste los catálogos necesarios para crear eventos sin red.
    * Es opcional para no romper los backends de memoria/legacy.
@@ -238,6 +247,31 @@ export class Repository {
   listPluviometros = (campoId: string) => this.backend.listPluviometros(campoId);
   listCircuitos = (campoId: string) => this.backend.listCircuitos(campoId);
   listParcelas = (circuitoId: string) => this.backend.listParcelas(circuitoId);
+
+  listTareas = (filters?: TareaFiltros): Promise<Tarea[]> => {
+    if (!this.backend.listTareas) return Promise.reject(new Error('El módulo Tareas no está disponible en este entorno.'));
+    return this.backend.listTareas(filters);
+  };
+  listOperariosTareas = (): Promise<Usuario[]> => {
+    if (!this.backend.listOperariosTareas) return Promise.resolve([]);
+    return this.backend.listOperariosTareas();
+  };
+  saveTareaAdmin = (input: TareaInput): Promise<Tarea> => {
+    if (!this.backend.saveTareaAdmin) return Promise.reject(new Error('No se pueden asignar tareas en este entorno.'));
+    return this.backend.saveTareaAdmin(input);
+  };
+  informarTarea = (tareaId: string, estado: Exclude<TareaEstado, 'pendiente'>, observaciones?: string): Promise<Tarea> => {
+    if (!this.backend.informarTarea) return Promise.reject(new Error('No se puede informar esta tarea en este entorno.'));
+    return this.backend.informarTarea(tareaId, estado, observaciones);
+  };
+  eliminarTarea = (tareaId: string): Promise<void> => {
+    if (!this.backend.eliminarTarea) return Promise.reject(new Error('No se puede eliminar esta tarea en este entorno.'));
+    return this.backend.eliminarTarea(tareaId);
+  };
+  listTareaHistorial = (tareaId: string): Promise<TareaHistorial[]> =>
+    this.backend.listTareaHistorial ? this.backend.listTareaHistorial(tareaId) : Promise.resolve([]);
+  subscribeTareas = (onChange: () => void): (() => void) =>
+    this.backend.subscribeTareas ? this.backend.subscribeTareas(onChange) : () => undefined;
   warmOfflineCache = (): Promise<void> =>
     this.backend.warmOfflineCache ? this.backend.warmOfflineCache() : Promise.resolve();
 

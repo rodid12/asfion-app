@@ -25,4 +25,8 @@ export type RootStackParamList = {
   VentaList: undefined;
   VentaDetail: { ventaId: string };
   VentaForm: { ventaId?: string } | undefined;
+  // Tareas vive fuera de la barra inferior para no comprimirla. La misma
+  // pantalla se adapta al rol: seguimiento general o "Mis tareas".
+  TareaList: undefined;
+  TareaForm: { tareaId?: string } | undefined;
 };

@@ -66,6 +66,7 @@ const TODOS_LOS_MODULOS: Modulo[] = [
   { key: 'pastoreo',   label: 'Pastoreo',   emoji: '🌾', descripcion: 'Movimiento de hacienda',                go: nav => nav.navigate('PastoreoForm', {}) },
   { key: 'compras',    label: 'Compras',    emoji: '🛒', descripcion: 'Compra de hacienda',                    go: nav => nav.navigate('CompraForm', {}) },
   { key: 'mediciones', label: 'Mediciones', emoji: '📏', descripcion: 'Pesadas, condición, forraje' },
+  { key: 'tareas',     label: 'Tareas',     emoji: '✅', descripcion: 'Asignación y seguimiento diario',       go: nav => nav.navigate('TareaList') },
   { key: 'ventas',     label: 'Ventas',     emoji: '💰', descripcion: 'Operaciones comerciales (solo admin)', go: nav => nav.navigate('VentaList') },
 ];
 
@@ -107,6 +108,15 @@ export function HomeScreen() {
       // El cliente confirmó que Ventas es administrado únicamente por los
       // responsables; no se ofrece a operarios ni moderadores.
       .filter(m => m.key !== 'ventas' || user?.rol === 'administrador')
+      .map(m => m.key === 'tareas'
+        ? {
+            ...m,
+            label: user?.rol === 'administrador' ? 'Seguimiento' : 'Mis tareas',
+            descripcion: user?.rol === 'administrador'
+              ? 'Asignar y controlar tareas diarias'
+              : 'Consultar e informar mis actividades',
+          }
+        : m)
       .map(m => ({ ...m, enabled: Boolean(m.go) })),
     [clientConfig, user?.rol],
   );

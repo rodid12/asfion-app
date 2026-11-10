@@ -14,6 +14,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { v4 as uuidv4 } from 'uuid';
 import { makeRedirectUri } from 'expo-auth-session';
 import * as QueryParams from 'expo-auth-session/build/QueryParams';
 import * as WebBrowser from 'expo-web-browser';
@@ -32,6 +33,11 @@ import type {
   Pluviometro,
   Subscription,
   SubscriptionStatus,
+  Tarea,
+  TareaEstado,
+  TareaFiltros,
+  TareaHistorial,
+  TareaInput,
   TipoEvento,
   Usuario,
   Venta,
@@ -92,6 +98,14 @@ const PENDING_PREFIX = 'asfion.supabase.pending.v2:';
 // v2 invalida copias locales que pudieron haberse generado antes de que las
 // consultas del superadministrador filtraran explícitamente por cliente.
 const CATALOG_PREFIX = 'asfion.supabase.catalog.v2:';
+const TAREA_PENDING_PREFIX = 'asfion.supabase.tareas.pending.v1:';
+
+interface TareaResultadoPendiente {
+  tareaId: string;
+  estado: Exclude<TareaEstado, 'pendiente'>;
+  observaciones?: string;
+  savedAt: string;
+}
 
 // Cierra correctamente una sesión OAuth si la app también se ejecuta en web.
 // En Android/iOS es inocuo y mantiene el mismo flujo oficial de Expo.
@@ -105,6 +119,17 @@ function esRefreshTokenInvalido(error: unknown): boolean {
   return t.includes('invalid refresh token')
     || t.includes('refresh token not found')
     || t.includes('refresh_token_not_found');
+}
+
+function esErrorDeRed(error: unknown): boolean {
+  const msg = error instanceof Error ? error.message : String(error ?? '');
+  const value = msg.toLowerCase();
+  return value.includes('network request failed')
+    || value.includes('failed to fetch')
+    || value.includes('fetch failed')
+    || value.includes('timeout')
+    || value.includes('timed out')
+    || value.includes('connection');
 }
 
 // =============================================================================
@@ -204,6 +229,41 @@ function rowToUsuario(r: any): Usuario {
     // [] representa alcance en todos los campos, sin convertirlo en admin.
     campos: r.rol === 'operario' && campoAsignadoId ? [campoAsignadoId] : [],
     campoAsignadoId,
+  };
+}
+
+function rowToTarea(r: any): Tarea {
+  const persona = r.asignado;
+  const nombre = persona
+    ? [persona.nombre, persona.apellido].filter(Boolean).join(' ').trim()
+    : '';
+  return {
+    id: r.id,
+    clienteId: r.cliente_id,
+    fecha: r.fecha,
+    asignadoEmail: r.asignado_email,
+    asignadoNombre: nombre || undefined,
+    descripcion: r.descripcion,
+    estado: r.estado,
+    observacionesAdmin: r.observaciones_admin ?? undefined,
+    observacionesOperario: r.observaciones_operario ?? undefined,
+    asignadaPor: r.asignada_por,
+    respondidaAt: r.respondida_at ?? undefined,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+    deletedAt: r.deleted_at ?? undefined,
+  };
+}
+
+function rowToTareaHistorial(r: any): TareaHistorial {
+  return {
+    id: Number(r.id),
+    tareaId: r.tarea_id,
+    accion: r.accion,
+    actorEmail: r.actor_email,
+    antes: r.antes ?? undefined,
+    despues: r.despues ?? undefined,
+    createdAt: r.created_at,
   };
 }
 
@@ -522,6 +582,29 @@ export class SupabaseBackend implements IDataBackend {
     const user = await this.getCurrentUser();
     if (!user?.email || !user.clienteId) return null;
     return `${PENDING_PREFIX}${user.clienteId}:${user.email.trim().toLowerCase()}`;
+  }
+
+  private tareaPendingKey(): string | null {
+    const user = this.currentUserCache;
+    if (!user?.email || !user.clienteId) return null;
+    return `${TAREA_PENDING_PREFIX}${user.clienteId}:${user.email.trim().toLowerCase()}`;
+  }
+
+  private async readTareasPendientes(): Promise<TareaResultadoPendiente[]> {
+    const key = this.tareaPendingKey();
+    if (!key) return [];
+    try {
+      const raw = await AsyncStorage.getItem(key);
+      return raw ? JSON.parse(raw) as TareaResultadoPendiente[] : [];
+    } catch {
+      return [];
+    }
+  }
+
+  private async writeTareasPendientes(rows: TareaResultadoPendiente[]): Promise<void> {
+    const key = this.tareaPendingKey();
+    if (!key) return;
+    await AsyncStorage.setItem(key, JSON.stringify(rows));
   }
 
   /** Migra únicamente eventos del usuario actual desde la antigua cola global. */
@@ -1114,6 +1197,175 @@ export class SupabaseBackend implements IDataBackend {
       usuarioEmail: row.usuario_email,
       evento: row.evento,
     };
+  }
+
+  // ---------- Tareas ----------
+
+  private async fetchTareasOnline(): Promise<Tarea[]> {
+    const user = await this.getCurrentUser();
+    if (!user?.clienteId) return [];
+    const { data, error } = await this.supabase
+      .from('tareas')
+      .select('*, asignado:usuarios!tareas_asignado_email_fkey(nombre, apellido)')
+      .eq('cliente_id', user.clienteId)
+      .is('deleted_at', null)
+      .order('fecha', { ascending: false })
+      .order('created_at', { ascending: false });
+    if (error) throw new Error(`listTareas: ${error.message}`);
+    return (data ?? []).map(rowToTarea);
+  }
+
+  private async flushResultadosTareas(): Promise<void> {
+    const pendientes = await this.readTareasPendientes();
+    if (pendientes.length === 0) return;
+    const restantes: TareaResultadoPendiente[] = [];
+    for (const item of pendientes) {
+      const { error } = await this.supabase.rpc('informar_tarea', {
+        p_tarea_id: item.tareaId,
+        p_estado: item.estado,
+        p_observaciones: item.observaciones ?? null,
+      });
+      if (error) {
+        if (!esErrorDeRed(error)) throw new Error(error.message);
+        restantes.push(item);
+      }
+    }
+    await this.writeTareasPendientes(restantes);
+  }
+
+  async listTareas(filters: TareaFiltros = {}): Promise<Tarea[]> {
+    try {
+      await this.flushResultadosTareas();
+    } catch (error) {
+      if (!esErrorDeRed(error)) throw error;
+    }
+
+    const rows = await this.refreshCatalog<Tarea>('tareas', () => this.fetchTareasOnline());
+    const pendientes = await this.readTareasPendientes();
+    const optimistas = new Map(pendientes.map(p => [p.tareaId, p]));
+    return rows
+      .map(t => {
+        const local = optimistas.get(t.id);
+        return local ? {
+          ...t,
+          estado: local.estado,
+          observacionesOperario: local.observaciones,
+          respondidaAt: local.savedAt,
+          updatedAt: local.savedAt,
+        } : t;
+      })
+      .filter(t => !filters.desde || t.fecha >= filters.desde)
+      .filter(t => !filters.hasta || t.fecha <= filters.hasta)
+      .filter(t => !filters.asignadoEmail || t.asignadoEmail === filters.asignadoEmail)
+      .filter(t => !filters.estado || t.estado === filters.estado)
+      .sort((a, b) => b.fecha.localeCompare(a.fecha) || b.updatedAt.localeCompare(a.updatedAt));
+  }
+
+  async listOperariosTareas(): Promise<Usuario[]> {
+    const user = await this.getCurrentUser();
+    if (!user?.clienteId) return [];
+    return this.cachedCatalog<Usuario>('tareas-operarios', async () => {
+      const { data, error } = await this.supabase
+        .from('usuarios')
+        .select('*')
+        .eq('cliente_id', user.clienteId)
+        .eq('rol', 'operario')
+        .order('nombre')
+        .order('apellido');
+      if (error) throw new Error(`listOperariosTareas: ${error.message}`);
+      return (data ?? []).map(rowToUsuario);
+    });
+  }
+
+  async saveTareaAdmin(input: TareaInput): Promise<Tarea> {
+    const id = input.id ?? uuidv4();
+    const { data, error } = await this.supabase.rpc('guardar_tarea_admin', {
+      p_id: id,
+      p_fecha: input.fecha,
+      p_asignado_email: input.asignadoEmail,
+      p_descripcion: input.descripcion,
+      p_estado: input.estado ?? 'pendiente',
+      p_observaciones_admin: input.observacionesAdmin?.trim() || null,
+    });
+    if (error) throw new Error(`saveTareaAdmin: ${error.message}`);
+    const tarea = rowToTarea(Array.isArray(data) ? data[0] : data);
+    const cached = await this.readCatalogCache<Tarea>('tareas') ?? [];
+    await this.writeCatalogCache('tareas', [tarea, ...cached.filter(t => t.id !== tarea.id)]);
+    return tarea;
+  }
+
+  async informarTarea(
+    tareaId: string,
+    estado: Exclude<TareaEstado, 'pendiente'>,
+    observaciones?: string,
+  ): Promise<Tarea> {
+    if (estado === 'no_completada' && !observaciones?.trim()) {
+      throw new Error('Explicá por qué la tarea no pudo completarse.');
+    }
+    const savedAt = new Date().toISOString();
+    try {
+      const { data, error } = await this.supabase.rpc('informar_tarea', {
+        p_tarea_id: tareaId,
+        p_estado: estado,
+        p_observaciones: observaciones?.trim() || null,
+      });
+      if (error) throw error;
+      const tarea = rowToTarea(Array.isArray(data) ? data[0] : data);
+      const cached = await this.readCatalogCache<Tarea>('tareas') ?? [];
+      await this.writeCatalogCache('tareas', cached.map(t => t.id === tarea.id ? { ...t, ...tarea } : t));
+      return tarea;
+    } catch (error) {
+      if (!esErrorDeRed(error)) throw new Error(error instanceof Error ? error.message : String(error));
+      const pendientes = await this.readTareasPendientes();
+      await this.writeTareasPendientes([
+        ...pendientes.filter(p => p.tareaId !== tareaId),
+        { tareaId, estado, observaciones: observaciones?.trim() || undefined, savedAt },
+      ]);
+      const cached = await this.readCatalogCache<Tarea>('tareas') ?? [];
+      const original = cached.find(t => t.id === tareaId);
+      if (!original) throw new Error('No encontramos la tarea en el dispositivo. Abrila una vez con conexión antes de informarla offline.');
+      const optimistic: Tarea = {
+        ...original,
+        estado,
+        observacionesOperario: observaciones?.trim() || undefined,
+        respondidaAt: savedAt,
+        updatedAt: savedAt,
+      };
+      await this.writeCatalogCache('tareas', cached.map(t => t.id === tareaId ? optimistic : t));
+      return optimistic;
+    }
+  }
+
+  async eliminarTarea(tareaId: string): Promise<void> {
+    const { error } = await this.supabase.rpc('eliminar_tarea_admin', { p_tarea_id: tareaId });
+    if (error) throw new Error(`eliminarTarea: ${error.message}`);
+    const cached = await this.readCatalogCache<Tarea>('tareas') ?? [];
+    await this.writeCatalogCache('tareas', cached.filter(t => t.id !== tareaId));
+  }
+
+  async listTareaHistorial(tareaId: string): Promise<TareaHistorial[]> {
+    const { data, error } = await this.supabase
+      .from('tareas_historial')
+      .select('*')
+      .eq('tarea_id', tareaId)
+      .order('created_at', { ascending: false });
+    if (error) throw new Error(`listTareaHistorial: ${error.message}`);
+    return (data ?? []).map(rowToTareaHistorial);
+  }
+
+  subscribeTareas(onChange: () => void): () => void {
+    const clienteId = this.currentUserCache?.clienteId;
+    if (!clienteId) return () => undefined;
+    const channel = this.supabase
+      .channel(`tareas:${clienteId}:${Date.now()}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'tareas',
+        filter: `cliente_id=eq.${clienteId}`,
+      }, () => onChange())
+      .subscribe();
+    return () => { void this.supabase.removeChannel(channel); };
   }
 
   // ---------- Eventos (genérico) ----------

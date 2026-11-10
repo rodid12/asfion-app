@@ -210,7 +210,7 @@ function mapRowToClientConfig(row: {
   // El tipo ModuloKey es estricto; filtramos solo los valores conocidos
   // para que un módulo nuevo en la DB no rompa el typed contract acá.
   const MODULOS_VALIDOS: readonly ModuloKey[] = [
-    'pariciones', 'lluvias', 'mortandad', 'pastoreo', 'compras', 'mediciones', 'ventas',
+    'pariciones', 'lluvias', 'mortandad', 'pastoreo', 'compras', 'mediciones', 'tareas', 'ventas',
   ];
   const modulos: ModuloKey[] = row.modulosHabilitados
     .filter((m): m is ModuloKey => MODULOS_VALIDOS.includes(m as ModuloKey));

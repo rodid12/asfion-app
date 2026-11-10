@@ -31,7 +31,7 @@ src/config/
    - `branding`: nombre, tagline, logo, color primario
    - `modulosHabilitados`: array con los módulos que el cliente va a usar.
      Opciones: `'pariciones'`, `'lluvias'`, `'mortandad'`, `'pastoreo'`,
-     `'mediciones'`. Solo los que estén en la lista aparecen en la home,
+     `'compras'`, `'mediciones'`, `'tareas'`, `'ventas'`. Solo los que estén en la lista aparecen en la home,
      en los tabs y en el navigator.
    - `catalogos`: los valores de cada dropdown/chip por módulo. Si un
      módulo NO está habilitado, igual tenés que poner un objeto con

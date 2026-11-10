@@ -55,6 +55,53 @@ export interface Usuario {
   isSuperAdmin?: boolean;
 }
 
+// ====== Módulo Tareas (asignación y seguimiento) ======
+
+export type TareaEstado = 'pendiente' | 'completada' | 'no_completada';
+
+export interface Tarea {
+  id: string;
+  clienteId: string;
+  fecha: string;
+  asignadoEmail: string;
+  asignadoNombre?: string;
+  descripcion: string;
+  estado: TareaEstado;
+  observacionesAdmin?: string;
+  observacionesOperario?: string;
+  asignadaPor: string;
+  respondidaAt?: string;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string;
+}
+
+export interface TareaHistorial {
+  id: number;
+  tareaId: string;
+  accion: 'creada' | 'modificada' | 'resultado_informado' | 'eliminada';
+  actorEmail: string;
+  antes?: Record<string, unknown>;
+  despues?: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface TareaFiltros {
+  desde?: string;
+  hasta?: string;
+  asignadoEmail?: string;
+  estado?: TareaEstado;
+}
+
+export interface TareaInput {
+  id?: string;
+  fecha: string;
+  asignadoEmail: string;
+  descripcion: string;
+  estado?: TareaEstado;
+  observacionesAdmin?: string;
+}
+
 // Catálogos compartidos — vienen del canonical (sincronizado con dashboard).
 // La app usa estos types EXACTOS para los selects de campo/lote/circuito en
 // los forms y para resolver nombres en las cards de lista.
