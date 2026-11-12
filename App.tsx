@@ -20,22 +20,25 @@ import { RepositoryProvider } from '@/data';
 import { NetworkProvider } from '@/data/network';
 import { AuthProvider } from '@/auth/context';
 import { RootNavigator } from '@/navigation/RootNavigator';
+import { AppErrorBoundary } from '@/components/AppErrorBoundary';
 
 export default function App() {
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaProvider>
-        <RepositoryProvider kind="supabase">
-          <NetworkProvider>
-            <AuthProvider>
-              <ClientConfigProvider>
-                <RootNavigator />
-                <StatusBar style="light" />
-              </ClientConfigProvider>
-            </AuthProvider>
-          </NetworkProvider>
-        </RepositoryProvider>
-      </SafeAreaProvider>
-    </GestureHandlerRootView>
+    <AppErrorBoundary>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <SafeAreaProvider>
+          <RepositoryProvider kind="supabase">
+            <NetworkProvider>
+              <AuthProvider>
+                <ClientConfigProvider>
+                  <RootNavigator />
+                  <StatusBar style="light" />
+                </ClientConfigProvider>
+              </AuthProvider>
+            </NetworkProvider>
+          </RepositoryProvider>
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
+    </AppErrorBoundary>
   );
 }

@@ -12,6 +12,9 @@
     "typecheck": "tsc --noEmit",
     "check:regressions": "node scripts/check-critical-regressions.mjs",
     "verify:release": "npm run typecheck && npm run check:regressions",
+    "verify:ota": "npm run verify:release && npx expo export --platform android --output-dir /tmp/asfion-ota-preflight-android --clear && npx expo export --platform ios --output-dir /tmp/asfion-ota-preflight-ios --clear",
+    "ota:qa": "npm run verify:ota && npx eas-cli@latest update --channel qa",
+    "ota:production": "npm run verify:ota && npx eas-cli@latest update --channel production",
     "client:upload-logo": "node --env-file=.env.local scripts/upload-client-logo.mjs",
     "app-store:setup-review-demo": "node --env-file=.env.local scripts/setup-app-review-demo.mjs",
     "postinstall": "patch-package",
@@ -19,6 +22,8 @@
     "eas:register-ios": "eas device:create",
     "eas:build:preview:ios": "eas build --profile preview --platform ios",
     "eas:build:preview:android": "eas build --profile preview --platform android",
+    "eas:build:qa:android": "eas build --profile qa --platform android",
+    "eas:build:field:android": "eas build --profile field-production --platform android",
     "eas:build:sim:ios": "eas build --profile preview-sim --platform ios"
   },
   "dependencies": {

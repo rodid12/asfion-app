@@ -31,9 +31,14 @@ const files = {
   tareaForm: new URL('../src/screens/tareas/TareaFormScreen.tsx', import.meta.url),
   migracionTareas: new URL('../supabase/migrations/0069_tareas_carahuasi.sql', import.meta.url),
   rootNavigator: new URL('../src/navigation/RootNavigator.tsx', import.meta.url),
+  tareaSafeScreens: new URL('../src/screens/tareas/TareaSafeScreens.tsx', import.meta.url),
+  appBoundary: new URL('../src/components/AppErrorBoundary.tsx', import.meta.url),
+  appRoot: new URL('../App.tsx', import.meta.url),
+  easConfig: new URL('../eas.json', import.meta.url),
+  packageJson: new URL('../package.json', import.meta.url),
 };
 
-const [compra, pdf, paricion, mortandad, ganaderas, clientConfig, paricionList, paricionDetail, mapa, compraForm, metricas, pastoreoForm, lluviaForm, causaMortandad, migracionDelete, migracion, migracionRecepcion, migracionMetricas311, migracionEmailsCarahuasi, migracionOrejano, fotos, migracionEscrituraCarahuasi, migracionEscrituraGoogle, migracionFotosUpsert, repository, supabaseBackend, tareaList, tareaForm, migracionTareas, rootNavigator] = await Promise.all(
+const [compra, pdf, paricion, mortandad, ganaderas, clientConfig, paricionList, paricionDetail, mapa, compraForm, metricas, pastoreoForm, lluviaForm, causaMortandad, migracionDelete, migracion, migracionRecepcion, migracionMetricas311, migracionEmailsCarahuasi, migracionOrejano, fotos, migracionEscrituraCarahuasi, migracionEscrituraGoogle, migracionFotosUpsert, repository, supabaseBackend, tareaList, tareaForm, migracionTareas, rootNavigator, tareaSafeScreens, appBoundary, appRoot, easConfig, packageJson] = await Promise.all(
   Object.values(files).map(file => readFile(file, 'utf8')),
 );
 
@@ -227,11 +232,30 @@ const checks = [
   },
   {
     ok: /hasModulo\(['"]tareas['"]\)/.test(rootNavigator) &&
-      /getComponent=\{\(\) => require\(['"]@\/screens\/tareas\/TareaListScreen['"]\)/.test(rootNavigator) &&
-      /getComponent=\{\(\) => require\(['"]@\/screens\/tareas\/TareaFormScreen['"]\)/.test(rootNavigator) &&
+      /component=\{SafeTareaListScreen\}/.test(rootNavigator) &&
+      /component=\{SafeTareaFormScreen\}/.test(rootNavigator) &&
       !/import \{ TareaListScreen \}/.test(rootNavigator) &&
-      !/import \{ TareaFormScreen \}/.test(rootNavigator),
+      !/import \{ TareaFormScreen \}/.test(rootNavigator) &&
+      /require\(['"]\.\/TareaListScreen['"]\)/.test(tareaSafeScreens) &&
+      /require\(['"]\.\/TareaFormScreen['"]\)/.test(tareaSafeScreens) &&
+      /class TareaErrorBoundary/.test(tareaSafeScreens) &&
+      /El resto de ASFION sigue funcionando normalmente/.test(tareaSafeScreens),
     message: 'Tareas volvió a cargarse durante el arranque y puede impedir que toda la app abra.',
+  },
+  {
+    ok: /class AppErrorBoundary/.test(appBoundary) &&
+      /getDerivedStateFromError/.test(appBoundary) &&
+      /<AppErrorBoundary>/.test(appRoot) &&
+      /<RootNavigator \/>/.test(appRoot),
+    message: 'La aplicación perdió la pantalla de recuperación ante errores JavaScript de arranque.',
+  },
+  {
+    ok: /"qa"[\s\S]*"channel": "qa"/.test(easConfig) &&
+      /"field-production"[\s\S]*"channel": "production"/.test(easConfig) &&
+      /"verify:ota"/.test(packageJson) &&
+      /"ota:qa"/.test(packageJson) &&
+      /"ota:production"/.test(packageJson),
+    message: 'Las publicaciones de prueba y de campo volvieron a compartir canal o perdieron el preflight obligatorio.',
   },
 ];
 
