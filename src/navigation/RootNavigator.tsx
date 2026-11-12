@@ -15,8 +15,6 @@ import { CompraDetailScreen } from '@/screens/compras/CompraDetailScreen';
 import { VentaListScreen } from '@/screens/ventas/VentaListScreen';
 import { VentaDetailScreen } from '@/screens/ventas/VentaDetailScreen';
 import { VentaFormScreen } from '@/screens/ventas/VentaFormScreen';
-import { TareaListScreen } from '@/screens/tareas/TareaListScreen';
-import { TareaFormScreen } from '@/screens/tareas/TareaFormScreen';
 import { useAuth } from '@/auth/context';
 import { ActivityIndicator, View } from 'react-native';
 import { colors } from '@/theme/colors';
@@ -120,8 +118,19 @@ export function RootNavigator() {
               )}
               {hasModulo('tareas') && (
                 <>
-                  <Stack.Screen name="TareaList" component={TareaListScreen} options={{ title: 'Tareas' }} />
-                  <Stack.Screen name="TareaForm" component={TareaFormScreen} options={{ title: 'Tarea' }} />
+                  {/* Tareas se carga únicamente cuando el usuario entra al
+                      módulo. Un error futuro acá no debe impedir el arranque
+                      del resto de ASFION ni afectar a otros clientes. */}
+                  <Stack.Screen
+                    name="TareaList"
+                    getComponent={() => require('@/screens/tareas/TareaListScreen').TareaListScreen}
+                    options={{ title: 'Tareas' }}
+                  />
+                  <Stack.Screen
+                    name="TareaForm"
+                    getComponent={() => require('@/screens/tareas/TareaFormScreen').TareaFormScreen}
+                    options={{ title: 'Tarea' }}
+                  />
                 </>
               )}
             </>

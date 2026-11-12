@@ -30,9 +30,10 @@ const files = {
   tareaList: new URL('../src/screens/tareas/TareaListScreen.tsx', import.meta.url),
   tareaForm: new URL('../src/screens/tareas/TareaFormScreen.tsx', import.meta.url),
   migracionTareas: new URL('../supabase/migrations/0069_tareas_carahuasi.sql', import.meta.url),
+  rootNavigator: new URL('../src/navigation/RootNavigator.tsx', import.meta.url),
 };
 
-const [compra, pdf, paricion, mortandad, ganaderas, clientConfig, paricionList, paricionDetail, mapa, compraForm, metricas, pastoreoForm, lluviaForm, causaMortandad, migracionDelete, migracion, migracionRecepcion, migracionMetricas311, migracionEmailsCarahuasi, migracionOrejano, fotos, migracionEscrituraCarahuasi, migracionEscrituraGoogle, migracionFotosUpsert, repository, supabaseBackend, tareaList, tareaForm, migracionTareas] = await Promise.all(
+const [compra, pdf, paricion, mortandad, ganaderas, clientConfig, paricionList, paricionDetail, mapa, compraForm, metricas, pastoreoForm, lluviaForm, causaMortandad, migracionDelete, migracion, migracionRecepcion, migracionMetricas311, migracionEmailsCarahuasi, migracionOrejano, fotos, migracionEscrituraCarahuasi, migracionEscrituraGoogle, migracionFotosUpsert, repository, supabaseBackend, tareaList, tareaForm, migracionTareas, rootNavigator] = await Promise.all(
   Object.values(files).map(file => readFile(file, 'utf8')),
 );
 
@@ -223,6 +224,14 @@ const checks = [
       /repo\.listTareaHistorial/.test(tareaForm) &&
       /repo\.eliminarTarea/.test(tareaForm),
     message: 'El formulario de tareas perdió la observación obligatoria, historial o baja auditada.',
+  },
+  {
+    ok: /hasModulo\(['"]tareas['"]\)/.test(rootNavigator) &&
+      /getComponent=\{\(\) => require\(['"]@\/screens\/tareas\/TareaListScreen['"]\)/.test(rootNavigator) &&
+      /getComponent=\{\(\) => require\(['"]@\/screens\/tareas\/TareaFormScreen['"]\)/.test(rootNavigator) &&
+      !/import \{ TareaListScreen \}/.test(rootNavigator) &&
+      !/import \{ TareaFormScreen \}/.test(rootNavigator),
+    message: 'Tareas volvió a cargarse durante el arranque y puede impedir que toda la app abra.',
   },
 ];
 

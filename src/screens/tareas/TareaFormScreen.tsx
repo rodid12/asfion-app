@@ -188,7 +188,7 @@ export function TareaFormScreen() {
           {esAdmin && historial.length > 0 && (
             <View style={styles.history}>
               <Text style={styles.historyTitle}>HISTORIAL DE CAMBIOS</Text>
-              {historial.map(h => <View key={h.id} style={styles.historyRow}><View style={styles.dot} /><View style={{ flex: 1 }}><Text style={styles.historyAction}>{h.accion.replaceAll('_', ' ')}</Text><Text style={styles.historyMeta}>{h.actorEmail} · {new Date(h.createdAt).toLocaleString('es-AR')}</Text></View></View>)}
+              {historial.map(h => <View key={h.id} style={styles.historyRow}><View style={styles.dot} /><View style={{ flex: 1 }}><Text style={styles.historyAction}>{h.accion.split('_').join(' ')}</Text><Text style={styles.historyMeta}>{h.actorEmail} · {new Date(h.createdAt).toLocaleString('es-AR')}</Text></View></View>)}
             </View>
           )}
         </ScrollView>
