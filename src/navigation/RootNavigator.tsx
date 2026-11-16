@@ -15,7 +15,6 @@ import { CompraDetailScreen } from '@/screens/compras/CompraDetailScreen';
 import { VentaListScreen } from '@/screens/ventas/VentaListScreen';
 import { VentaDetailScreen } from '@/screens/ventas/VentaDetailScreen';
 import { VentaFormScreen } from '@/screens/ventas/VentaFormScreen';
-import { SafeTareaFormScreen, SafeTareaListScreen } from '@/screens/tareas/TareaSafeScreens';
 import { useAuth } from '@/auth/context';
 import { ActivityIndicator, View } from 'react-native';
 import { colors } from '@/theme/colors';
@@ -23,6 +22,15 @@ import { TabProvider } from './TabContext';
 import { useClientConfig } from '@/config/ClientConfigContext';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
+
+// A diferencia de los demás módulos, Tareas se entrega como una extensión
+// opcional por cliente. No importamos ni evaluamos ningún archivo suyo durante
+// el arranque: React Navigation lo resuelve recién cuando la persona entra.
+// Así, incluso un error interno del módulo nunca puede impedir abrir ASFION.
+const getSafeTareaListScreen = () =>
+  require('../screens/tareas/TareaSafeScreens').SafeTareaListScreen;
+const getSafeTareaFormScreen = () =>
+  require('../screens/tareas/TareaSafeScreens').SafeTareaFormScreen;
 
 // Header global del Stack — consistente con el ScreenHeader de los listados:
 //  - bg = navyDeep (mismo color que ScreenHeader → continuidad visual cuando
@@ -122,8 +130,8 @@ export function RootNavigator() {
                   habilitado en HomeScreen, pero la estructura del navigator no
                   cambia cuando llega la configuración remota. Esto evita que
                   activar Tareas en Supabase pueda derribar la pantalla raíz. */}
-              <Stack.Screen name="TareaList" component={SafeTareaListScreen} options={{ title: 'Tareas' }} />
-              <Stack.Screen name="TareaForm" component={SafeTareaFormScreen} options={{ title: 'Tarea' }} />
+              <Stack.Screen name="TareaList" getComponent={getSafeTareaListScreen} options={{ title: 'Tareas' }} />
+              <Stack.Screen name="TareaForm" getComponent={getSafeTareaFormScreen} options={{ title: 'Tarea' }} />
             </>
           )}
         </Stack.Navigator>

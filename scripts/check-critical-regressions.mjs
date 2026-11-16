@@ -234,10 +234,10 @@ const checks = [
   },
   {
     ok: !/hasModulo\(['"]tareas['"]\)\s*&&/.test(rootNavigator) &&
-      /<Stack\.Screen name="TareaList" component=\{SafeTareaListScreen\}/.test(rootNavigator) &&
-      /component=\{SafeTareaFormScreen\}/.test(rootNavigator) &&
-      !/import \{ TareaListScreen \}/.test(rootNavigator) &&
-      !/import \{ TareaFormScreen \}/.test(rootNavigator) &&
+      !/from ['"]@\/screens\/tareas\//.test(rootNavigator) &&
+      /getSafeTareaListScreen[\s\S]*require\(['"]\.\.\/screens\/tareas\/TareaSafeScreens['"]\)/.test(rootNavigator) &&
+      /<Stack\.Screen name="TareaList" getComponent=\{getSafeTareaListScreen\}/.test(rootNavigator) &&
+      /<Stack\.Screen name="TareaForm" getComponent=\{getSafeTareaFormScreen\}/.test(rootNavigator) &&
       /require\(['"]\.\/TareaListScreen['"]\)/.test(tareaSafeScreens) &&
       /require\(['"]\.\/TareaFormScreen['"]\)/.test(tareaSafeScreens) &&
       /class TareaErrorBoundary/.test(tareaSafeScreens) &&
