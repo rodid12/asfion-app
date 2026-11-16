@@ -233,8 +233,8 @@ const checks = [
     message: 'El formulario de tareas perdió la observación obligatoria, historial o baja auditada.',
   },
   {
-    ok: /hasModulo\(['"]tareas['"]\)/.test(rootNavigator) &&
-      /component=\{SafeTareaListScreen\}/.test(rootNavigator) &&
+    ok: !/hasModulo\(['"]tareas['"]\)\s*&&/.test(rootNavigator) &&
+      /<Stack\.Screen name="TareaList" component=\{SafeTareaListScreen\}/.test(rootNavigator) &&
       /component=\{SafeTareaFormScreen\}/.test(rootNavigator) &&
       !/import \{ TareaListScreen \}/.test(rootNavigator) &&
       !/import \{ TareaFormScreen \}/.test(rootNavigator) &&
@@ -242,7 +242,7 @@ const checks = [
       /require\(['"]\.\/TareaFormScreen['"]\)/.test(tareaSafeScreens) &&
       /class TareaErrorBoundary/.test(tareaSafeScreens) &&
       /El resto de ASFION sigue funcionando normalmente/.test(tareaSafeScreens),
-    message: 'Tareas volvió a cargarse durante el arranque y puede impedir que toda la app abra.',
+    message: 'Tareas volvió a alterar dinámicamente el navigator o a cargarse durante el arranque.',
   },
   {
     ok: /class AppErrorBoundary/.test(appBoundary) &&

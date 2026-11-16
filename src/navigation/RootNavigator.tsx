@@ -117,14 +117,13 @@ export function RootNavigator() {
                   <Stack.Screen name="VentaForm" component={VentaFormScreen} options={{ title: 'Venta' }} />
                 </>
               )}
-              {hasModulo('tareas') && (
-                <>
-                  {/* Solo se importa un contenedor seguro. Las pantallas reales
-                      se evalúan al entrar y tienen su propio ErrorBoundary. */}
-                  <Stack.Screen name="TareaList" component={SafeTareaListScreen} options={{ title: 'Tareas' }} />
-                  <Stack.Screen name="TareaForm" component={SafeTareaFormScreen} options={{ title: 'Tarea' }} />
-                </>
-              )}
+              {/* Tareas se registra siempre con sus contenedores seguros.
+                  La visibilidad del acceso sigue dependiendo del módulo
+                  habilitado en HomeScreen, pero la estructura del navigator no
+                  cambia cuando llega la configuración remota. Esto evita que
+                  activar Tareas en Supabase pueda derribar la pantalla raíz. */}
+              <Stack.Screen name="TareaList" component={SafeTareaListScreen} options={{ title: 'Tareas' }} />
+              <Stack.Screen name="TareaForm" component={SafeTareaFormScreen} options={{ title: 'Tarea' }} />
             </>
           )}
         </Stack.Navigator>
