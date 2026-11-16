@@ -36,9 +36,10 @@ const files = {
   appRoot: new URL('../App.tsx', import.meta.url),
   easConfig: new URL('../eas.json', import.meta.url),
   packageJson: new URL('../package.json', import.meta.url),
+  migracionLotesCarahuasi: new URL('../supabase/migrations/0070_lotes_carahuasi_y_la_poblacion.sql', import.meta.url),
 };
 
-const [compra, pdf, paricion, mortandad, ganaderas, clientConfig, paricionList, paricionDetail, mapa, compraForm, metricas, pastoreoForm, lluviaForm, causaMortandad, migracionDelete, migracion, migracionRecepcion, migracionMetricas311, migracionEmailsCarahuasi, migracionOrejano, fotos, migracionEscrituraCarahuasi, migracionEscrituraGoogle, migracionFotosUpsert, repository, supabaseBackend, tareaList, tareaForm, migracionTareas, rootNavigator, tareaSafeScreens, appBoundary, appRoot, easConfig, packageJson] = await Promise.all(
+const [compra, pdf, paricion, mortandad, ganaderas, clientConfig, paricionList, paricionDetail, mapa, compraForm, metricas, pastoreoForm, lluviaForm, causaMortandad, migracionDelete, migracion, migracionRecepcion, migracionMetricas311, migracionEmailsCarahuasi, migracionOrejano, fotos, migracionEscrituraCarahuasi, migracionEscrituraGoogle, migracionFotosUpsert, repository, supabaseBackend, tareaList, tareaForm, migracionTareas, rootNavigator, tareaSafeScreens, appBoundary, appRoot, easConfig, packageJson, migracionLotesCarahuasi] = await Promise.all(
   Object.values(files).map(file => readFile(file, 'utf8')),
 );
 
@@ -256,6 +257,17 @@ const checks = [
       /"ota:qa"/.test(packageJson) &&
       /"ota:production"/.test(packageJson),
     message: 'Las publicaciones de prueba y de campo volvieron a compartir canal o perdieron el preflight obligatorio.',
+  },
+  {
+    ok: /Potrero de La Cruz/.test(migracionLotesCarahuasi) &&
+      /Potrero del cementerio 2/.test(migracionLotesCarahuasi) &&
+      /Lote 1 — lado represa/.test(migracionLotesCarahuasi) &&
+      /Lote 7 — del otro lado del bebedero de cemento/.test(migracionLotesCarahuasi) &&
+      /v_carahuasi <> 14/.test(migracionLotesCarahuasi) &&
+      /v_poblacion <> 7/.test(migracionLotesCarahuasi) &&
+      /ON CONFLICT \(id\) DO UPDATE/.test(migracionLotesCarahuasi) &&
+      !/DELETE FROM public\.lotes/.test(migracionLotesCarahuasi),
+    message: 'La carga de lotes de Carahuasi/La Población quedó incompleta o puede borrar históricos.',
   },
 ];
 
