@@ -86,6 +86,8 @@ export function ParicionFormScreen(_p: Props) {
   const [asistencia, setAsistencia] = useState<SiNo | undefined>();
   const [caravanaColor, setCaravanaColor] = useState<Paricion['caravanaColor']>();
   const [caravanaNumero, setCaravanaNumero] = useState('');
+  const [caravanaMadre, setCaravanaMadre] = useState('');
+  const [tatuaje, setTatuaje] = useState('');
   const [causaTipo, setCausaTipo] = useState<CausaMuerteTipo | undefined>();
   const [causaDetalle, setCausaDetalle] = useState('');
   const [observaciones, setObservaciones] = useState('');
@@ -102,6 +104,7 @@ export function ParicionFormScreen(_p: Props) {
   // nunca quede una causa oculta guardada al cambiar el sexo.
   const causaVisible      = evento === 'Muerte' && sexo !== 'Orejano';
   const asistenciaVisible = evento === 'Nacimiento';
+  const identificacionNacimientoVisible = evento === 'Nacimiento';
   // Un orejano todavía no fue señalado ni identificado con caravana.
   // Ocultamos ambos datos (color y número) y evitamos persistir valores que
   // hayan quedado seleccionados antes de cambiar el sexo a Orejano.
@@ -123,6 +126,13 @@ export function ParicionFormScreen(_p: Props) {
       setCaravanaNumero('');
     }
   }, [sexo]);
+
+  useEffect(() => {
+    if (!identificacionNacimientoVisible) {
+      setCaravanaMadre('');
+      setTatuaje('');
+    }
+  }, [identificacionNacimientoVisible]);
 
   // ─── State común vía useEventoForm ───
   const ef = useEventoForm<Paricion>({
@@ -148,6 +158,8 @@ export function ParicionFormScreen(_p: Props) {
         asistencia: asistenciaVisible ? asistencia : undefined,
         caravanaColor: caravanaVisible ? caravanaColor : undefined,
         caravanaNumero: caravanaVisible && caravanaNumero.trim() ? caravanaNumero.trim() : undefined,
+        caravanaMadre: identificacionNacimientoVisible ? (caravanaMadre.trim() || undefined) : undefined,
+        tatuaje: identificacionNacimientoVisible ? (tatuaje.trim() || undefined) : undefined,
         causaTipo: causaVisible ? causaTipo : undefined,
         causaDetalle: causaVisible ? (causaDetalle.trim() || undefined) : undefined,
         observaciones: observaciones.trim() || undefined,
@@ -161,6 +173,8 @@ export function ParicionFormScreen(_p: Props) {
       setSexo(undefined);
       setAsistencia(undefined);
       setCaravanaNumero('');
+      setCaravanaMadre('');
+      setTatuaje('');
       // Conservamos caravanaColor (probable misma tanda)
       setCausaTipo(undefined);
       setCausaDetalle('');
@@ -181,6 +195,8 @@ export function ParicionFormScreen(_p: Props) {
       setAsistencia(existing.asistencia);
       setCaravanaColor(existing.caravanaColor);
       setCaravanaNumero(existing.caravanaNumero ?? '');
+      setCaravanaMadre(existing.caravanaMadre ?? '');
+      setTatuaje(existing.tatuaje ?? '');
       setCausaTipo(existing.causaTipo);
       setCausaDetalle(existing.causaDetalle ?? '');
       setObservaciones(existing.observaciones ?? '');
@@ -251,12 +267,14 @@ export function ParicionFormScreen(_p: Props) {
       asistencia !== originalRecord.asistencia ||
       caravanaColor !== originalRecord.caravanaColor ||
       caravanaNumero !== (originalRecord.caravanaNumero ?? '') ||
+      caravanaMadre !== (originalRecord.caravanaMadre ?? '') ||
+      tatuaje !== (originalRecord.tatuaje ?? '') ||
       causaTipo !== originalRecord.causaTipo ||
       causaDetalle !== (originalRecord.causaDetalle ?? '') ||
       observaciones !== (originalRecord.observaciones ?? '') ||
       JSON.stringify(fotos) !== JSON.stringify(originalRecord.fotos ?? [])
     );
-  }, [isEdit, originalRecord, campoId, loteId, fecha, vacasGrupo, evento, sexo, asistencia, caravanaColor, caravanaNumero, causaTipo, causaDetalle, observaciones, fotos]);
+  }, [isEdit, originalRecord, campoId, loteId, fecha, vacasGrupo, evento, sexo, asistencia, caravanaColor, caravanaNumero, caravanaMadre, tatuaje, causaTipo, causaDetalle, observaciones, fotos]);
 
   const valid = useMemo(() => {
     if (!campoId) return false;
@@ -520,6 +538,27 @@ export function ParicionFormScreen(_p: Props) {
                 value={caravanaNumero}
                 onChangeText={setCaravanaNumero}
                 placeholder="Ej. 0202"
+                keyboardType="default"
+                autoCapitalize="characters"
+              />
+            </>
+          )}
+
+          {identificacionNacimientoVisible && (
+            <>
+              <FormField
+                label="Caravana madre"
+                value={caravanaMadre}
+                onChangeText={setCaravanaMadre}
+                placeholder="Ej. 1538"
+                keyboardType="default"
+                autoCapitalize="characters"
+              />
+              <FormField
+                label="Tatuaje"
+                value={tatuaje}
+                onChangeText={setTatuaje}
+                placeholder="Ej. A-127"
                 keyboardType="default"
                 autoCapitalize="characters"
               />

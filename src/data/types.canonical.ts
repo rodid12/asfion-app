@@ -111,6 +111,10 @@ export interface ParicionCanonical {
   asistencia?: SiNo;
   caravanaColor?: CaravanaColor;
   caravanaNumero?: string;                // string porque histórico mezcla formatos
+  /** Identificación opcional de la madre, informada al registrar un nacimiento. */
+  caravanaMadre?: string;
+  /** Tatuaje opcional de la cría; no todos los campos utilizan este sistema. */
+  tatuaje?: string;
   causaTipo?: CausaMuerteTipo;            // nivel 1 — solo si evento=Muerte|Aborto
   causaDetalle?: string;                  // nivel 2 — texto libre
   observaciones?: string;

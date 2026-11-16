@@ -204,6 +204,8 @@ export function ParicionDetailScreen() {
               </View>
             </View>
           )}
+          {paricion.caravanaMadre && <Row label="Caravana madre" value={paricion.caravanaMadre} />}
+          {paricion.tatuaje && <Row label="Tatuaje" value={paricion.tatuaje} />}
         </Section>
 
         {/* Detalle del evento (asistencia, causa) */}
@@ -311,6 +313,8 @@ export function ParicionDetailScreen() {
                       { label: 'Sexo',            value: paricion.sexo },
                       { label: 'Caravana color',  value: paricion.caravanaColor },
                       { label: 'Caravana número', value: paricion.caravanaNumero },
+                      { label: 'Caravana madre',  value: paricion.caravanaMadre },
+                      { label: 'Tatuaje',         value: paricion.tatuaje },
                     ],
                   },
                   {

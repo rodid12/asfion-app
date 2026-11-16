@@ -350,6 +350,8 @@ function paricionToRow(p: Paricion, clienteId: string) {
     asistencia: p.asistencia ?? null,
     caravana_color: p.caravanaColor ?? null,
     caravana_numero: p.caravanaNumero ?? null,
+    caravana_madre: p.caravanaMadre ?? null,
+    tatuaje: p.tatuaje ?? null,
     causa_tipo: p.causaTipo ?? null,
     causa_detalle: p.causaDetalle ?? null,
     observaciones: p.observaciones ?? null,

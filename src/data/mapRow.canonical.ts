@@ -209,6 +209,8 @@ export const PARICION_SCHEMA: Schema<ParicionCanonical> = {
   asistencia:     { from: 'asistencia',      type: 'as-is'   },
   caravanaColor:  { from: 'caravana_color',  type: 'as-is'   },
   caravanaNumero: { from: 'caravana_numero', type: 'string?' },
+  caravanaMadre:  { from: 'caravana_madre',  type: 'string?' },
+  tatuaje:        { from: 'tatuaje',         type: 'string?' },
   causaTipo:      { from: 'causa_tipo',      type: 'as-is'   },
   causaDetalle:   { from: 'causa_detalle',   type: 'string?' },
   observaciones:  { from: 'observaciones',   type: 'string?' },

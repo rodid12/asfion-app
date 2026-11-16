@@ -37,9 +37,10 @@ const files = {
   easConfig: new URL('../eas.json', import.meta.url),
   packageJson: new URL('../package.json', import.meta.url),
   migracionLotesCarahuasi: new URL('../supabase/migrations/0070_lotes_carahuasi_y_la_poblacion.sql', import.meta.url),
+  migracionIdentificacionNacimiento: new URL('../supabase/migrations/0071_pariciones_caravana_madre_tatuaje.sql', import.meta.url),
 };
 
-const [compra, pdf, paricion, mortandad, ganaderas, clientConfig, paricionList, paricionDetail, mapa, compraForm, metricas, pastoreoForm, lluviaForm, causaMortandad, migracionDelete, migracion, migracionRecepcion, migracionMetricas311, migracionEmailsCarahuasi, migracionOrejano, fotos, migracionEscrituraCarahuasi, migracionEscrituraGoogle, migracionFotosUpsert, repository, supabaseBackend, tareaList, tareaForm, migracionTareas, rootNavigator, tareaSafeScreens, appBoundary, appRoot, easConfig, packageJson, migracionLotesCarahuasi] = await Promise.all(
+const [compra, pdf, paricion, mortandad, ganaderas, clientConfig, paricionList, paricionDetail, mapa, compraForm, metricas, pastoreoForm, lluviaForm, causaMortandad, migracionDelete, migracion, migracionRecepcion, migracionMetricas311, migracionEmailsCarahuasi, migracionOrejano, fotos, migracionEscrituraCarahuasi, migracionEscrituraGoogle, migracionFotosUpsert, repository, supabaseBackend, tareaList, tareaForm, migracionTareas, rootNavigator, tareaSafeScreens, appBoundary, appRoot, easConfig, packageJson, migracionLotesCarahuasi, migracionIdentificacionNacimiento] = await Promise.all(
   Object.values(files).map(file => readFile(file, 'utf8')),
 );
 
@@ -268,6 +269,16 @@ const checks = [
       /ON CONFLICT \(id\) DO UPDATE/.test(migracionLotesCarahuasi) &&
       !/DELETE FROM public\.lotes/.test(migracionLotesCarahuasi),
     message: 'La carga de lotes de Carahuasi/La Población quedó incompleta o puede borrar históricos.',
+  },
+  {
+    ok: /label="Caravana madre"/.test(paricion) &&
+      /label="Tatuaje"/.test(paricion) &&
+      /identificacionNacimientoVisible/.test(paricion) &&
+      /caravanaMadre/.test(paricionDetail) &&
+      /tatuaje/.test(paricionDetail) &&
+      /ADD COLUMN IF NOT EXISTS caravana_madre text/.test(migracionIdentificacionNacimiento) &&
+      /ADD COLUMN IF NOT EXISTS tatuaje text/.test(migracionIdentificacionNacimiento),
+    message: 'Pariciones perdió los campos opcionales de caravana madre o tatuaje en nacimientos.',
   },
 ];
 
