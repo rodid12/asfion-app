@@ -233,7 +233,10 @@ function rowToUsuario(r: any): Usuario {
 }
 
 function rowToTarea(r: any): Tarea {
-  const persona = r.asignado;
+  // PostgREST normalmente devuelve un objeto para esta relación N:1, pero
+  // algunas versiones/configuraciones lo representan como array. Aceptamos
+  // ambos formatos para que una diferencia de metadata no rompa la pantalla.
+  const persona = Array.isArray(r.asignado) ? r.asignado[0] : r.asignado;
   const nombre = persona
     ? [persona.nombre, persona.apellido].filter(Boolean).join(' ').trim()
     : '';

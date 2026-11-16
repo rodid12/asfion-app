@@ -99,8 +99,17 @@ export function TareaListScreen() {
     nav.setOptions({ title: esAdmin ? 'Seguimiento de tareas' : 'Mis tareas' });
     void load();
     const focus = nav.addListener('focus', () => { void load(true); });
-    const realtime = repo.subscribeTareas(() => { void load(true); });
-    return () => { focus(); realtime(); };
+    // Realtime mejora la actualización del panel, pero no es requisito para
+    // abrirlo. Si el dispositivo o la red rechazan WebSocket, seguimos con
+    // refresh manual + un refresco periódico sin derribar la pantalla.
+    let realtime: () => void = () => undefined;
+    try {
+      realtime = repo.subscribeTareas(() => { void load(true); });
+    } catch (error) {
+      console.warn('[ASFION:Tareas] Realtime no disponible; se usa polling.', error);
+    }
+    const polling = setInterval(() => { void load(true); }, 60_000);
+    return () => { focus(); realtime(); clearInterval(polling); };
   }, [nav, esAdmin, load, repo]);
 
   const filtradas = useMemo(() => {

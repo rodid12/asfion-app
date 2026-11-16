@@ -34,7 +34,7 @@ class TareaErrorBoundary extends React.Component<BoundaryProps, BoundaryState> {
 
   render(): ReactNode {
     if (this.state.error) {
-      return <SafeFallback onBack={this.props.onBack} onRetry={this.props.onRetry} />;
+      return <SafeFallback onBack={this.props.onBack} onRetry={this.props.onRetry} detail={this.state.error.message} />;
     }
     return this.props.children;
   }
@@ -48,25 +48,25 @@ function SafeModuleScreen<P extends { navigation: { goBack: () => void } }>({
   screenProps: P;
 }) {
   const [Component, setComponent] = useState<ComponentType<P> | null>(null);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let active = true;
     setComponent(null);
-    setFailed(false);
+    setFailed(null);
     try {
       const loaded = loader();
       if (active) setComponent(() => loaded);
     } catch (error) {
       console.error('[ASFION:Tareas] No se pudo cargar el módulo', error);
-      if (active) setFailed(true);
+      if (active) setFailed(error instanceof Error ? error.message : String(error));
     }
     return () => { active = false; };
   }, [attempt, loader]);
 
   const retry = () => setAttempt(value => value + 1);
-  if (failed) return <SafeFallback onBack={screenProps.navigation.goBack} onRetry={retry} />;
+  if (failed) return <SafeFallback onBack={screenProps.navigation.goBack} onRetry={retry} detail={failed} />;
   if (!Component) {
     return <View style={styles.loading}><ActivityIndicator size="large" color={colors.orange} /><Text style={styles.loadingText}>Abriendo Tareas…</Text></View>;
   }
@@ -88,7 +88,7 @@ export function SafeTareaFormScreen(props: TareaFormProps) {
   return <SafeModuleScreen loader={loadTareaForm} screenProps={props} />;
 }
 
-function SafeFallback({ onBack, onRetry }: { onBack: () => void; onRetry: () => void }) {
+function SafeFallback({ onBack, onRetry, detail }: { onBack: () => void; onRetry: () => void; detail?: string }) {
   return (
     <View style={styles.screen}>
       <View style={styles.card}>
@@ -97,6 +97,7 @@ function SafeFallback({ onBack, onRetry }: { onBack: () => void; onRetry: () => 
         <Text style={styles.body}>
           El resto de ASFION sigue funcionando normalmente. Tus cargas y eventos no fueron afectados.
         </Text>
+        {detail ? <Text selectable style={styles.detail}>Detalle técnico: {detail}</Text> : null}
         <Pressable onPress={onRetry} style={styles.primary}><Text style={styles.primaryText}>REINTENTAR</Text></Pressable>
         <Pressable onPress={onBack} style={styles.secondary}><Text style={styles.secondaryText}>VOLVER AL MENÚ</Text></Pressable>
       </View>
@@ -112,6 +113,7 @@ const styles = StyleSheet.create({
   emoji: { fontSize: 36 },
   title: { marginTop: spacing.md, color: colors.navyDeep, fontSize: fontSize.xl, fontWeight: fontWeight.bold as '700' },
   body: { marginTop: spacing.md, color: colors.textMuted, fontSize: fontSize.base, lineHeight: 23 },
+  detail: { marginTop: spacing.md, color: colors.textMuted, fontSize: fontSize.xs, lineHeight: 18 },
   primary: { minHeight: 52, marginTop: spacing.xl, alignItems: 'center', justifyContent: 'center', borderRadius: radius.lg, backgroundColor: colors.orange },
   primaryText: { color: colors.white, fontWeight: fontWeight.bold as '700' },
   secondary: { minHeight: 48, marginTop: spacing.sm, alignItems: 'center', justifyContent: 'center' },
