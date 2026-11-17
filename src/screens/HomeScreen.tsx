@@ -18,6 +18,7 @@
 // ORANGE accent (10%) solo para CTAs y elementos primarios.
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import type { ComponentType } from 'react';
 import {
   Alert,
   Pressable,
@@ -59,6 +60,10 @@ interface Modulo {
   tease?: boolean;
 }
 
+interface TareaModuleProps {
+  onClose: () => void;
+}
+
 const TODOS_LOS_MODULOS: Modulo[] = [
   { key: 'pariciones', label: 'Pariciones', emoji: '🐮', descripcion: 'Nacimientos, muertes, abortos, retactos', go: nav => nav.navigate('ParicionForm', {}) },
   { key: 'lluvias',    label: 'Lluvias',    emoji: '🌧️', descripcion: 'Milímetros por pluviómetro',           go: nav => nav.navigate('LluviaForm', {}) },
@@ -66,7 +71,10 @@ const TODOS_LOS_MODULOS: Modulo[] = [
   { key: 'pastoreo',   label: 'Pastoreo',   emoji: '🌾', descripcion: 'Movimiento de hacienda',                go: nav => nav.navigate('PastoreoForm', {}) },
   { key: 'compras',    label: 'Compras',    emoji: '🛒', descripcion: 'Compra de hacienda',                    go: nav => nav.navigate('CompraForm', {}) },
   { key: 'mediciones', label: 'Mediciones', emoji: '📏', descripcion: 'Pesadas, condición, forraje' },
-  { key: 'tareas',     label: 'Tareas',     emoji: '✅', descripcion: 'Asignación y seguimiento diario',       go: nav => nav.navigate('TareaList') },
+  // Seguimiento no pertenece al navigator raíz. Se carga como módulo
+  // independiente únicamente al tocar este acceso, para que un error suyo no
+  // pueda volver a impedir el arranque de ASFION.
+  { key: 'tareas',     label: 'Tareas',     emoji: '✅', descripcion: 'Asignación y seguimiento diario' },
   { key: 'ventas',     label: 'Ventas',     emoji: '💰', descripcion: 'Operaciones comerciales (solo admin)', go: nav => nav.navigate('VentaList') },
 ];
 
@@ -124,6 +132,7 @@ export function HomeScreen() {
   const [pendientes, setPendientes] = useState(0);
   const [paricionesHoy, setParicionesHoy] = useState(0);
   const [paricionesSemana, setParicionesSemana] = useState(0);
+  const [TareaModule, setTareaModule] = useState<ComponentType<TareaModuleProps> | null>(null);
 
   const refresh = useCallback(async () => {
     const [pendings, hoy, semana] = await Promise.allSettled([
@@ -173,6 +182,21 @@ export function HomeScreen() {
   }, [pendientes, paricionesHoy, paricionesSemana, switchTab]);
 
   const onModuloPress = (m: Modulo & { enabled: boolean }) => {
+    if (m.key === 'tareas') {
+      try {
+        // require literal deliberadamente diferido: Metro incluye el código en
+        // el bundle OTA, pero React Native no lo evalúa durante el arranque.
+        const loaded = require('./tareas/TareaModuleModal').TareaModuleModal as ComponentType<TareaModuleProps>;
+        setTareaModule(() => loaded);
+      } catch (error) {
+        console.error('[ASFION:Tareas] No se pudo abrir el módulo aislado', error);
+        Alert.alert(
+          'Seguimiento no está disponible',
+          'El resto de ASFION continúa funcionando. Cerrá este aviso y seguí trabajando normalmente.',
+        );
+      }
+      return;
+    }
     if (!m.enabled) {
       Alert.alert(
         `${m.label} · Próximamente`,
@@ -185,6 +209,7 @@ export function HomeScreen() {
 
   return (
     <View style={styles.safe}>
+      {TareaModule ? <TareaModule onClose={() => setTareaModule(null)} /> : null}
       {/* HEADER FULL-BLEED navy deep.
           IMPORTANTE: el bg navy va en un <View> que envuelve al SafeAreaView,
           NO en el SafeAreaView mismo. Algunas versiones de

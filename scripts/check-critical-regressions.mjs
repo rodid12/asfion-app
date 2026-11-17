@@ -29,8 +29,10 @@ const files = {
   supabaseBackend: new URL('../src/data/backends/supabase.ts', import.meta.url),
   tareaList: new URL('../src/screens/tareas/TareaListScreen.tsx', import.meta.url),
   tareaForm: new URL('../src/screens/tareas/TareaFormScreen.tsx', import.meta.url),
+  tareaModule: new URL('../src/screens/tareas/TareaModuleModal.tsx', import.meta.url),
   migracionTareas: new URL('../supabase/migrations/0069_tareas_carahuasi.sql', import.meta.url),
   rootNavigator: new URL('../src/navigation/RootNavigator.tsx', import.meta.url),
+  homeScreen: new URL('../src/screens/HomeScreen.tsx', import.meta.url),
   tareaSafeScreens: new URL('../src/screens/tareas/TareaSafeScreens.tsx', import.meta.url),
   appBoundary: new URL('../src/components/AppErrorBoundary.tsx', import.meta.url),
   appRoot: new URL('../App.tsx', import.meta.url),
@@ -40,7 +42,7 @@ const files = {
   migracionIdentificacionNacimiento: new URL('../supabase/migrations/0071_pariciones_caravana_madre_tatuaje.sql', import.meta.url),
 };
 
-const [compra, pdf, paricion, mortandad, ganaderas, clientConfig, paricionList, paricionDetail, mapa, compraForm, metricas, pastoreoForm, lluviaForm, causaMortandad, migracionDelete, migracion, migracionRecepcion, migracionMetricas311, migracionEmailsCarahuasi, migracionOrejano, fotos, migracionEscrituraCarahuasi, migracionEscrituraGoogle, migracionFotosUpsert, repository, supabaseBackend, tareaList, tareaForm, migracionTareas, rootNavigator, tareaSafeScreens, appBoundary, appRoot, easConfig, packageJson, migracionLotesCarahuasi, migracionIdentificacionNacimiento] = await Promise.all(
+const [compra, pdf, paricion, mortandad, ganaderas, clientConfig, paricionList, paricionDetail, mapa, compraForm, metricas, pastoreoForm, lluviaForm, causaMortandad, migracionDelete, migracion, migracionRecepcion, migracionMetricas311, migracionEmailsCarahuasi, migracionOrejano, fotos, migracionEscrituraCarahuasi, migracionEscrituraGoogle, migracionFotosUpsert, repository, supabaseBackend, tareaList, tareaForm, tareaModule, migracionTareas, rootNavigator, homeScreen, tareaSafeScreens, appBoundary, appRoot, easConfig, packageJson, migracionLotesCarahuasi, migracionIdentificacionNacimiento] = await Promise.all(
   Object.values(files).map(file => readFile(file, 'utf8')),
 );
 
@@ -233,16 +235,16 @@ const checks = [
     message: 'El formulario de tareas perdió la observación obligatoria, historial o baja auditada.',
   },
   {
-    ok: !/hasModulo\(['"]tareas['"]\)\s*&&/.test(rootNavigator) &&
-      !/from ['"]@\/screens\/tareas\//.test(rootNavigator) &&
-      /getSafeTareaListScreen[\s\S]*require\(['"]\.\.\/screens\/tareas\/TareaSafeScreens['"]\)/.test(rootNavigator) &&
-      /<Stack\.Screen name="TareaList" getComponent=\{getSafeTareaListScreen\}/.test(rootNavigator) &&
-      /<Stack\.Screen name="TareaForm" getComponent=\{getSafeTareaFormScreen\}/.test(rootNavigator) &&
-      /require\(['"]\.\/TareaListScreen['"]\)/.test(tareaSafeScreens) &&
-      /require\(['"]\.\/TareaFormScreen['"]\)/.test(tareaSafeScreens) &&
-      /class TareaErrorBoundary/.test(tareaSafeScreens) &&
-      /El resto de ASFION sigue funcionando normalmente/.test(tareaSafeScreens),
-    message: 'Tareas volvió a alterar dinámicamente el navigator o a cargarse durante el arranque.',
+    ok: !/TareaList|TareaForm|screens\/tareas/.test(rootNavigator) &&
+      !/import[^;]+TareaModuleModal/.test(homeScreen) &&
+      /require\(['"]\.\/tareas\/TareaModuleModal['"]\)/.test(homeScreen) &&
+      /setTareaModule\(\(\) => loaded\)/.test(homeScreen) &&
+      /<Modal/.test(tareaModule) &&
+      /NavigationIndependentTree/.test(tareaModule) &&
+      /class TareaModuleBoundary/.test(tareaModule) &&
+      /onRequestClose=\{onClose\}/.test(tareaModule) &&
+      /El resto de la aplicación continúa funcionando/.test(tareaModule),
+    message: 'Tareas volvió a conectarse al navigator raíz o perdió su aislamiento de arranque.',
   },
   {
     ok: /class AppErrorBoundary/.test(appBoundary) &&

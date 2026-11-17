@@ -23,15 +23,6 @@ import { useClientConfig } from '@/config/ClientConfigContext';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-// A diferencia de los demás módulos, Tareas se entrega como una extensión
-// opcional por cliente. No importamos ni evaluamos ningún archivo suyo durante
-// el arranque: React Navigation lo resuelve recién cuando la persona entra.
-// Así, incluso un error interno del módulo nunca puede impedir abrir ASFION.
-const getSafeTareaListScreen = () =>
-  require('../screens/tareas/TareaSafeScreens').SafeTareaListScreen;
-const getSafeTareaFormScreen = () =>
-  require('../screens/tareas/TareaSafeScreens').SafeTareaFormScreen;
-
 // Header global del Stack — consistente con el ScreenHeader de los listados:
 //  - bg = navyDeep (mismo color que ScreenHeader → continuidad visual cuando
 //    se navega desde una lista a un form o detalle)
@@ -125,13 +116,6 @@ export function RootNavigator() {
                   <Stack.Screen name="VentaForm" component={VentaFormScreen} options={{ title: 'Venta' }} />
                 </>
               )}
-              {/* Tareas se registra siempre con sus contenedores seguros.
-                  La visibilidad del acceso sigue dependiendo del módulo
-                  habilitado en HomeScreen, pero la estructura del navigator no
-                  cambia cuando llega la configuración remota. Esto evita que
-                  activar Tareas en Supabase pueda derribar la pantalla raíz. */}
-              <Stack.Screen name="TareaList" getComponent={getSafeTareaListScreen} options={{ title: 'Tareas' }} />
-              <Stack.Screen name="TareaForm" getComponent={getSafeTareaFormScreen} options={{ title: 'Tarea' }} />
             </>
           )}
         </Stack.Navigator>
