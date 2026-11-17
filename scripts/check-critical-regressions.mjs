@@ -237,6 +237,8 @@ const checks = [
   {
     ok: !/TareaList|TareaForm|screens\/tareas/.test(rootNavigator) &&
       !/import[^;]+TareaModuleModal/.test(homeScreen) &&
+      /m\.key === ['"]tareas['"][\s\S]*clientConfig\.id === ['"]estancia-carahuasi['"]/.test(homeScreen) &&
+      /enabled: m\.key === ['"]tareas['"] \|\| Boolean\(m\.go\)/.test(homeScreen) &&
       /require\(['"]\.\/tareas\/TareaModuleModal['"]\)/.test(homeScreen) &&
       /setTareaModule\(\(\) => loaded\)/.test(homeScreen) &&
       /<Modal/.test(tareaModule) &&

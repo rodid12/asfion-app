@@ -30,7 +30,9 @@ jest.mock('@/config/ClientConfigContext', () => ({
   useClientConfig: () => ({
     id: 'estancia-carahuasi',
     branding: { nombre: 'Estancia Carahuasi', tagline: 'Gestión integral del campo', logo: null },
-    modulosHabilitados: ['pariciones', 'tareas'],
+    // La bandera remota permanece apagada para proteger versiones antiguas.
+    // La versión nueva debe ofrecer Seguimiento por ser Carahuasi.
+    modulosHabilitados: ['pariciones'],
     catalogos: {},
   }),
 }));
@@ -60,6 +62,7 @@ describe('arranque de Carahuasi con Seguimiento habilitado', () => {
     const screen = render(<HomeScreen />);
 
     expect(screen.getByText('Seguimiento')).toBeTruthy();
+    expect(screen.queryByText('PRÓXIMAMENTE')).toBeNull();
     expect(mockTaskModuleLoaded).not.toHaveBeenCalled();
     await waitFor(() => expect(mockContarPariciones).toHaveBeenCalled());
 

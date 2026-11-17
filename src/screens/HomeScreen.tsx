@@ -111,8 +111,13 @@ export function HomeScreen() {
   const modulos = useMemo(
     () => TODOS_LOS_MODULOS
       // Tease modules se muestran siempre, independiente del clientConfig.
-      // Los demás solo si están en modulosHabilitados.
-      .filter(m => m.tease || clientConfig.modulosHabilitados.includes(m.key))
+      // Los demás solo si están en modulosHabilitados. Seguimiento es la
+      // excepción deliberada: queda ligado a la versión segura del código y no
+      // a una bandera remota. Así una versión anterior nunca intenta montarlo
+      // aunque el cliente se configure desde Supabase.
+      .filter(m => m.key === 'tareas'
+        ? clientConfig.id === 'estancia-carahuasi'
+        : m.tease || clientConfig.modulosHabilitados.includes(m.key))
       // El cliente confirmó que Ventas es administrado únicamente por los
       // responsables; no se ofrece a operarios ni moderadores.
       .filter(m => m.key !== 'ventas' || user?.rol === 'administrador')
@@ -125,7 +130,7 @@ export function HomeScreen() {
               : 'Consultar e informar mis actividades',
           }
         : m)
-      .map(m => ({ ...m, enabled: Boolean(m.go) })),
+      .map(m => ({ ...m, enabled: m.key === 'tareas' || Boolean(m.go) })),
     [clientConfig, user?.rol],
   );
 
