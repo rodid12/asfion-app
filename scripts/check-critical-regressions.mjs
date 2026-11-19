@@ -256,6 +256,11 @@ const checks = [
     message: 'La aplicación perdió la pantalla de recuperación ante errores JavaScript de arranque.',
   },
   {
+    ok: /Updates\.channel === ['"]qa['"]/.test(appBoundary) &&
+      /Diagnóstico QA:/.test(appBoundary),
+    message: 'La versión QA perdió el diagnóstico visible necesario para investigar sin afectar producción.',
+  },
+  {
     ok: /"qa"[\s\S]*"channel": "qa"/.test(easConfig) &&
       /"field-production"[\s\S]*"channel": "production"/.test(easConfig) &&
       /"verify:ota"/.test(packageJson) &&

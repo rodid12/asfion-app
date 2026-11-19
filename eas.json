@@ -32,6 +32,9 @@
     "qa": {
       "distribution": "internal",
       "channel": "qa",
+      "env": {
+        "APP_VARIANT": "qa"
+      },
       "android": {
         "buildType": "apk"
       }

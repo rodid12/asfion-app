@@ -1,5 +1,6 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import * as Updates from 'expo-updates';
 
 import { colors } from '@/theme/colors';
 import { radius, spacing } from '@/theme/spacing';
@@ -38,6 +39,7 @@ export class AppErrorBoundary extends React.Component<Props, State> {
 
   render(): React.ReactNode {
     if (this.state.error) {
+      const mostrarDiagnostico = Updates.channel === 'qa';
       return (
         <View style={styles.screen}>
           <View style={styles.card}>
@@ -46,6 +48,11 @@ export class AppErrorBoundary extends React.Component<Props, State> {
             <Text style={styles.body}>
               Tus datos guardados no fueron eliminados. Podés reintentar o cerrar y volver a abrir la aplicación.
             </Text>
+            {mostrarDiagnostico ? (
+              <Text selectable style={styles.diagnostic}>
+                Diagnóstico QA: {this.state.error.message}
+              </Text>
+            ) : null}
             <Pressable onPress={this.retry} style={styles.button}>
               <Text style={styles.buttonText}>REINTENTAR</Text>
             </Pressable>
@@ -90,6 +97,15 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: fontSize.base,
     lineHeight: 23,
+  },
+  diagnostic: {
+    marginTop: spacing.md,
+    padding: spacing.sm,
+    borderRadius: radius.md,
+    color: colors.danger,
+    backgroundColor: '#FBEAEA',
+    fontSize: fontSize.xs,
+    lineHeight: 18,
   },
   button: {
     minHeight: 54,
