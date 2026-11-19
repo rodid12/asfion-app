@@ -39,6 +39,13 @@
         "buildType": "apk"
       }
     },
+    "qa-testflight": {
+      "channel": "qa",
+      "autoIncrement": true,
+      "env": {
+        "APP_VARIANT": "qa-testflight"
+      }
+    },
     "field-production": {
       "distribution": "internal",
       "channel": "production",
